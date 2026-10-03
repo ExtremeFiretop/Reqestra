@@ -408,6 +408,9 @@ namespace Ombi.Store.Migrations.ExternalPostgres
                     b.Property<DateTime>("AddedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("TmdbId")
                         .HasColumnType("text");
 

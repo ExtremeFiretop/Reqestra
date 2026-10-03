@@ -4,7 +4,6 @@ using Ombi.Helpers;
 using Ombi.Store.Entities;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Security.Principal;
@@ -35,7 +34,9 @@ namespace Ombi.Core.Engine
             OmbiUserManager manager, IRepository<RequestLog> rl, ICacheService cache,
             ISettingsService<OmbiSettings> ombiSettings, IRepository<RequestSubscription> sub, IMediaCacheService mediaCacheService,
             IFeatureService featureService,
-            IUserPlayedMovieRepository userPlayedMovieRepository)
+            IUserPlayedMovieRepository userPlayedMovieRepository,
+            IQualityProfileSelectionService qualityProfileSelectionService,
+            IMediaCleanupEngine mediaCleanupEngine = null)
             : base(user, requestService, r, manager, cache, ombiSettings, sub)
         {
             MovieApi = movieApi;
@@ -46,6 +47,8 @@ namespace Ombi.Core.Engine
             _mediaCacheService = mediaCacheService;
             _featureService = featureService;
             _userPlayedMovieRepository = userPlayedMovieRepository;
+            _qualityProfileSelectionService = qualityProfileSelectionService;
+            _mediaCleanupEngine = mediaCleanupEngine;
         }
 
         private IMovieDbApi MovieApi { get; }
@@ -56,6 +59,8 @@ namespace Ombi.Core.Engine
         private readonly IMediaCacheService _mediaCacheService;
         private readonly IFeatureService _featureService;
         protected readonly IUserPlayedMovieRepository _userPlayedMovieRepository;
+        private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
+        private readonly IMediaCleanupEngine _mediaCleanupEngine;
 
         /// <summary>
         /// Requests the movie.
@@ -94,18 +99,65 @@ namespace Ombi.Core.Engine
                 };
             }
 
-            if ((model.RootFolderOverride.HasValue || model.QualityPathOverride.HasValue) && !isAdmin)
+            var canSelectQualityProfile = isAdmin || await UserManager.IsInRoleAsync(userDetails, OmbiRoles.SelectQualityProfile);
+            var is4kFeatureEnabled = await _featureService.FeatureEnabled(FeatureNames.Movie4KRequests);
+            var is4kRequest = is4kFeatureEnabled && model.Is4kRequest;
+
+            if (model.RootFolderOverride.HasValue && !isAdmin)
             {
                 return new RequestEngineResult
                 {
                     Result = false,
-                    Message = "You do not have the correct permissions!",
-                    ErrorMessage = $"You do not have the correct permissions!"
+                    Message = "You do not have the correct permissions to override the root folder!",
+                    ErrorMessage = "You do not have the correct permissions to override the root folder!"
                 };
             }
 
-            var is4kFeatureEnabled = await _featureService.FeatureEnabled(FeatureNames.Movie4KRequests);
-            var is4kRequest = is4kFeatureEnabled && model.Is4kRequest;
+            if (model.QualityPathOverride.HasValue && !canSelectQualityProfile)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    Message = "You do not have the correct permissions to select a quality profile!",
+                    ErrorMessage = "You do not have the correct permissions to select a quality profile!"
+                };
+            }
+
+            if (model.QualityPathOverride.HasValue && model.QualityPathOverride.Value < 0)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    Message = "The selected Radarr quality profile is invalid.",
+                    ErrorMessage = "The selected Radarr quality profile is invalid."
+                };
+            }
+
+            if (model.QualityPathOverride.GetValueOrDefault() > 0 && !isAdmin)
+            {
+                try
+                {
+                    if (!await _qualityProfileSelectionService.IsValidRadarrProfile(model.QualityPathOverride.Value, is4kRequest))
+                    {
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            Message = "The selected Radarr quality profile is no longer available.",
+                            ErrorMessage = "The selected Radarr quality profile is no longer available."
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Could not validate selected {RadarrType} quality profile {ProfileId}", is4kRequest ? "Radarr 4K" : "Radarr", model.QualityPathOverride.Value);
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        Message = "Ombi could not validate the selected Radarr quality profile because Radarr is unavailable.",
+                        ErrorMessage = "Ombi could not validate the selected Radarr quality profile because Radarr is unavailable."
+                    };
+                }
+            }
 
             MovieRequests requestModel;
             bool isExisting = false;
@@ -121,6 +173,17 @@ namespace Ombi.Core.Engine
                 else
                 {
                     existingRequest.RequestedDate = DateTime.UtcNow;
+                }
+                if (model.QualityPathOverride.HasValue)
+                {
+                    if (is4kRequest)
+                    {
+                        existingRequest.QualityOverride4K = model.QualityPathOverride.Value;
+                    }
+                    else
+                    {
+                        existingRequest.QualityOverride = model.QualityPathOverride.Value;
+                    }
                 }
                 isExisting = true;
                 requestModel = existingRequest;
@@ -147,7 +210,8 @@ namespace Ombi.Core.Engine
                     LangCode = model.LanguageCode,
                     RequestedByAlias = model.RequestedByAlias,
                     RootPathOverride = model.RootFolderOverride.GetValueOrDefault(),
-                    QualityOverride = model.QualityPathOverride.GetValueOrDefault(),
+                    QualityOverride = is4kRequest ? 0 : model.QualityPathOverride.GetValueOrDefault(),
+                    QualityOverride4K = is4kRequest ? model.QualityPathOverride.GetValueOrDefault() : 0,
                     RequestedDate4k = model.Is4kRequest ? DateTime.UtcNow : DateTime.MinValue,
                     Is4kRequest = model.Is4kRequest,
                     Source = model.Source
@@ -265,7 +329,7 @@ namespace Ombi.Core.Engine
             };
         }
 
-        public async Task<RequestsViewModel<MovieRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder)
+        public async Task<RequestsViewModel<MovieRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             IQueryable<MovieRequests> allRequests;
@@ -282,24 +346,11 @@ namespace Ombi.Core.Engine
                         .GetWithUser();
             }
 
-            var prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(sortProperty, true);
+            allRequests = FilterByRequestedUser(allRequests, requestedByUserId, shouldHide.IsAdmin);
 
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find("RequestedDate", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-
-            // TODO fix this so we execute this on the server
-            var requests = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.ToList().OrderBy(x => prop.GetValue(x)).ToList()
-                : allRequests.ToList().OrderByDescending(x => prop.GetValue(x)).ToList();
-            var total = requests.Count();
-            requests = requests.Skip(position).Take(count).ToList();
+            var total = await allRequests.CountAsync();
+            var requests = await ApplySortMovies(allRequests, sortProperty, sortOrder)
+                .Skip(position).Take(count).ToListAsync();
 
             await FillAdditionalFields(shouldHide, requests);
             return new RequestsViewModel<MovieRequests>
@@ -309,7 +360,7 @@ namespace Ombi.Core.Engine
             };
         }
 
-        public async Task<RequestsViewModel<MovieRequests>> GetRequestsByStatus(int count, int position, string sortProperty, string sortOrder, RequestStatus status)
+        public async Task<RequestsViewModel<MovieRequests>> GetRequestsByStatus(int count, int position, string sortProperty, string sortOrder, RequestStatus status, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             IQueryable<MovieRequests> allRequests;
@@ -325,6 +376,8 @@ namespace Ombi.Core.Engine
                     MovieRepository
                         .GetWithUser();
             }
+
+            allRequests = FilterByRequestedUser(allRequests, requestedByUserId, shouldHide.IsAdmin);
 
             switch (status)
             {
@@ -356,8 +409,7 @@ namespace Ombi.Core.Engine
                     break;
             }
 
-            var requests = allRequests.ToList();
-            var total = requests.Count;
+            var total = await allRequests.CountAsync();
             if (total == 0)
             {
                 return new RequestsViewModel<MovieRequests>
@@ -367,24 +419,8 @@ namespace Ombi.Core.Engine
                 };
             }
 
-            var prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(sortProperty, true);
-
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find("RequestedDate", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-
-            requests = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.ToList().OrderBy(x => prop.GetValue(x)).ToList()
-                : allRequests.ToList().OrderByDescending(x => prop.GetValue(x)).ToList();
-
-            // TODO fix this so we execute this on the server
-            requests = requests.Skip(position).Take(count).ToList();
+            var requests = await ApplySortMovies(allRequests, sortProperty, sortOrder)
+                .Skip(position).Take(count).ToListAsync();
 
             await FillAdditionalFields(shouldHide, requests);
             return new RequestsViewModel<MovieRequests>
@@ -394,7 +430,7 @@ namespace Ombi.Core.Engine
             };
         }
 
-        public async Task<RequestsViewModel<MovieRequests>> GetUnavailableRequests(int count, int position, string sortProperty, string sortOrder)
+        public async Task<RequestsViewModel<MovieRequests>> GetUnavailableRequests(int count, int position, string sortProperty, string sortOrder, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             IQueryable<MovieRequests> allRequests;
@@ -411,23 +447,11 @@ namespace Ombi.Core.Engine
                         .GetWithUser().Where(x => !x.Available && x.Approved);
             }
 
-            var prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(sortProperty, true);
+            allRequests = FilterByRequestedUser(allRequests, requestedByUserId, shouldHide.IsAdmin);
 
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find("RequestedDate", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-
-            var requests = (sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.ToList().OrderBy(x => prop.GetValue(x))
-                : allRequests.ToList().OrderByDescending(x => prop.GetValue(x))).ToList();
-            var total = requests.Count();
-            requests = requests.Skip(position).Take(count).ToList();
+            var total = await allRequests.CountAsync();
+            var requests = await ApplySortMovies(allRequests, sortProperty, sortOrder)
+                .Skip(position).Take(count).ToListAsync();
 
             await FillAdditionalFields(shouldHide, requests);
             return new RequestsViewModel<MovieRequests>
@@ -457,6 +481,18 @@ namespace Ombi.Core.Engine
             return new RequestEngineResult
             {
                 Result = true
+            };
+        }
+
+        private static IQueryable<MovieRequests> ApplySortMovies(IQueryable<MovieRequests> query, string sortProperty, string sortOrder)
+        {
+            var asc = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase);
+            return sortProperty.ToLowerInvariant() switch
+            {
+                "id" => asc ? query.OrderBy(x => x.Id) : query.OrderByDescending(x => x.Id),
+                "title" => asc ? query.OrderBy(x => x.Title) : query.OrderByDescending(x => x.Title),
+                "releasedate" => asc ? query.OrderBy(x => x.ReleaseDate) : query.OrderByDescending(x => x.ReleaseDate),
+                _ => asc ? query.OrderBy(x => x.RequestedDate) : query.OrderByDescending(x => x.RequestedDate)
             };
         }
 
@@ -785,6 +821,13 @@ namespace Ombi.Core.Engine
             });
 
             await MovieRepository.Delete(request);
+            if (_mediaCleanupEngine != null)
+            {
+                await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                    RequestType.Movie,
+                    request.Id,
+                    request.TheMovieDbId);
+            }
             await _mediaCacheService.Purge();
             return new RequestEngineResult
             {
@@ -794,8 +837,20 @@ namespace Ombi.Core.Engine
 
         public async Task RemoveAllMovieRequests()
         {
-            var request = MovieRepository.GetAll();
-            await MovieRepository.DeleteRange(request);
+            var requests = await MovieRepository.GetAll().ToListAsync();
+            await MovieRepository.DeleteRange(requests);
+
+            if (_mediaCleanupEngine != null)
+            {
+                foreach (var request in requests)
+                {
+                    await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                        RequestType.Movie,
+                        request.Id,
+                        request.TheMovieDbId);
+                }
+            }
+
             await _mediaCacheService.Purge();
         }
 

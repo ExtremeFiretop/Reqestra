@@ -10,7 +10,7 @@ import { StorageService } from "../shared/storage/storage-service";
     templateUrl: "./loginoauth.component.html",
 })
 export class LoginOAuthComponent implements OnInit {
-    public pin: number;
+    public pin: string;
     public error: string;
 
     constructor(private authService: AuthService, private router: Router,

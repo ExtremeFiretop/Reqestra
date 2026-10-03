@@ -8,7 +8,9 @@ import 'cypress-wait-until';
 declare global {
   namespace Cypress {
     interface Chainable {
+      ensureSetup(): Chainable<void>;
       landingSettings(enabled: boolean): Chainable<void>;
+      getAdminToken(): Chainable<string>;
       loginWithCreds(username: string, password: string): Chainable<void>;
       login(): Chainable<void>;
       removeLogin(): Chainable<void>;
@@ -26,6 +28,51 @@ declare global {
   }
 }
 
+// Idempotently make sure Ombi has finished its first-run setup (i.e. the admin
+// user exists and the wizard is marked complete). Historically every spec
+// depended on the wizard feature having been run first via the UI - if that run
+// failed or was skipped, the whole suite cascaded into failures because the app
+// stayed on the wizard page. This command talks directly to the wizard API
+// (the same endpoint the UI calls) so any spec can guarantee a usable app on its
+// own, regardless of execution order.
+//
+// The endpoint is [AllowAnonymous] and only succeeds when no local user exists,
+// so calling it repeatedly is safe: once the admin is created it simply returns
+// "existing user" which we deliberately ignore.
+Cypress.Commands.add('ensureSetup', () => {
+  const username = Cypress.env('username');
+  const password = Cypress.env('password');
+  expect(username, 'Cypress env "username" must be set for ensureSetup')
+    .to.be.a('string').and.not.be.empty;
+  expect(password, 'Cypress env "password" must be set for ensureSetup')
+    .to.be.a('string').and.not.be.empty;
+
+  cy.request({
+    method: 'POST',
+    url: '/api/v1/Identity/Wizard',
+    body: { username, password, usePlexAdminAccount: false },
+    failOnStatusCode: false,
+  }).then((resp) => {
+    expect(resp.status, 'wizard endpoint should respond 200').to.equal(200);
+
+    // SaveWizardResult => { result: boolean, errors: string[] }.
+    //  - result === true  : admin was created (first run).
+    //  - result === false : only acceptable when the admin already exists,
+    //                       which is the idempotent re-run case. Any other
+    //                       failure (e.g. bad credentials) must fail loudly here
+    //                       rather than letting every later test time out.
+    const result = resp.body?.result;
+    if (result !== true) {
+      const errors: string[] = resp.body?.errors ?? [];
+      const alreadySetUp = errors.some((e) => /existing user/i.test(e));
+      expect(
+        alreadySetUp,
+        `unexpected wizard setup failure: ${JSON.stringify(errors)}`
+      ).to.be.true;
+    }
+  });
+});
+
 // Enhanced landing page settings command
 Cypress.Commands.add("landingSettings", (enabled: boolean) => {
   cy.fixture('login/landingPageSettings').then((settings) => {
@@ -34,36 +81,76 @@ Cypress.Commands.add("landingSettings", (enabled: boolean) => {
   });
 });
 
-// Enhanced login with credentials
-Cypress.Commands.add('loginWithCreds', (username: string, password: string) => {
-  cy.request({
+const requestAccessToken = (username: string, password: string): Cypress.Chainable<string> => {
+  return cy.request({
     method: 'POST',
     url: '/api/v1/token',
     body: { username, password },
-    failOnStatusCode: false
+    // Assert explicitly below so a rate-limit response is reported at the
+    // authentication step instead of surfacing later as a misleading 401.
+    failOnStatusCode: false,
   }).then((resp) => {
-    if (resp.status === 200) {
-      window.localStorage.setItem('id_token', resp.body.access_token);
-    }
+    expect(
+      resp.status,
+      `login for "${username}" should return HTTP 200 (HTTP 429 means the authentication rate limiter was hit)`
+    ).to.equal(200);
+
+    const token = resp.body?.access_token;
+    expect(token, `login response for "${username}" should contain an access token`)
+      .to.be.a('string').and.not.be.empty;
+
+    return token as string;
   });
-  
-  // Log outside of the promise chain
-  cy.log(`Login attempt for user: ${username}`);
+};
+
+// Return an admin token without changing the browser's login state. The token
+// is cached in the Cypress Node process so repeated global setup across specs
+// does not repeatedly exercise the production /api/v1/token rate limiter.
+Cypress.Commands.add('getAdminToken', () => {
+  const username = Cypress.env('username');
+  const password = Cypress.env('password');
+
+  expect(username, 'Cypress env "username" must be set for admin authentication')
+    .to.be.a('string').and.not.be.empty;
+  expect(password, 'Cypress env "password" must be set for admin authentication')
+    .to.be.a('string').and.not.be.empty;
+
+  return cy.task('getCachedAuthToken', username, { log: false }).then((cachedToken) => {
+    if (typeof cachedToken === 'string' && cachedToken.length > 0) {
+      return cachedToken;
+    }
+
+    return requestAccessToken(username, password).then((token) => {
+      return cy.task(
+        'cacheAuthToken',
+        { username, token },
+        { log: false }
+      ).then(() => token);
+    });
+  });
 });
 
-// Enhanced default login
+// Login with arbitrary credentials. This intentionally performs a fresh login
+// because several tests create distinct users and need to verify their actual
+// credentials and permissions.
+Cypress.Commands.add('loginWithCreds', (username: string, password: string) => {
+  return requestAccessToken(username, password).then((token) => {
+    window.localStorage.setItem('id_token', token);
+    cy.log(`Logged in as user: ${username}`);
+  });
+});
+
+// Default administrator login reuses the cached token. This keeps the normal
+// production rate limiter intact while avoiding dozens of identical admin
+// token requests during a single Cypress run.
 Cypress.Commands.add('login', () => {
   cy.clearLocalStorage();
   cy.clearCookies();
-  
-  const username = Cypress.env('username');
-  const password = Cypress.env('password');
-  
-  if (!username || !password) {
-    throw new Error('Username and password must be set in environment variables');
-  }
-  
-  cy.loginWithCreds(username, password);
+
+  return cy.getAdminToken().then((token) => {
+    window.localStorage.setItem('id_token', token);
+    cy.log('Restored administrator authentication');
+  });
 });
 
 // Enhanced login removal

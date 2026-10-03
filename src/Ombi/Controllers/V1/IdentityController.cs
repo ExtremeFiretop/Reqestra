@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -170,7 +170,7 @@ namespace Ombi.Controllers.V1
             }
             if (result.Succeeded)
             {
-                _log.LogInformation("Created User {0}", userToCreate.UserName);
+                _log.LogInformation("Created user {UserName}", SafeForLogging(userToCreate.UserName));
                 await CreateRoles();
                 _log.LogInformation("Created the roles");
                 var roleResult = await UserManager.AddToRoleAsync(userToCreate, OmbiRoles.Admin);
@@ -205,7 +205,7 @@ namespace Ombi.Controllers.V1
         {
             foreach (var err in result.Errors)
             {
-                _log.LogCritical(err.Description);
+                _log.LogCritical("Identity operation failed: {Description}", SafeForLogging(err.Description));
             }
         }
 
@@ -226,6 +226,11 @@ namespace Ombi.Controllers.V1
             await CreateRole(OmbiRoles.EditCustomPage);
             await CreateRole(OmbiRoles.Request4KMovie);
             await CreateRole(OmbiRoles.AutoApprove4KMovie);
+            await CreateRole(OmbiRoles.RequestMediaRemoval);
+            await CreateRole(OmbiRoles.DeleteOwnMedia);
+            await CreateRole(OmbiRoles.VoteOnMediaCleanup);
+            await CreateRole(OmbiRoles.ManageMediaCleanup);
+            await CreateRole(OmbiRoles.SelectQualityProfile);
         }
 
         private async Task CreateRole(string role)
@@ -298,6 +303,18 @@ namespace Ombi.Controllers.V1
         }
 
         /// <summary>
+        /// Lightweight authenticated endpoint used by the web client to report active use.
+        /// UserActivityMiddleware performs the throttled LastActive update before this action runs.
+        /// </summary>
+        [HttpPost("activity")]
+        [Authorize]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public IActionResult RecordActivity()
+        {
+            return Ok();
+        }
+
+        /// <summary>
         /// Sets the current users language
         /// </summary>
         [HttpPost("language")]
@@ -363,6 +380,7 @@ namespace Ombi.Controllers.V1
                 UserType = (Core.Models.UserType)(int)user.UserType,
                 Claims = new List<ClaimCheckboxes>(),
                 LastLoggedIn = user.LastLoggedIn,
+                LastActive = user.LastActive,
                 HasLoggedIn = user.LastLoggedIn.HasValue,
                 EpisodeRequestLimit = user.EpisodeRequestLimit ?? 0,
                 MovieRequestLimit = user.MovieRequestLimit ?? 0,
@@ -749,6 +767,14 @@ namespace Ombi.Controllers.V1
         [PowerUser]
         public async Task<IEnumerable<ClaimCheckboxes>> GetAllClaims()
         {
+            // Upgraded installations do not run the first-run CreateRoles path, so ensure
+            // media-cleanup roles exist before returning the assignable role list.
+            await CreateRole(OmbiRoles.RequestMediaRemoval);
+            await CreateRole(OmbiRoles.DeleteOwnMedia);
+            await CreateRole(OmbiRoles.VoteOnMediaCleanup);
+            await CreateRole(OmbiRoles.ManageMediaCleanup);
+            await CreateRole(OmbiRoles.SelectQualityProfile);
+
             var claims = new List<ClaimCheckboxes>();
             // Add the missing claims
             var allRoles = await RoleManager.Roles.ToListAsync();
@@ -949,6 +975,7 @@ namespace Ombi.Controllers.V1
         }
 
         [HttpGet("notificationpreferences")]
+        [Authorize]
         public async Task<List<UserNotificationPreferences>> GetUserPreferences()
         {
             var username = User.Identity.Name.ToUpper();
@@ -957,10 +984,21 @@ namespace Ombi.Controllers.V1
         }
 
         [HttpGet("notificationpreferences/{userId}")]
-        public async Task<List<UserNotificationPreferences>> GetUserPreferences(string userId)
+        [Authorize]
+        [ProducesResponseType(404)]
+        [ProducesResponseType(401)]
+        public async Task<IActionResult> GetUserPreferences(string userId)
         {
             var user = await UserManager.Users.FirstOrDefaultAsync(x => x.Id == userId);
-            return await GetPreferences(user);
+            if (user == null)
+            {
+                return NotFound();
+            }
+            if (!await HasAccessToUserPreferences(user))
+            {
+                return Unauthorized();
+            }
+            return Json(await GetPreferences(user));
         }
 
         private readonly List<NotificationAgent> _excludedAgents = new List<NotificationAgent>
@@ -969,6 +1007,24 @@ namespace Ombi.Controllers.V1
             NotificationAgent.Mobile,
             NotificationAgent.Webhook
         };
+
+        private async Task<bool> HasAccessToUserPreferences(OmbiUser user)
+        {
+            // A user can always access their own preferences, otherwise the power user/admin role is required
+            var username = User.Identity.Name.ToUpper();
+            var me = await UserManager.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == username);
+            if (me == null)
+            {
+                return false;
+            }
+            if (me.Id.Equals(user.Id, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return true;
+            }
+            var isPowerUser = await UserManager.IsInRoleAsync(me, OmbiRoles.PowerUser);
+            var isAdmin = await UserManager.IsInRoleAsync(me, OmbiRoles.Admin);
+            return isPowerUser || isAdmin;
+        }
 
         private async Task<List<UserNotificationPreferences>> GetPreferences(OmbiUser user)
         {
@@ -993,36 +1049,33 @@ namespace Ombi.Controllers.V1
         }
 
         [HttpPost("NotificationPreferences")]
+        [Authorize]
         [ProducesResponseType(404)]
         [ProducesResponseType(401)]
         public async Task<IActionResult> AddUserNotificationPreference([FromBody] List<AddNotificationPreference> preferences)
         {
+            // Validate the whole batch up front so a failure part way through cannot
+            // leave the request partially applied
             foreach (var pref in preferences)
             {
-
                 // Make sure the user exists
                 var user = await UserManager.Users.FirstOrDefaultAsync(x => x.Id == pref.UserId);
                 if (user == null)
                 {
                     return NotFound();
                 }
-                // Check if we are editing a different user than ourself, if we are then we need to power user role
-
-                var username = User.Identity.Name.ToUpper();
-                var me = await UserManager.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == username);
-                if (!me.Id.Equals(user.Id, StringComparison.InvariantCultureIgnoreCase))
+                // Check if we are touching a different user than ourself, if we are then we need the power user role
+                if (!await HasAccessToUserPreferences(user))
                 {
-                    var isPowerUser = await UserManager.IsInRoleAsync(me, OmbiRoles.PowerUser);
-                    var isAdmin = await UserManager.IsInRoleAsync(me, OmbiRoles.Admin);
-                    if (!isPowerUser && !isAdmin)
-                    {
-                        return Unauthorized();
-                    }
+                    return Unauthorized();
                 }
+            }
 
+            foreach (var pref in preferences)
+            {
                 // Make sure we don't already have a preference for this agent
                 var existingPreference = await _userNotificationPreferences.GetAll()
-                    .FirstOrDefaultAsync(x => x.UserId == user.Id && x.Agent == pref.Agent);
+                    .FirstOrDefaultAsync(x => x.UserId == pref.UserId && x.Agent == pref.Agent);
                 if (existingPreference != null)
                 {
                     // Update it

@@ -1,8 +1,13 @@
 # Stage 1: Build Angular frontend
-FROM node:20-bookworm-slim AS ui-build
+FROM --platform=$BUILDPLATFORM node:20-bookworm-slim AS ui-build
 WORKDIR /source
 COPY Ombi/ClientApp/package.json Ombi/ClientApp/yarn.lock Ombi/ClientApp/
-RUN yarn --cwd Ombi/ClientApp install --frozen-lockfile
+RUN for attempt in 1 2 3; do \
+      yarn --cwd Ombi/ClientApp install --frozen-lockfile --network-timeout 600000 && break; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      echo "Yarn install failed (attempt $attempt/3); retrying in 15 seconds..."; \
+      sleep 15; \
+    done
 COPY Ombi/ClientApp Ombi/ClientApp
 RUN yarn --cwd Ombi/ClientApp run build
 
@@ -30,6 +35,11 @@ COPY ["Ombi.Store/Ombi.Store.csproj", "Ombi.Store/"]
 RUN dotnet restore Ombi/Ombi.csproj
 
 COPY . .
+
+# Ombi.csproj links ../../version.json, which resolves to /version.json
+# inside this build stage. Materialize it from the CI-calculated version.
+RUN printf '{\n  "version": "%s"\n}\n' "$VERSION" > /version.json
+
 RUN dotnet publish Ombi/Ombi.csproj -c Release --no-restore -o /app/publish
 
 # Stage 3: Final runtime image

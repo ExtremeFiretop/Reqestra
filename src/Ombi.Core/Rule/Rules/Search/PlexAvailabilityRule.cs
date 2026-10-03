@@ -2,6 +2,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Ombi.Core.Models.Search;
+using Ombi.Core.Rule.Rules;
 using Ombi.Core.Services;
 using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
@@ -78,6 +79,25 @@ namespace Ombi.Core.Rule.Rules.Search
                     {
                         result.UseTvDb = true;
                     }
+                }
+            }
+
+            if (obj is SearchTvShowViewModel tvShow)
+            {
+                var fingerprintMatch = await PlexEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                    _repo,
+                    tvShow.SeasonRequests,
+                    item?.Id);
+
+                if (fingerprintMatch != null)
+                {
+                    if (item == null)
+                    {
+                        item = fingerprintMatch.Content;
+                        result.UseContentId = true;
+                    }
+
+                    result.SeasonNumberMap[fingerprintMatch.SourceSeasonNumber] = fingerprintMatch.PlexSeasonNumber;
                 }
             }
 

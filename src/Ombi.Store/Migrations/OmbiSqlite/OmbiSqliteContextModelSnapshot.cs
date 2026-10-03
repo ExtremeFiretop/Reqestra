@@ -275,6 +275,9 @@ namespace Ombi.Store.Migrations.OmbiSqlite
                     b.Property<DateTime?>("LastLoggedIn")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastActive")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("INTEGER");
 
@@ -539,6 +542,9 @@ namespace Ombi.Store.Migrations.OmbiSqlite
                     b.Property<int>("ParentRequestId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("QualityOverride")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("RequestType")
                         .HasColumnType("INTEGER");
 
@@ -736,6 +742,9 @@ namespace Ombi.Store.Migrations.OmbiSqlite
                         .HasColumnType("TEXT");
 
                     b.Property<int>("QualityOverride")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("QualityOverride4K")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("ReleaseDate")

@@ -14,7 +14,10 @@ namespace Ombi.Api.External.ExternalApis.Sonarr.Models
         public int totalEpisodeCount { get; set; }
         public int episodeCount { get; set; }
         public int episodeFileCount { get; set; }
+        // Older Sonarr responses exposed sizeOnDisk at the series root.
+        // Current v3/v4 responses expose the aggregate size under statistics.
         public long sizeOnDisk { get; set; }
+        public Statistics statistics { get; set; }
         public string status { get; set; }
         public string overview { get; set; }
         public DateTime previousAiring { get; set; }
@@ -32,6 +35,7 @@ namespace Ombi.Api.External.ExternalApis.Sonarr.Models
         public int tvdbId { get; set; }
         public int tvRageId { get; set; }
         public int tvMazeId { get; set; }
+        public int tmdbId { get; set; }
         public DateTime firstAired { get; set; }
         public DateTime lastInfoSync { get; set; }
         public string seriesType { get; set; }

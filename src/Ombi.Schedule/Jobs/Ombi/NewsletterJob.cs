@@ -754,7 +754,10 @@ namespace Ombi.Schedule.Jobs.Ombi
             foreach (var season in seasons.OrderBy(x => x.SeasonNumber))
             {
                 string episodeList;
-                if (season.Episodes.Count >= season.Header.episode_count)
+                // TMDB can occasionally omit a season from the show's season summary even when
+                // Plex has episodes for it. In that case we cannot know whether the season is
+                // complete, so list the known episodes instead of dereferencing a null Header.
+                if (season.Header != null && season.Episodes.Count >= season.Header.episode_count)
                 {
                     // do not list individual episodes when the season is complete
                     episodeList = string.Empty;
@@ -764,7 +767,7 @@ namespace Ombi.Schedule.Jobs.Ombi
                     var orderedEpisodes = season.Episodes.OrderBy(x => x.EpisodeNumber).ToList();
                     episodeList = $"{Texts.EpisodesLabel} {StringHelper.BuildEpisodeList(orderedEpisodes.Select(x => x.EpisodeNumber))}";
                 }
-                var episodeAirDate = season.Header.air_date;
+                var episodeAirDate = season.Header?.air_date ?? string.Empty;
                 sb.Append($"{Texts.SeasonLabel} {season.SeasonNumber} - {episodeList} {episodeAirDate}");
                 sb.Append("<br />");
             }

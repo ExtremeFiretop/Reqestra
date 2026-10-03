@@ -34,8 +34,42 @@ namespace Ombi.Core.Helpers
         public async Task<TvShowRequestBuilderV2> GetShowInfo(int id, string langCode = "en")
         {
             TheMovieDbRecord = await MovieDbApi.GetTVInfo(id.ToString(), langCode);
+            if (TheMovieDbRecord == null)
+            {
+                // The API layer returns null/default for transient TMDB failures (for example a
+                // 500 response). Let the request engine report a normal request error instead of
+                // throwing a NullReferenceException and aborting callers such as watchlist import.
+                return null;
+            }
+
+            // Sonarr requires a TVDB ID. TMDB's appended external_ids payload can occasionally
+            // be absent/incomplete even though the dedicated external_ids endpoint has the mapping.
+            // Refresh it before persisting the Ombi request so new requests do not enter the retry
+            // queue with TvDbId = 0.
+            if (!int.TryParse(TheMovieDbRecord.ExternalIds?.TvDbId, out var tvdbId) || tvdbId <= 0)
+            {
+                var externalIds = await MovieDbApi.GetTvExternals(id);
+                if (externalIds != null)
+                {
+                    TheMovieDbRecord.ExternalIds ??= new ExternalIds();
+
+                    if (externalIds.tvdb_id > 0)
+                    {
+                        TheMovieDbRecord.ExternalIds.TvDbId = externalIds.tvdb_id.ToString();
+                    }
+
+                    // Keep any stable IMDb identity even when TMDB still has no TVDB mapping.
+                    // Duplicate/content rules can use it to recognize provider-id aliases.
+                    if (string.IsNullOrEmpty(TheMovieDbRecord.ExternalIds.ImdbId) &&
+                        !string.IsNullOrEmpty(externalIds.imdb_id))
+                    {
+                        TheMovieDbRecord.ExternalIds.ImdbId = externalIds.imdb_id;
+                    }
+                }
+            }
 
             // Remove 'Specials Season'
+            TheMovieDbRecord.seasons ??= new List<Season>();
             var firstSeason = TheMovieDbRecord.seasons.OrderBy(x => x.season_number).FirstOrDefault();
             if (firstSeason?.season_number == 0)
             {
@@ -58,10 +92,13 @@ namespace Ombi.Core.Helpers
         {
             var animationGenre = TheMovieDbRecord.genres?.Any(s => s.name.Equals("Animation", StringComparison.InvariantCultureIgnoreCase)) ?? false;
             var animeKeyword = TheMovieDbRecord.Keywords?.KeywordsValue?.Any(s => s.Name.Equals("Anime", StringComparison.InvariantCultureIgnoreCase)) ?? false;
+            int.TryParse(TheMovieDbRecord.ExternalIds?.TvDbId, out var tvDbId);
             ChildRequest = new ChildRequests
             {
-                Id = model.TheMovieDbId, // This is set to 0 after the request rules have run, the request rules needs it to identify the request
                 RequestType = RequestType.TvShow,
+                RequestTheMovieDbId = model.TheMovieDbId,
+                RequestTvDbId = tvDbId,
+                RequestImdbId = TheMovieDbRecord.ExternalIds?.ImdbId ?? string.Empty,
                 RequestedDate = DateTime.UtcNow,
                 Approved = false,
                 RequestedUserId = userId,
@@ -95,11 +132,22 @@ namespace Ombi.Core.Helpers
         public async Task<TvShowRequestBuilderV2> BuildEpisodes(TvRequestViewModelV2 tv)
         {
             var allEpisodes = new List<Episode>();
+            var seasonNumbers = GetSeasonNumbersToLoad(tv);
 
-            foreach (var season in TheMovieDbRecord.seasons)
+            foreach (var seasonNumber in seasonNumbers)
             {
-                var seasonEpisodes = await MovieDbApi.GetSeasonEpisodes(TheMovieDbRecord.id, season.season_number, CancellationToken.None);
+                var seasonEpisodes = await MovieDbApi.GetSeasonEpisodes(TheMovieDbRecord.id, seasonNumber, CancellationToken.None);
+                if (seasonEpisodes?.episodes == null)
+                {
+                    continue;
+                }
+
                 allEpisodes.AddRange(seasonEpisodes.episodes);
+            }
+
+            if (!allEpisodes.Any())
+            {
+                return this;
             }
 
             if (tv.RequestAll)
@@ -230,6 +278,51 @@ namespace Ombi.Core.Helpers
             return this;
         }
 
+
+        private IReadOnlyCollection<int> GetSeasonNumbersToLoad(TvRequestViewModelV2 tv)
+        {
+            var availableSeasons = TheMovieDbRecord.seasons ?? new List<Season>();
+
+            if (tv.RequestAll)
+            {
+                return availableSeasons
+                    .Select(x => x.season_number)
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToArray();
+            }
+
+            if (tv.LatestSeason)
+            {
+                var latestSeason = availableSeasons
+                    .Where(x => x.season_number > 0)
+                    .OrderByDescending(x => x.season_number)
+                    .FirstOrDefault();
+
+                return latestSeason == null
+                    ? Array.Empty<int>()
+                    : new[] { latestSeason.season_number };
+            }
+
+            if (tv.FirstSeason)
+            {
+                var firstSeason = availableSeasons
+                    .Where(x => x.season_number > 0)
+                    .OrderBy(x => x.season_number)
+                    .FirstOrDefault();
+
+                return firstSeason == null
+                    ? Array.Empty<int>()
+                    : new[] { firstSeason.season_number };
+            }
+
+            return (tv.Seasons ?? new List<SeasonsViewModel>())
+                .Where(x => x.Episodes?.Any() == true)
+                .Select(x => x.SeasonNumber)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+        }
 
         public TvShowRequestBuilderV2 CreateNewRequest(TvRequestViewModelV2 tv, int rootPathOverride, int qualityOverride, int langProfile)
         {

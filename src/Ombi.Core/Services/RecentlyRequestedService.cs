@@ -56,7 +56,11 @@ namespace Ombi.Core.Services
             var customizationSettingsTask = _customizationSettings.GetSettingsAsync();
 
             var recentMovieRequests = _movieRequestRepository.GetAll().Include(x => x.RequestedUser).OrderByDescending(x => x.RequestedDate).Take(AmountToTake);
-            var recentTvRequests = _tvRequestRepository.GetChild().Include(x => x.RequestedUser).Include(x => x.ParentRequest).OrderByDescending(x => x.RequestedDate).Take(AmountToTake);
+            var recentTvRequests = _tvRequestRepository.GetChild()
+                .AsSplitQuery()
+                .OrderByDescending(x => x.RequestedDate)
+                .ThenByDescending(x => x.Id)
+                .Take(AmountToTake);
             var recentMusicRequests = _musicRequestRepository.GetAll().Include(x => x.RequestedUser).OrderByDescending(x => x.RequestedDate).Take(AmountToTake);
 
             var settings = await customizationSettingsTask;

@@ -112,6 +112,7 @@ namespace Ombi.DependencyInjection
             services.AddTransient<IPlexOAuthManager, PlexOAuthManager>();
             services.AddTransient<IPlexTokenKeepAliveService, PlexTokenKeepAliveService>();
             services.AddTransient<IVoteEngine, VoteEngine>();
+            services.AddTransient<IMediaCleanupEngine, MediaCleanupEngine>();
             services.AddTransient<IDemoMovieSearchEngine, DemoMovieSearchEngine>();
             services.AddTransient<IDemoTvSearchEngine, DemoTvSearchEngine>();
             services.AddTransient<IUserDeletionEngine, UserDeletionEngine>();
@@ -234,6 +235,8 @@ namespace Ombi.DependencyInjection
             services.AddTransient<INotificationService, NotificationService>();
             services.AddTransient<IEmailProvider, GenericEmailProvider>();
             services.AddTransient<INotificationHelper, NotificationHelper>();
+            services.AddSingleton<IBackgroundNotificationQueue, BackgroundNotificationQueue>();
+            services.AddHostedService<BackgroundNotificationHostedService>();
             services.AddSingleton<ICacheService, CacheService>();
             services.AddSingleton<IMediaCacheService, MediaCacheService>();
             services.AddScoped<IImageService, ImageService>();
@@ -254,6 +257,7 @@ namespace Ombi.DependencyInjection
             services.AddTransient<IChangeLogProcessor, ChangeLogProcessor>();
             services.AddScoped<IFeatureService, FeatureService>();
             services.AddTransient<IRecentlyRequestedService, RecentlyRequestedService>();
+            services.AddTransient<IQualityProfileSelectionService, QualityProfileSelectionService>();
             services.AddTransient<IPlexService, PlexService>();
             services.AddScoped<IPlexWatchlistStatusStore, PlexWatchlistStatusStore>();
             services.AddSingleton<IFileSystem, FileSystem>();
@@ -296,6 +300,8 @@ namespace Ombi.DependencyInjection
             services.AddTransient<IMediaDatabaseRefresh, MediaDatabaseRefresh>();
             services.AddTransient<IArrAvailabilityChecker, ArrAvailabilityChecker>();
             services.AddTransient<IAutoDeleteRequests, AutoDeleteRequests>();
+            services.AddTransient<IMediaCleanupJob, MediaCleanupJob>();
+            services.AddTransient<IMediaCleanupVoteReminderJob, MediaCleanupVoteReminderJob>();
         }
 
         public static void RegisterHubs(this IServiceCollection services)

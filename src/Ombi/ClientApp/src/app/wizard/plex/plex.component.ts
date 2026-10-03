@@ -90,20 +90,20 @@ export class PlexComponent implements OnInit, OnDestroy {
         resizable=1,
         width=500,
         height=500`);
-        this.plexTv.GetPin(this.clientId, "Ombi").subscribe((pin: any) => {
+        this.plexTv.GetPin().subscribe((pin: any) => {
 
             this.authService.login({ usePlexOAuth: true, password: "", rememberMe: true, username: "", plexTvPin: pin }).subscribe(x => {
                 oAuthWindow!.location.replace(x.url);
                 this.pinTimer = setInterval(() => {
                     // this.notify.info("Authenticating", "Loading... Please Wait");
-                    this.getPinResult(x.pinId);
+                    this.getPinResult(x.pollToken);
                 }, 3000);
             });
         });
     }
 
-    public getPinResult(pinId: number) {
-        this.plexOauth.oAuth(pinId).subscribe(x => {
+    public getPinResult(pollToken: string) {
+        this.plexOauth.oAuth(pollToken).subscribe(x => {
             
             if (!x.accessToken) {
                 if(!x.success) {
@@ -120,7 +120,7 @@ export class PlexComponent implements OnInit, OnDestroy {
                 usePlexAdminAccount: true,
             }).subscribe(u => {
                 if (u.result) {
-                    this.authService.oAuth(pinId).subscribe(c => {
+                    this.authService.oAuth(pollToken).subscribe(c => {
                         this.store.save("id_token", c.access_token);
                         this.completed = true;
                         this.notificationService.success("Created your Plex User!");

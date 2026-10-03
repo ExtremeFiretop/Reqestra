@@ -1,4 +1,5 @@
 
+using System;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,6 +24,14 @@ public class BaseController : Controller
             ip = remoteip.TrimEnd(',').Split(",").Select(s => s.Trim()).FirstOrDefault();
         }
 
-        return ip;
+        return SafeForLogging(ip);
+    }
+
+    protected static string SafeForLogging(string value)
+    {
+        return value?
+            .Replace(Environment.NewLine, string.Empty)
+            .Replace("\r", string.Empty)
+            .Replace("\n", string.Empty);
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.ServiceProcess;
 
 namespace Ombi.Updater
 {
@@ -75,44 +76,189 @@ namespace Ombi.Updater
 
         public bool Kill(StartupOptions opts)
         {
-            //if (opts.IsWindowsService)
-            //{
-            //    Console.WriteLine("Stopping Service {0}", opts.WindowsServiceName);
-            //    var process = new Process();
-            //    var startInfo =
-            //        new ProcessStartInfo
-            //        {
-            //            WindowStyle = ProcessWindowStyle.Hidden,
-            //            FileName = "cmd.exe",
-            //            Arguments = $"/C net stop \"{opts.WindowsServiceName}\""
-            //        };
-            //    process.StartInfo = startInfo;
-            //    process.Start();
-            //}
-            //else
-            //{
-                var process = Process.GetProcesses().FirstOrDefault(p => p.ProcessName == opts.ProcessName);
+            if (opts == null)
+            {
+                throw new ArgumentNullException(nameof(opts));
+            }
+
+            if (opts.IsWindowsService)
+            {
+                return StopWindowsService(opts.WindowsServiceName);
+            }
+
+            Process process;
+            if (opts.OmbiProcessId > 0)
+            {
+                try
+                {
+                    process = Process.GetProcessById(opts.OmbiProcessId);
+                }
+                catch (ArgumentException)
+                {
+                    // The exact process handed to the updater has already exited. This is
+                    // equivalent to a successful stop and it is safe to continue replacing files.
+                    Console.WriteLine("Process with id {0} has already exited", opts.OmbiProcessId);
+                    return true;
+                }
+
+                // Protect against the extremely small chance that the PID was recycled before
+                // the updater started. Never kill a different process merely because it now has
+                // the PID we were given.
+                if (!string.IsNullOrWhiteSpace(opts.ProcessName) &&
+                    !string.Equals(process.ProcessName, opts.ProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine(
+                        "Process id {0} belongs to '{1}', not expected process '{2}'. Update aborted.",
+                        opts.OmbiProcessId, process.ProcessName, opts.ProcessName);
+                    return false;
+                }
+            }
+            else
+            {
+                // Backward compatibility for manually invoked/older updater callers that do
+                // not provide a PID. New Reqestra builds always pass the exact current PID.
+                process = Process.GetProcesses().FirstOrDefault(p =>
+                    string.Equals(p.ProcessName, opts.ProcessName, StringComparison.OrdinalIgnoreCase));
 
                 if (process == null)
                 {
                     Console.WriteLine("Cannot find process with name: {0}", opts.ProcessName);
                     return false;
                 }
-                
+            }
 
-                if (process.Id > 0)
+            if (process.Id <= 0)
+            {
+                return false;
+            }
+
+            Console.WriteLine("[{0}]: Killing process {1}", process.Id, process.ProcessName);
+            process.Kill();
+            Console.WriteLine("[{0}]: Waiting for exit", process.Id);
+            process.WaitForExit();
+            Console.WriteLine("[{0}]: Process terminated successfully", process.Id);
+            return true;
+        }
+
+        public bool StartService(string serviceName)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.WriteLine("Windows services can only be started on Windows");
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(serviceName))
+            {
+                Console.WriteLine("Cannot start a Windows service without a service name");
+                return false;
+            }
+
+            try
+            {
+                using var service = new ServiceController(serviceName);
+                service.Refresh();
+
+                if (service.Status == ServiceControllerStatus.Running)
                 {
-                    Console.WriteLine("[{0}]: Killing process", process.Id);
-                    process.Kill();
-                    Console.WriteLine("[{0}]: Waiting for exit", process.Id);
-                    process.WaitForExit();
-                    Console.WriteLine("[{0}]: Process terminated successfully", process.Id);
-
-                return true;
+                    Console.WriteLine("Windows service {0} is already running", serviceName);
+                    return true;
                 }
 
-            return false;
-            //}
+                if (service.Status == ServiceControllerStatus.StartPending)
+                {
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+                    service.Refresh();
+                    return service.Status == ServiceControllerStatus.Running;
+                }
+
+                if (service.Status == ServiceControllerStatus.StopPending)
+                {
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                    service.Refresh();
+                }
+
+                if (service.Status == ServiceControllerStatus.Paused)
+                {
+                    Console.WriteLine("Continuing Windows service {0}", serviceName);
+                    service.Continue();
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+                    service.Refresh();
+                    return service.Status == ServiceControllerStatus.Running;
+                }
+
+                Console.WriteLine("Starting Windows service {0}", serviceName);
+                service.Start();
+                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+                service.Refresh();
+
+                var started = service.Status == ServiceControllerStatus.Running;
+                Console.WriteLine(started
+                    ? "Windows service {0} started successfully"
+                    : "Windows service {0} did not reach the Running state", serviceName);
+                return started;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to start Windows service {0}: {1}", serviceName, e.Message);
+                return false;
+            }
+        }
+
+        private static bool StopWindowsService(string serviceName)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.WriteLine("Windows services can only be stopped on Windows");
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(serviceName))
+            {
+                Console.WriteLine("Cannot stop a Windows service without a service name");
+                return false;
+            }
+
+            try
+            {
+                using var service = new ServiceController(serviceName);
+                service.Refresh();
+
+                if (service.Status == ServiceControllerStatus.Stopped)
+                {
+                    Console.WriteLine("Windows service {0} is already stopped", serviceName);
+                    return true;
+                }
+
+                if (service.Status == ServiceControllerStatus.StopPending)
+                {
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                    service.Refresh();
+                    return service.Status == ServiceControllerStatus.Stopped;
+                }
+
+                if (!service.CanStop)
+                {
+                    Console.WriteLine("Windows service {0} cannot be stopped", serviceName);
+                    return false;
+                }
+
+                Console.WriteLine("Stopping Windows service {0}", serviceName);
+                service.Stop();
+                service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                service.Refresh();
+
+                var stopped = service.Status == ServiceControllerStatus.Stopped;
+                Console.WriteLine(stopped
+                    ? "Windows service {0} stopped successfully"
+                    : "Windows service {0} did not reach the Stopped state", serviceName);
+                return stopped;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to stop Windows service {0}: {1}", serviceName, e.Message);
+                return false;
+            }
         }
 
         public void KillAll(string processName)

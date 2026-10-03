@@ -76,6 +76,7 @@ export class CarouselListComponent {
     
     private amountToLoad = 20;
     private currentlyLoaded = 0;
+    private loadVersion = 0;
     public responsiveOptions: any;
 
     constructor() {
@@ -181,13 +182,15 @@ export class CarouselListComponent {
             this.discoverOptions.set(DiscoverOption[DiscoverOption[localDiscoverOptions]]);
         }
 
-        // Load initial data - just enough to fill the first carousel page
-        // This reduces initial API calls and improves loading performance
+        // Load the first batch and render it immediately.
+        const loadVersion = ++this.loadVersion;
         await this.loadData(false);
-        
-        // If we don't have enough results to fill the carousel, load one more batch
-        if (this.discoverResults().length < 20) {
-            await this.loadData(false);
+
+        // If filtering leaves the carousel short, top it up in the background.
+        // This deliberately caps the automatic initial load at two batches while
+        // avoiding a second expensive TV enrichment pass on the critical render path.
+        if (this.discoverResults().length < this.amountToLoad) {
+            void this.topUpInitialCarousel(loadVersion);
         }
     }
 
@@ -247,10 +250,63 @@ export class CarouselListComponent {
         this.createInitialModel(clearExisting);
     }
 
+    private async topUpInitialCarousel(loadVersion: number) {
+        // Yield so Angular can paint the first batch before starting another request.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+
+        if (loadVersion !== this.loadVersion || this.discoverResults().length >= this.amountToLoad) {
+            return;
+        }
+
+        const offset = this.currentlyLoaded;
+        const discoverOption = +this.discoverOptions();
+        const amountToTopUp = this.amountToLoad - this.discoverResults().length;
+
+        try {
+            let movieResults: ISearchMovieResult[] | undefined;
+            let tvResults: ISearchTvResult[] | undefined;
+
+            switch (discoverOption) {
+                case DiscoverOption.Combined:
+                    [movieResults, tvResults] = await Promise.all([
+                        this.fetchMovies(offset, amountToTopUp),
+                        this.fetchTv(offset, amountToTopUp)
+                    ]);
+                    break;
+                case DiscoverOption.Movie:
+                    movieResults = await this.fetchMovies(offset, amountToTopUp);
+                    break;
+                case DiscoverOption.Tv:
+                    tvResults = await this.fetchTv(offset, amountToTopUp);
+                    break;
+            }
+
+            // The user may have changed media mode while the background request was running.
+            if (loadVersion !== this.loadVersion || discoverOption !== +this.discoverOptions()) {
+                return;
+            }
+
+            if (movieResults) {
+                this.movies.set(movieResults);
+                this.movieCount.emit(movieResults.length);
+            }
+            if (tvResults) {
+                this.tvShows.set(tvResults);
+            }
+
+            this.currentlyLoaded += amountToTopUp;
+            this.createInitialModel(false);
+        } catch (error) {
+            console.warn('Discover carousel background top-up failed', error);
+        }
+    }
+
     private async switchDiscoverMode(newMode: DiscoverOption) {
         if (this.discoverOptions() === newMode) {
             return;
         }
+        // Invalidate any deferred initial top-up from the previous mode.
+        this.loadVersion++;
         this.loading();
         this.currentlyLoaded = 0;
         this.discoverOptions.set(+newMode);
@@ -261,41 +317,45 @@ export class CarouselListComponent {
 
     private async loadMovies(offset?: number) {
         var loadOffset = offset ?? this.currentlyLoaded;
+        this.movies.set(await this.fetchMovies(loadOffset));
+        this.movieCount.emit(this.movies().length);
+    }
+
+    private async fetchMovies(loadOffset: number, amountToLoad: number = this.amountToLoad): Promise<ISearchMovieResult[]> {
         switch (this.discoverType()) {
             case DiscoverType.Popular:
-                this.movies.set(await this.searchService.popularMoviesByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.popularMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.Trending:
-                this.movies.set(await this.searchService.nowPlayingMoviesByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.nowPlayingMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.Upcoming:
-                this.movies.set(await this.searchService.upcomingMoviesByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.upcomingMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.RecentlyRequested:
-                this.movies.set(await this.searchService.recentlyRequestedMoviesByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.recentlyRequestedMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.Seasonal:
-                this.movies.set(await this.searchService.seasonalMoviesByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.seasonalMoviesByPage(loadOffset, amountToLoad);
+            default:
+                return [];
         }
-        this.movieCount.emit(this.movies().length);
     }
 
     private async loadTv(offset?: number) {
         var loadOffset = offset ?? this.currentlyLoaded;
+        this.tvShows.set(await this.fetchTv(loadOffset));
+    }
+
+    private async fetchTv(loadOffset: number, amountToLoad: number = this.amountToLoad): Promise<ISearchTvResult[]> {
         switch (this.discoverType()) {
             case DiscoverType.Popular:
-                this.tvShows.set(await this.searchService.popularTvByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.popularTvByPage(loadOffset, amountToLoad);
             case DiscoverType.Trending:
-                this.tvShows.set(await this.searchService.trendingTvByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.trendingTvByPage(loadOffset, amountToLoad);
             case DiscoverType.Upcoming:
-                this.tvShows.set(await this.searchService.anticipatedTvByPage(loadOffset, this.amountToLoad));
-                break;
+                return await this.searchService.anticipatedTvByPage(loadOffset, amountToLoad);
             case DiscoverType.RecentlyRequested:
-                // this.tvShows = await this.searchService.recentlyRequestedMoviesByPage(loadOffset, this.amountToLoad); // TODO need to do some more mapping
-                break;
+                // TODO need to do some more mapping
+                return [];
+            default:
+                return [];
         }
     }
 

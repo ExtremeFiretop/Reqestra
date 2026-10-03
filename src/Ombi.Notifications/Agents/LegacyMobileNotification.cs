@@ -166,7 +166,7 @@ namespace Ombi.Notifications.Agents
 
             // Send to user
             var playerIds = GetUsers(model, NotificationType.RequestDeclined);
-            await AddSubscribedUsers(playerIds);
+            playerIds = await AddSubscribedUsers(playerIds);
             await Send(playerIds, notification, settings, model);
         }
 
@@ -186,7 +186,7 @@ namespace Ombi.Notifications.Agents
             // Send to user
             var playerIds = GetUsers(model, NotificationType.RequestApproved);
 
-            await AddSubscribedUsers(playerIds);
+            playerIds = await AddSubscribedUsers(playerIds);
             await Send(playerIds, notification, settings, model);
         }
 
@@ -205,7 +205,7 @@ namespace Ombi.Notifications.Agents
             // Send to user
             var playerIds = GetUsers(model, NotificationType.RequestAvailable);
 
-            await AddSubscribedUsers(playerIds);
+            playerIds = await AddSubscribedUsers(playerIds);
             await Send(playerIds, notification, settings, model);
         }
         protected override Task Send(NotificationMessage model, MobileNotificationSettings settings)
@@ -277,7 +277,7 @@ namespace Ombi.Notifications.Agents
             if (model.UserId.HasValue() && (!notificationIds?.Any() ?? true))
             {
                 var user = _userManager.Users.Include(x => x.NotificationUserIds).FirstOrDefault(x => x.Id == model.UserId);
-                notificationIds = user.NotificationUserIds;
+                notificationIds = user?.NotificationUserIds;
             }
 
             if (!notificationIds?.Any() ?? true)
@@ -312,19 +312,37 @@ namespace Ombi.Notifications.Agents
             return playerIds;
         }
 
-        private async Task AddSubscribedUsers(List<string> playerIds)
+        private async Task<List<string>> AddSubscribedUsers(List<string> playerIds)
         {
-            if (await Subscribed.AnyAsync())
+            playerIds ??= new List<string>();
+
+            if (Subscribed == null)
             {
-                foreach (var user in Subscribed)
-                {
-                    var notificationId = user.NotificationUserIds;
-                    if (notificationId.Any())
-                    {
-                        playerIds.AddRange(notificationId.Select(x => x.PlayerId));
-                    }
-                }
+                return playerIds;
             }
+
+            var subscribedUserIds = await Subscribed
+                .Where(x => x != null)
+                .Select(x => x.Id)
+                .Distinct()
+                .ToListAsync();
+
+            if (!subscribedUserIds.Any())
+            {
+                return playerIds;
+            }
+
+            var subscribedPlayerIds = await _notifications.GetAll()
+                .Where(x => subscribedUserIds.Contains(x.UserId))
+                .Select(x => x.PlayerId)
+                .ToListAsync();
+
+            playerIds.AddRange(subscribedPlayerIds.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            return playerIds
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToList();
         }
 
         protected override async Task PartiallyAvailable(NotificationOptions model, MobileNotificationSettings settings)
@@ -343,7 +361,7 @@ namespace Ombi.Notifications.Agents
             // Send to user
             var playerIds = GetUsers(model, NotificationType.PartiallyAvailable);
 
-            await AddSubscribedUsers(playerIds);
+            playerIds = await AddSubscribedUsers(playerIds);
             await Send(playerIds, notification, settings, model);
         }
     }

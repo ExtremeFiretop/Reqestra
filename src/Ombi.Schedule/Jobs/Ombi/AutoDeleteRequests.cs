@@ -3,8 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Ombi.Core.Engine.Interfaces;
 using Ombi.Core.Settings;
 using Ombi.Settings.Settings.Models;
+using Ombi.Store.Entities;
 using Ombi.Store.Repository.Requests;
 using Quartz;
 
@@ -18,15 +20,18 @@ namespace Ombi.Schedule.Jobs.Ombi
         private readonly ITvRequestRepository _tvRequestRepository;
         private readonly IMusicRequestRepository _musicRequestRepository;
         private readonly ILogger<AutoDeleteRequests> _logger;
+        private readonly IMediaCleanupEngine _mediaCleanupEngine;
 
         public AutoDeleteRequests(ISettingsService<OmbiSettings> ombiSettings, IMovieRequestRepository movieRequest,
-            ILogger<AutoDeleteRequests> logger, ITvRequestRepository tvRequestRepository, IMusicRequestRepository musicRequestRepository)
+            ILogger<AutoDeleteRequests> logger, ITvRequestRepository tvRequestRepository, IMusicRequestRepository musicRequestRepository,
+            IMediaCleanupEngine mediaCleanupEngine = null)
         {
             _ombiSettings = ombiSettings;
             _movieRequests = movieRequest;
             _tvRequestRepository = tvRequestRepository;
             _musicRequestRepository = musicRequestRepository;
             _logger = logger;
+            _mediaCleanupEngine = mediaCleanupEngine;
         }
 
         public async Task Execute(IJobExecutionContext job)
@@ -53,6 +58,17 @@ namespace Ombi.Schedule.Jobs.Ombi
             }
 
             await _movieRequests.DeleteRange(requestsToDelete);
+
+            if (_mediaCleanupEngine != null)
+            {
+                foreach (var request in requestsToDelete)
+                {
+                    await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                        RequestType.Movie,
+                        request.Id,
+                        request.TheMovieDbId);
+                }
+            }
         }
 
         private async Task ProcessTvRequests(DateTime date)
@@ -67,6 +83,18 @@ namespace Ombi.Schedule.Jobs.Ombi
             var parentRequests = await _tvRequestRepository.Get().Where(x => !x.ChildRequests.Any()).ToListAsync();
 
             await _tvRequestRepository.DeleteRange(parentRequests);
+
+            if (_mediaCleanupEngine != null)
+            {
+                foreach (var request in parentRequests)
+                {
+                    await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                        RequestType.TvShow,
+                        request.Id,
+                        request.ExternalProviderId,
+                        request.TvDbId);
+                }
+            }
         }
 
         private async Task ProcessMusicRequests(DateTime date)

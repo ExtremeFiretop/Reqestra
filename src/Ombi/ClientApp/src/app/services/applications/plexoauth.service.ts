@@ -16,7 +16,7 @@ export class PlexOAuthService extends ServiceHelpers {
         super(http, "/api/v1/PlexOAuth/", href);
     }
 
-    public oAuth(pin: number): Observable<IPlexOAuthAccessToken> {
-        return this.http.get<IPlexOAuthAccessToken>(`${this.url}${pin}`,  {headers: this.headers});
+    public oAuth(pollToken: string): Observable<IPlexOAuthAccessToken> {
+        return this.http.post<IPlexOAuthAccessToken>(this.url, { pollToken }, {headers: this.headers});
     }
 }

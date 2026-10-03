@@ -32,6 +32,7 @@ namespace Ombi.Schedule.Jobs.Ombi
         private readonly IMovieRequestRepository _movieRequestRepository;
         private readonly ITvRequestRepository _tvRequestRepository;
         private readonly IMusicRequestRepository _musicRequestRepository;
+        private const int MissingTvDbMaxAutomaticRetries = 3;
 
         public async Task Execute(IJobExecutionContext job)
         {
@@ -42,7 +43,7 @@ namespace Ombi.Schedule.Jobs.Ombi
             {
                 if (request.Type == RequestType.Movie)
                 {
-                    var movieRequest = await _movieRequestRepository.GetAll().FirstOrDefaultAsync(x => x.Id == request.RequestId);
+                    var movieRequest = await _movieRequestRepository.GetWithUser().FirstOrDefaultAsync(x => x.Id == request.RequestId);
                     if (movieRequest == null)
                     {
                         await _requestQueue.Delete(request);
@@ -67,6 +68,38 @@ namespace Ombi.Schedule.Jobs.Ombi
                         await _requestQueue.SaveChangesAsync();
                         continue;
                     }
+
+                    // Deterministic mapping failures require an administrator to reconcile the
+                    // Ombi/TMDB request with the existing Sonarr series. Keep the queue row
+                    // incomplete so it remains visible under Failed Requests, but do not keep
+                    // retrying an operation that cannot succeed without human intervention.
+                    var manualInterventionRequired = request.Error?.StartsWith(
+                        TvSender.ManualInterventionQueuePrefix,
+                        StringComparison.OrdinalIgnoreCase) == true;
+                    if (manualInterventionRequired)
+                    {
+                        continue;
+                    }
+
+                    // A TV request with no TVDB mapping can never be accepted by Sonarr. Keep
+                    // deterministic failures capped, but allow legacy rows created before the
+                    // Sonarr identity-repair fallback existed to pass through TvSender once. The
+                    // current sender records that it attempted the Sonarr fallback in the terminal
+                    // error text, so a failed migration attempt becomes capped again immediately.
+                    // This lets historical rows benefit from newer repair logic without restoring
+                    // the old endless-retry behavior.
+                    var unresolvedTvDb = tvRequest.ParentRequest?.TvDbId <= 0 &&
+                        request.Error?.StartsWith(TvSender.MissingTvDbAfterRefreshPrefix, StringComparison.OrdinalIgnoreCase) == true;
+                    var sonarrIdentityRepairAlreadyAttempted = request.Error?.IndexOf(
+                        TvSender.MissingTvDbSonarrRepairAttemptedMarker,
+                        StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (unresolvedTvDb &&
+                        request.RetryCount >= MissingTvDbMaxAutomaticRetries &&
+                        sonarrIdentityRepairAlreadyAttempted)
+                    {
+                        continue;
+                    }
+
                     var result = await _tvSender.Send(tvRequest);
                     if (result.Success)
                     {

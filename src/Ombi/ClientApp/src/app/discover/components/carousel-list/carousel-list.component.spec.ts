@@ -302,7 +302,6 @@ describe('CarouselListComponent', () => {
       await component.ngOnInit();
 
       const results = component.discoverResults();
-      // ngOnInit loads a second batch when < 20 results, so we get 2 batches
       const movieResults = results.filter(r => r.type === RequestType.movie);
       const tvResults = results.filter(r => r.type === RequestType.tvShow);
       expect(movieResults.length).toBeGreaterThan(0);
@@ -379,16 +378,28 @@ describe('CarouselListComponent', () => {
       expect(component.hasResults()).toBe(true);
     });
 
-    it('should track totalResults', async () => {
-      const movies = [makeMovie({ id: 1 }), makeMovie({ id: 2 }), makeMovie({ id: 3 })];
-      mockSearchService.popularMoviesByPage.mockResolvedValue(movies);
+    it('should render the first batch before topping up in the background', async () => {
+      vi.useFakeTimers();
+      try {
+        const movies = [makeMovie({ id: 1 }), makeMovie({ id: 2 }), makeMovie({ id: 3 })];
+        mockSearchService.popularMoviesByPage.mockResolvedValue(movies);
 
-      const { component } = createComponent(mockSearchService);
-      setupInputs(component, DiscoverType.Popular, DiscoverOption.Movie);
-      await component.ngOnInit();
+        const { component } = createComponent(mockSearchService);
+        setupInputs(component, DiscoverType.Popular, DiscoverOption.Movie);
+        await component.ngOnInit();
 
-      // ngOnInit loads a second batch when < 20 results, so results are doubled
-      expect(component.totalResults()).toBe(6);
+        expect(component.totalResults()).toBe(3);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenCalledTimes(1);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(1, 0, 20);
+
+        await vi.runAllTimersAsync();
+
+        expect(component.totalResults()).toBe(6);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenCalledTimes(2);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(2, 20, 17);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

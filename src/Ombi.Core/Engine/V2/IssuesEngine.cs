@@ -32,7 +32,13 @@ namespace Ombi.Core.Engine.V2
 
         public async Task<IEnumerable<IssuesSummaryModel>> GetIssues(int position, int take, IssueStatus status, CancellationToken token)
         {
-            var issues = await _issues.GetAll().Where(x => x.Status == status && x.ProviderId != null).Skip(position).Take(take).OrderBy(x => x.Title).ToListAsync(token);
+            var issues = await _issues.GetAll()
+                .Where(x => x.Status == status && x.ProviderId != null)
+                .OrderBy(x => x.Title)
+                .ThenBy(x => x.Id)
+                .Skip(position)
+                .Take(take)
+                .ToListAsync(token);
             var grouped = issues.GroupBy(x => new { x.Title, x.ProviderId }, (key, g) => new { key = key, Issues = g });
             
             var model = new List<IssuesSummaryModel>();

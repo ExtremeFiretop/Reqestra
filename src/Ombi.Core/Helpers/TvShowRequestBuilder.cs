@@ -71,8 +71,10 @@ namespace Ombi.Core.Helpers
         {
             ChildRequest = new ChildRequests
             {
-                Id = model.TvDbId, // This is set to 0 after the request rules have run, the request rules needs it to identify the request
                 RequestType = RequestType.TvShow,
+                RequestTheMovieDbId = TheMovieDbRecord?.Id ?? 0,
+                RequestTvDbId = model.TvDbId,
+                RequestImdbId = ShowInfo.externals?.imdb ?? string.Empty,
                 RequestedDate = DateTime.UtcNow,
                 Approved = false,
                 RequestedUserId = userId,

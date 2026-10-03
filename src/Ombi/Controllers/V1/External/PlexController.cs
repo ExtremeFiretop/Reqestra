@@ -26,13 +26,15 @@ namespace Ombi.Controllers.V1.External
     public class PlexController : Controller
     {
         public PlexController(IPlexApi plexApi, ISettingsService<PlexSettings> plexSettings,
-            ILogger<PlexController> logger, IPlexOAuthManager manager, IPlexService plexService)
+            ILogger<PlexController> logger, IPlexOAuthManager manager, IPlexService plexService,
+            OmbiUserManager userManager)
         {
             PlexApi = plexApi;
             PlexSettings = plexSettings;
             _log = logger;
             _plexOAuthManager = manager;
             _plexService = plexService;
+            _userManager = userManager;
         }
 
         private IPlexApi PlexApi { get; }
@@ -40,6 +42,7 @@ namespace Ombi.Controllers.V1.External
         private readonly ILogger<PlexController> _log;
         private readonly IPlexOAuthManager _plexOAuthManager;
         private readonly IPlexService _plexService;
+        private readonly OmbiUserManager _userManager;
 
         /// <summary>
         /// Signs into the Plex API.
@@ -52,10 +55,20 @@ namespace Ombi.Controllers.V1.External
         {
             try
             {
+                // This endpoint is anonymous purely so the first-run wizard can sign in to Plex.tv
+                // and populate the server configuration before any user account exists. Once an
+                // administrator has been set up the wizard is finished, so this is no longer part of
+                // the setup flow and should short-circuit.
+                var admins = await _userManager.GetUsersInRoleAsync(OmbiRoles.Admin);
+                if (admins.Any())
+                {
+                    return null;
+                }
+
                 // Do we already have settings?
                 _log.LogDebug("OK, signing into Plex");
                 var settings = await PlexSettings.GetSettingsAsync();
-                if (!settings.Servers?.Any() ?? false) return null;
+                if (settings.Servers?.Any() ?? false) return null;
 
                 _log.LogDebug("This is our first time, good to go!");
 
@@ -259,9 +272,9 @@ namespace Ombi.Controllers.V1.External
         {
             var vm = new List<UsersViewModel>();
             var s = await PlexSettings.GetSettingsAsync();
-            foreach (var server in s.Servers)
+            foreach (var plexAuthToken in s.Servers.Select(server => server.PlexAuthToken))
             {
-                var users = await PlexApi.GetUsers(server.PlexAuthToken);
+                var users = await PlexApi.GetUsers(plexAuthToken);
                 if (users?.User != null && users.User.Any())
                 {
                     vm.AddRange(users.User.Select(u => new UsersViewModel
@@ -269,6 +282,30 @@ namespace Ombi.Controllers.V1.External
                         Username = u.Username,
                         Id = u.Id
                     }));
+                }
+
+                // The user-management exclusion picker historically only listed /api/users,
+                // which contains shared/friend accounts but not the Plex server owner. The
+                // watchlist importer now treats the owner as an import target too, so include
+                // the owner here to make that target selectable in "Plex Users excluded from
+                // Import". BannedPlexUserIds is keyed by this numeric plex.tv account id.
+                try
+                {
+                    var account = await PlexApi.GetAccount(plexAuthToken);
+                    if (account?.user != null && !string.IsNullOrWhiteSpace(account.user.id))
+                    {
+                        vm.Add(new UsersViewModel
+                        {
+                            Username = account.user.username ?? account.user.title,
+                            Id = account.user.id
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Friends can still be configured even if owner lookup is temporarily
+                    // unavailable. Avoid making the whole settings picker fail for that case.
+                    _log.LogWarning(ex, "Unable to resolve Plex server owner for the user-management exclusion list");
                 }
             }
 
@@ -287,12 +324,12 @@ namespace Ombi.Controllers.V1.External
             Uri url;
             if (!wizard.Wizard)
             {
-                url = await _plexOAuthManager.GetOAuthUrl(wizard.Pin.code);
+                url = await _plexOAuthManager.GetOAuthUrl(wizard.Pin?.pollToken);
             }
             else
             {
                 var websiteAddress =$"{this.Request.Scheme}://{this.Request.Host}{this.Request.PathBase}";
-                url = await _plexOAuthManager.GetWizardOAuthUrl(wizard.Pin.code, websiteAddress);
+                url = await _plexOAuthManager.GetWizardOAuthUrl(wizard.Pin?.pollToken, websiteAddress);
             }
 
             if (url == null)

@@ -14,29 +14,30 @@ namespace Ombi.Updater
         private const int MaxRetries = 3;
         private const int RetryDelayMs = 1000;
 
-        public Installer(ILogger<Installer> log)
+        public Installer(ILogger<Installer> log, IProcessProvider processProvider)
         {
             _log = log;
+            _processProvider = processProvider;
         }
 
         private readonly ILogger<Installer> _log;
+        private readonly IProcessProvider _processProvider;
 
         public void Start(StartupOptions opt)
         {
-            var p = new ProcessProvider();
-            bool killed = false;
+            bool stopped = false;
             try
             {
-                killed = p.Kill(opt);
+                stopped = _processProvider.Kill(opt);
             }
             catch (Exception e)
             {
-                _log.LogError(e, "Error killing Ombi process");
+                _log.LogError(e, "Error stopping Reqestra process/service");
             }
 
-            if (!killed)
+            if (!stopped)
             {
-                _log.LogError("Couldn't kill the Ombi process, aborting update");
+                _log.LogError("Couldn't stop the Reqestra process/service, aborting update");
                 return;
             }
 
@@ -60,28 +61,23 @@ namespace Ombi.Updater
             }
             if (options.IsWindowsService)
             {
-                var startInfo =
-                    new ProcessStartInfo
-                    {
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        FileName = "cmd.exe",
-                        Arguments = $"/C net start \"{options.WindowsServiceName}\""
-                    };
-
-                using (var process = new Process { StartInfo = startInfo })
+                if (!_processProvider.StartService(options.WindowsServiceName))
                 {
-                    process.Start();
+                    _log.LogError(
+                        "Reqestra files were updated, but Windows service {ServiceName} could not be restarted",
+                        options.WindowsServiceName);
+                    return;
                 }
             }
             else
             {
                 if (!string.IsNullOrEmpty(options.Host))
                 {
-                    startupArgsBuilder.Append($"--host {options.Host} ");
+                    startupArgsBuilder.Append($"--host \"{options.Host}\" ");
                 }
                 if (!string.IsNullOrEmpty(options.Storage))
                 {
-                    startupArgsBuilder.Append($"--storage {options.Storage}");
+                    startupArgsBuilder.Append($"--storage \"{options.Storage}\"");
                 }
 
                 var start = new ProcessStartInfo
@@ -106,10 +102,13 @@ namespace Ombi.Updater
 
         private void MoveFiles(StartupOptions options)
         {
-            var location = System.Reflection.Assembly.GetEntryAssembly().Location;
-            location = Path.GetDirectoryName(location);
+            // Assembly.Location is empty for a bundled single-file executable. The updater is
+            // published as a self-contained single file, so use its process base directory to
+            // locate the parent TempUpdate directory containing the extracted release.
+            var location = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
             _log.LogDebug("We are currently in dir {0}", location);
-            var updatedLocation = Directory.GetParent(location).FullName;
+            var updatedLocation = Directory.GetParent(location)?.FullName
+                ?? throw new InvalidOperationException($"Unable to resolve update directory from '{location}'.");
             _log.LogDebug("The files are in {0}", updatedLocation); // Since the updater is a folder deeper
             _log.LogDebug("Ombi is installed at {0}", options.ApplicationPath);
 

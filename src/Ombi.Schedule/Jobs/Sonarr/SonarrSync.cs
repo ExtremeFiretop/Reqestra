@@ -17,6 +17,7 @@ using Ombi.Schedule.Jobs.Radarr;
 using Ombi.Settings.Settings.Models.External;
 using Ombi.Store.Context;
 using Ombi.Store.Entities;
+using Ombi.Store.Repository.Requests;
 using Quartz;
 
 namespace Ombi.Schedule.Jobs.Sonarr
@@ -24,13 +25,14 @@ namespace Ombi.Schedule.Jobs.Sonarr
     public class SonarrSync : ISonarrSync
     {
         public SonarrSync(ISettingsService<SonarrSettings> s, ISonarrV3Api api, ILogger<SonarrSync> l, ExternalContext ctx,
-            IMovieDbApi movieDbApi)
+            IMovieDbApi movieDbApi, ITvRequestRepository tvRequestRepository)
         {
             _settings = s;
             _api = api;
             _log = l;
             _ctx = ctx;
             _movieDbApi = movieDbApi;
+            _tvRequestRepository = tvRequestRepository;
             _settings.ClearCache();
         }
 
@@ -39,138 +41,155 @@ namespace Ombi.Schedule.Jobs.Sonarr
         private readonly ILogger<SonarrSync> _log;
         private readonly ExternalContext _ctx;
         private readonly IMovieDbApi _movieDbApi;
+        private readonly ITvRequestRepository _tvRequestRepository;
 
         public async Task Execute(IJobExecutionContext job)
         {
             try
             {
+                try
+                {
+                    var removedRequestRows = await _tvRequestRepository.CleanupOrphanedRequestData();
+                    if (removedRequestRows > 0)
+                    {
+                        _log.LogInformation(
+                            "Media request maintenance removed {RemovedRows} orphaned or empty TV request row(s).",
+                            removedRequestRows);
+                    }
+                }
+                catch (Exception maintenanceException)
+                {
+                    // Request-table housekeeping must never prevent the Sonarr cache from syncing.
+                    _log.LogWarning(maintenanceException,
+                        "Could not run TV request maintenance before the Sonarr sync; continuing with the Sonarr sync.");
+                }
+
                 var settings = await _settings.GetSettingsAsync();
                 if (!settings.Enabled)
                 {
                     return;
                 }
+
                 var series = await _api.GetSeries(settings.ApiKey, settings.FullUri);
-                if (series != null)
+                if (series == null)
                 {
-                    var sonarrSeries = series as ImmutableHashSet<SonarrSeries> ?? series.ToImmutableHashSet();
-                    var ids = sonarrSeries.Select(x => new SonarrDto
-                    {
-                        TvDbId = x.tvdbId,
-                        ImdbId = x.imdbId,
-                        Title = x.title,
-                        MovieDbId = 0,
-                        Id = x.id,
-                        Monitored = x.monitored,
-                        EpisodeFileCount = x.episodeFileCount
-                    }).ToHashSet();
+                    _log.LogWarning("Sonarr returned no series snapshot; preserving the existing Sonarr cache.");
+                    return;
+                }
 
-                    var strat = _ctx.Database.CreateExecutionStrategy();
-                    await strat.ExecuteAsync(async () =>
-                    {
-                        using var tran = await _ctx.Database.BeginTransactionAsync();
-                        await _ctx.Database.ExecuteSqlRawAsync("DELETE FROM SonarrCache");
-                        // Reset auto-increment to prevent Int32 overflow (see #5224)
-                        await _ctx.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence WHERE name = 'SonarrCache'");
-                        await tran.CommitAsync();
-                    });
+                var sonarrSeries = series as ImmutableHashSet<SonarrSeries> ?? series.ToImmutableHashSet();
+                var ids = sonarrSeries.Select(x => new SonarrDto
+                {
+                    TvDbId = x.tvdbId,
+                    ImdbId = x.imdbId,
+                    Title = x.title,
+                    MovieDbId = x.tmdbId,
+                    Id = x.id,
+                    Monitored = x.monitored,
+                    EpisodeFileCount = x.episodeFileCount
+                }).ToHashSet();
 
-                    var sonarrCacheToSave = new HashSet<SonarrCache>();
-                    foreach (var id in ids)
+                // Build the complete replacement snapshot in memory before deleting anything from
+                // OmbiExternal. If any Sonarr/TMDb call fails, the outer catch preserves the last
+                // known-good cache rather than leaving a partially rebuilt cache behind.
+                var seriesSnapshot = new List<SonarrCache>();
+                var episodeSnapshot = new List<SonarrEpisodeCache>();
+
+                foreach (var id in ids)
+                {
+                    var cache = new SonarrCache
                     {
-                        var cache = new SonarrCache
+                        TvDbId = id.TvDbId
+                    };
+
+                    if (id.MovieDbId > 0)
+                    {
+                        // Modern Sonarr responses already contain the TMDB ID. Prefer that value
+                        // instead of translating TVDB -> TMDB through another provider call.
+                        cache.TheMovieDbId = id.MovieDbId;
+                    }
+                    else
+                    {
+                        FindResult findResult = null;
+
+                        if (id.TvDbId > 0)
                         {
-                            TvDbId = id.TvDbId
-                        };
+                            findResult = await _movieDbApi.Find(id.TvDbId.ToString(), ExternalSource.tvdb_id);
+                        }
 
-                        var findResult = await _movieDbApi.Find(id.TvDbId.ToString(), ExternalSource.tvdb_id);
-                        if (findResult.tv_results.Any())
+                        if (findResult?.tv_results?.Any() != true && !string.IsNullOrWhiteSpace(id.ImdbId))
                         {
-                            cache.TheMovieDbId = findResult.tv_results.FirstOrDefault()?.id ?? -1;
+                            findResult = await _movieDbApi.Find(id.ImdbId, ExternalSource.imdb_id);
+                        }
+
+                        if (findResult?.tv_results?.Any() == true)
+                        {
+                            cache.TheMovieDbId = findResult.tv_results.FirstOrDefault()?.id ?? 0;
                             id.MovieDbId = cache.TheMovieDbId;
                         }
-                        sonarrCacheToSave.Add(cache);
                     }
 
-                    await _ctx.SonarrCache.AddRangeAsync(sonarrCacheToSave);
-                    await _ctx.SaveChangesAsync();
-                    sonarrCacheToSave.Clear();
-
-                    foreach (var s in ids)
-                    {
-                        if (!s.Monitored && s.EpisodeFileCount == 0) // We have files
-                        {
-                            continue;
-                        }
-
-                        _log.LogDebug($"Syncing series: {s.Title}");
-                        var episodes = await _api.GetEpisodes(s.Id, settings.ApiKey, settings.FullUri);
-                        var monitoredEpisodes = episodes.Where(x => x.monitored || x.hasFile);
-
-                        // Delete existing episodes for this series before adding new ones
-                        strat = _ctx.Database.CreateExecutionStrategy();
-                        await strat.ExecuteAsync(async () =>
-                        {
-                            using var tran = await _ctx.Database.BeginTransactionAsync();
-                            await _ctx.Database.ExecuteSqlRawAsync("DELETE FROM SonarrEpisodeCache WHERE TvDbId = {0}", s.TvDbId);
-                            await tran.CommitAsync();
-                        });
-
-                        //var allExistingEpisodes = await _ctx.SonarrEpisodeCache.Where(x => x.TvDbId == s.tvdbId).ToListAsync();
-                        // Add to DB
-                        _log.LogDebug("We have the episodes, adding to db transaction");
-                        var episodesToAdd = monitoredEpisodes.Select(episode =>
-                                new SonarrEpisodeCache
-                                {
-                                    EpisodeNumber = episode.episodeNumber,
-                                    SeasonNumber = episode.seasonNumber,
-                                    TvDbId = s.TvDbId,
-                                    MovieDbId = s.MovieDbId,
-                                    HasFile = episode.hasFile
-                                });
-                        //var episodesToAdd = new List<SonarrEpisodeCache>();
-
-                        //foreach (var monitored in monitoredEpisodes)
-                        //{
-                        //    var existing = allExistingEpisodes.FirstOrDefault(x => x.SeasonNumber == monitored.seasonNumber && x.EpisodeNumber == monitored.episodeNumber);
-                        //    if (existing == null)
-                        //    {
-                        //        // Just add a new one
-                        //        episodesToAdd.Add(new SonarrEpisodeCache
-                        //        {
-                        //            EpisodeNumber = monitored.episodeNumber,
-                        //            SeasonNumber = monitored.seasonNumber,
-                        //            TvDbId = s.tvdbId,
-                        //            HasFile = monitored.hasFile
-                        //        });
-                        //    } 
-                        //    else
-                        //    {
-                        //        // Do we need to update the availability?
-                        //        if (monitored.hasFile != existing.HasFile)
-                        //        {
-                        //            existing.HasFile = monitored.hasFile;
-                        //        }
-                        //    }
-
-                        //}
-                        strat = _ctx.Database.CreateExecutionStrategy();
-                        await strat.ExecuteAsync(async () =>
-                        {
-                            using var tran = await _ctx.Database.BeginTransactionAsync();
-                            await _ctx.SonarrEpisodeCache.AddRangeAsync(episodesToAdd);
-                            _log.LogDebug("Commiting the transaction");
-                            await _ctx.SaveChangesAsync();
-                            await tran.CommitAsync();
-                        });
-                    }
-
+                    seriesSnapshot.Add(cache);
                 }
+
+                foreach (var s in ids)
+                {
+                    if (!s.Monitored && s.EpisodeFileCount == 0)
+                    {
+                        // There cannot be a currently monitored/downloaded episode for this series,
+                        // so its episode snapshot is intentionally empty.
+                        continue;
+                    }
+
+                    _log.LogDebug("Syncing series: {Title}", s.Title);
+                    var episodes = await _api.GetEpisodes(s.Id, settings.ApiKey, settings.FullUri);
+                    if (episodes == null)
+                    {
+                        throw new InvalidOperationException($"Sonarr returned no episode snapshot for series '{s.Title}' ({s.Id}).");
+                    }
+
+                    episodeSnapshot.AddRange(episodes
+                        .Where(x => x.monitored || x.hasFile)
+                        .Select(episode => new SonarrEpisodeCache
+                        {
+                            EpisodeNumber = episode.episodeNumber,
+                            SeasonNumber = episode.seasonNumber,
+                            TvDbId = s.TvDbId,
+                            MovieDbId = s.MovieDbId,
+                            HasFile = episode.hasFile
+                        }));
+                }
+
+                var strat = _ctx.Database.CreateExecutionStrategy();
+                await strat.ExecuteAsync(async () =>
+                {
+                    using var tran = await _ctx.Database.BeginTransactionAsync();
+
+                    // Reconcile both tables from one complete snapshot. This removes episode rows for
+                    // series that were deleted from Sonarr as well as rows for episodes that are no
+                    // longer monitored and no longer have files.
+                    await _ctx.Database.ExecuteSqlRawAsync("DELETE FROM SonarrEpisodeCache");
+                    await _ctx.Database.ExecuteSqlRawAsync("DELETE FROM SonarrCache");
+                    await _ctx.Database.ResetAutoIncrementAsync("SonarrEpisodeCache");
+                    await _ctx.Database.ResetAutoIncrementAsync("SonarrCache");
+
+                    await _ctx.SonarrCache.AddRangeAsync(seriesSnapshot);
+                    await _ctx.SonarrEpisodeCache.AddRangeAsync(episodeSnapshot);
+                    await _ctx.SaveChangesAsync();
+                    await tran.CommitAsync();
+                });
+
+                _log.LogInformation(
+                    "Reconciled Sonarr cache from a complete snapshot. Series={SeriesCount}, Episodes={EpisodeCount}",
+                    seriesSnapshot.Count,
+                    episodeSnapshot.Count);
 
                 await OmbiQuartz.TriggerJob(nameof(IArrAvailabilityChecker), "DVR");
             }
             catch (Exception e)
             {
-                _log.LogError(LoggingEvents.SonarrCacher, e, "Exception when trying to cache Sonarr");
+                _log.LogError(LoggingEvents.SonarrCacher, e,
+                    "Exception when trying to cache Sonarr. Existing Sonarr cache was preserved unless the replacement transaction completed.");
             }
         }
 

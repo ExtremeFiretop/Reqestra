@@ -21,6 +21,7 @@ namespace Ombi.Store.Repository.Requests
         public async Task<TvRequests> GetRequestAsync(int tvDbId)
         {
             return await Db.TvRequests.Where(x => x.ExternalProviderId == tvDbId)
+                .AsSplitQuery()
                 .Include(x => x.ChildRequests)
                     .ThenInclude(x => x.RequestedUser)
                 .Include(x => x.ChildRequests)
@@ -43,6 +44,7 @@ namespace Ombi.Store.Repository.Requests
         public IQueryable<TvRequests> Get()
         {
             return Db.TvRequests
+                .AsSplitQuery()
                 .Include(x => x.ChildRequests)
                 .ThenInclude(x => x.RequestedUser)
                 .Include(x => x.ChildRequests)
@@ -54,6 +56,7 @@ namespace Ombi.Store.Repository.Requests
         public IQueryable<TvRequests> Get(string userId)
         {
             return Db.TvRequests
+                .AsSplitQuery()
                 .Include(x => x.ChildRequests)
                 .ThenInclude(x => x.RequestedUser)
                 .Include(x => x.ChildRequests)
@@ -87,6 +90,7 @@ namespace Ombi.Store.Repository.Requests
                 .Include(x => x.ParentRequest)
                 .Include(x => x.SeasonRequests)
                 .ThenInclude(x => x.Episodes)
+                .AsSplitQuery()
                 .AsQueryable();
         }
 
@@ -98,6 +102,7 @@ namespace Ombi.Store.Repository.Requests
                 .Include(x => x.ParentRequest)
                 .Include(x => x.SeasonRequests)
                 .ThenInclude(x => x.Episodes)
+                .AsSplitQuery()
                 .AsQueryable();
         }
 
@@ -133,14 +138,131 @@ namespace Ombi.Store.Repository.Requests
 
         public async Task DeleteChild(ChildRequests request)
         {
-            Db.ChildRequests.Remove(request);
+            if (request == null)
+            {
+                return;
+            }
+
+            await EnsureChildGraphLoaded(request);
+            MarkChildGraphForDeletion(request);
             await InternalSaveChanges();
+            await CleanupOrphanedRequestData();
+        }
+
+        public async Task DeleteRequest(TvRequests request)
+        {
+            if (request == null)
+            {
+                return;
+            }
+
+            var children = request.ChildRequests;
+            if (children == null)
+            {
+                children = await GetChild().Where(x => x.ParentRequestId == request.Id).ToListAsync();
+            }
+
+            foreach (var child in children.ToList())
+            {
+                await EnsureChildGraphLoaded(child);
+                MarkChildGraphForDeletion(child);
+            }
+
+            Db.TvRequests.Remove(request);
+            await InternalSaveChanges();
+            await CleanupOrphanedRequestData();
         }
 
         public async Task DeleteChildRange(IEnumerable<ChildRequests> request)
         {
-            Db.ChildRequests.RemoveRange(request);
-            await InternalSaveChanges();
+            var children = request?.ToList() ?? new List<ChildRequests>();
+            foreach (var child in children)
+            {
+                await EnsureChildGraphLoaded(child);
+                MarkChildGraphForDeletion(child);
+            }
+
+            if (children.Count > 0)
+            {
+                await InternalSaveChanges();
+            }
+
+            await CleanupOrphanedRequestData();
+        }
+
+        public async Task<int> CleanupOrphanedRequestData()
+        {
+            var removed = 0;
+
+            // Repair structural orphans only. A linked-but-empty season/child/parent can be
+            // legitimate request history and cannot, by itself, make ExistingTvRequestRule think
+            // an episode is requested. Deleting those rows here made maintenance unnecessarily
+            // destructive and could erase unrelated TV request history after a partial cleanup.
+            var orphanEpisodes = await Db.EpisodeRequests
+                .Where(x => !Db.Set<SeasonRequests>().Any(s => s.Id == x.SeasonId))
+                .ToListAsync();
+            if (orphanEpisodes.Count > 0)
+            {
+                Db.EpisodeRequests.RemoveRange(orphanEpisodes);
+                removed += orphanEpisodes.Count;
+                await InternalSaveChanges();
+            }
+
+            var orphanSeasons = await Db.Set<SeasonRequests>()
+                .Where(x => !Db.ChildRequests.Any(c => c.Id == x.ChildRequestId))
+                .ToListAsync();
+            if (orphanSeasons.Count > 0)
+            {
+                Db.Set<SeasonRequests>().RemoveRange(orphanSeasons);
+                removed += orphanSeasons.Count;
+                await InternalSaveChanges();
+            }
+
+            var orphanChildren = await Db.ChildRequests
+                .Where(x => !Db.TvRequests.Any(t => t.Id == x.ParentRequestId))
+                .ToListAsync();
+            if (orphanChildren.Count > 0)
+            {
+                Db.ChildRequests.RemoveRange(orphanChildren);
+                removed += orphanChildren.Count;
+                await InternalSaveChanges();
+            }
+
+            return removed;
+        }
+
+        private async Task EnsureChildGraphLoaded(ChildRequests request)
+        {
+            if (request.SeasonRequests != null)
+            {
+                return;
+            }
+
+            request.SeasonRequests = await Db.Set<SeasonRequests>()
+                .Where(x => x.ChildRequestId == request.Id)
+                .Include(x => x.Episodes)
+                .ToListAsync();
+        }
+
+        private void MarkChildGraphForDeletion(ChildRequests request)
+        {
+            var seasons = request.SeasonRequests?.ToList() ?? new List<SeasonRequests>();
+            var episodes = seasons
+                .Where(x => x.Episodes != null)
+                .SelectMany(x => x.Episodes)
+                .ToList();
+
+            if (episodes.Count > 0)
+            {
+                Db.EpisodeRequests.RemoveRange(episodes);
+            }
+
+            if (seasons.Count > 0)
+            {
+                Db.Set<SeasonRequests>().RemoveRange(seasons);
+            }
+
+            Db.ChildRequests.Remove(request);
         }
 
         public async Task Update(TvRequests request)

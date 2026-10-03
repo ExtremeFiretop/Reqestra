@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using Moq.AutoMock;
 using NUnit.Framework;
+using Ombi.Api.External.ExternalApis.TheMovieDb.Models;
 using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
 using Ombi.Helpers;
@@ -137,6 +138,30 @@ namespace Ombi.Schedule.Tests
                 yield return new TestCaseData(new List<int> { 1, 99, 101, 555, 468, 469 }).Returns("1, 99, 101, 555, 468-469").SetName("More Complex");
                 yield return new TestCaseData(new List<int> { 1 }).Returns("1").SetName("Single Episode");
             }
+        }
+
+        [Test]
+        public void GetTvEpisodesString_WhenTmdbSeasonIsMissing_ListsKnownEpisodesInsteadOfThrowing()
+        {
+            var mocker = new AutoMocker();
+            var subject = mocker.CreateInstance<NewsletterJob>();
+            var method = typeof(NewsletterJob).GetMethod("GetTvEpisodesString", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+
+            var tvInfo = new TvInfo
+            {
+                number_of_episodes = 10,
+                seasons = new List<Season>()
+            };
+            ICollection<IMediaServerEpisode> episodes = new List<IMediaServerEpisode>
+            {
+                new PlexEpisode { SeasonNumber = 3, EpisodeNumber = 1, Title = "Episode 1" },
+                new PlexEpisode { SeasonNumber = 3, EpisodeNumber = 2, Title = "Episode 2" }
+            };
+
+            var result = (string)method.Invoke(subject, new object[] { tvInfo, episodes });
+
+            Assert.That(result, Does.Contain("1-2"));
         }
 
         private sealed class TestExternalContext : ExternalContext

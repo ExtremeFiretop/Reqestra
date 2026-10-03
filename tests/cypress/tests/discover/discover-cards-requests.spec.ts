@@ -1,24 +1,87 @@
 import { DiscoverType } from "@/integration/page-objects/shared/DiscoverCard";
 import { discoverPage as Page } from "@/integration/page-objects";
+import popularMovies from "@fixtures/discover/popularMovies.json";
+
+const initialDiscoverLoad = 20;
+
+// These tests exercise Reqestra card/request state, not the contents or
+// ordering of TMDB's live Popular feed. Use the repository fixture so a newly
+// listed movie with sparse external metadata cannot change the card's loading
+// path and make the state assertions nondeterministic.
+//
+// The fixture contains fewer than the carousel's 20-item initial target.
+// Preserve the production pagination contract by returning a distinct second
+// page when the carousel asks to top up the missing cards.
+const interceptPopularMovie = (index: number, overrides: Partial<(typeof popularMovies)[number]>) => {
+  const body = popularMovies.map((movie) => ({ ...movie }));
+  Object.assign(body[index], overrides);
+
+  const amountToTopUp = Math.max(0, initialDiscoverLoad - body.length);
+  const topUpMovies = popularMovies.slice(0, amountToTopUp).map((movie, topUpIndex) => {
+    const id = 9_000_000 + topUpIndex;
+    return {
+      ...movie,
+      id,
+      theMovieDbId: id.toString(),
+      imdbId: `tt9${(topUpIndex + 1).toString().padStart(7, "0")}`,
+      title: `Top-up Movie ${topUpIndex + 1}`,
+      originalTitle: `Top-up Movie ${topUpIndex + 1}`,
+    };
+  });
+
+  cy.intercept(
+    "GET",
+    `**/search/Movie/Popular/0/${initialDiscoverLoad}`,
+    { body },
+  ).as("cardsResponse");
+
+  if (amountToTopUp > 0) {
+    cy.intercept(
+      "GET",
+      `**/search/Movie/Popular/${initialDiscoverLoad}/${amountToTopUp}`,
+      { body: topUpMovies },
+    ).as("cardsTopUpResponse");
+  }
+};
 
 describe("Discover Cards Requests Tests", () => {
   beforeEach(() => {
     cy.login();
   });
 
-  it("Not requested movie allows admin to request", () => {
-    cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[0];
-        movie.available = false;
-        movie.approved = false;
-        movie.requested = false;
+  it("Tops up a short popular movie response from the next source offset", () => {
+    interceptPopularMovie(0, {
+      available: false,
+      approved: false,
+      requested: false,
+    });
 
-        body[0] = movie;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    cy.then(() => {
+      window.localStorage.setItem("DiscoverOptions2", "2");
+    });
+
+    Page.visit();
+
+    cy.wait("@cardsResponse").then((initial) => {
+      expect(initial.response!.body).to.have.length(popularMovies.length);
+    });
+
+    cy.wait("@cardsTopUpResponse").then((topUp) => {
+      expect(topUp.request.url).to.match(/\/search\/Movie\/Popular\/20\/4(?:\?.*)?$/i);
+      expect(topUp.response!.body).to.have.length(4);
+
+      const ids = topUp.response!.body.map((movie: (typeof popularMovies)[number]) => movie.id);
+      expect(new Set(ids).size).to.equal(ids.length);
+      expect(ids.every((id: number) => !popularMovies.some((movie) => movie.id === id))).to.be.true;
+    });
+  });
+
+  it("Not requested movie allows admin to request", () => {
+    interceptPopularMovie(0, {
+      available: false,
+      approved: false,
+      requested: false,
+    });
 
     cy.intercept("POST", "**/Request/Movie", {
       result: true,
@@ -42,7 +105,6 @@ describe("Discover Cards Requests Tests", () => {
       card.requestButton.should("exist");
       // Not visible until hover
       card.requestButton.should("not.be.visible");
-      cy.wait(500);
       card.topLevelCard.realHover();
 
       card.requestButton.should("be.visible");
@@ -55,9 +117,13 @@ describe("Discover Cards Requests Tests", () => {
 
       cy.verifyNotification("has been added successfully");
 
-      card.requestButton.should("not.exist");
+      // Assert the positive "requested" state first: these retry until the card
+      // has re-rendered, which is also what removes the request button. Checking
+      // button removal last avoids a race where the just-clicked (still focused)
+      // button lingers in the DOM for a beat after the state change.
       card.availabilityText.should("have.text", "Pending");
       card.statusClass.should("have.class", "requested");
+      card.requestButton.should("not.exist");
     });
   });
 
@@ -70,18 +136,11 @@ describe("Discover Cards Requests Tests", () => {
         cy.removeLogin();
         cy.loginWithCreds(id, "a");
 
-        cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
-          req.reply((res) => {
-            const body = res.body;
-            const movie = body[6];
-            movie.available = false;
-            movie.approved = false;
-            movie.requested = false;
-
-            body[6] = movie;
-            res.send(body);
-          });
-        }).as("cardsResponse");
+        interceptPopularMovie(6, {
+          available: false,
+          approved: false,
+          requested: false,
+        });
 
         cy.intercept("POST", "**/Request/Movie", {
           result: true,
@@ -105,7 +164,6 @@ describe("Discover Cards Requests Tests", () => {
           card.requestButton.should("exist");
           // Not visible until hover
           card.requestButton.should("not.be.visible");
-          cy.wait(500);
           card.topLevelCard.realHover();
 
           card.requestButton.should("be.visible");
@@ -115,9 +173,12 @@ describe("Discover Cards Requests Tests", () => {
 
           cy.verifyNotification("has been added successfully");
 
-          card.requestButton.should("not.exist");
+          // Assert the positive "requested" state first (these retry until the
+          // card re-renders, which is what removes the button); check button
+          // removal last to avoid a race with the just-clicked focused button.
           card.availabilityText.should("have.text", "Pending");
           card.statusClass.should("have.class", "requested");
+          card.requestButton.should("not.exist");
         });
       });
     });
@@ -127,18 +188,11 @@ describe("Discover Cards Requests Tests", () => {
     cy.then(() => {
       window.localStorage.setItem("DiscoverOptions2", "2");
     });
-    cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[1];
-        movie.available = true;
-        movie.approved = false;
-        movie.requested = false;
-
-        body[1] = movie;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    interceptPopularMovie(1, {
+      available: true,
+      approved: false,
+      requested: false,
+    });
 
     Page.visit();
 
@@ -161,18 +215,11 @@ describe("Discover Cards Requests Tests", () => {
     cy.then(() => {
       window.localStorage.setItem("DiscoverOptions2", "2");
     });
-    cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[1];
-        movie.available = false;
-        movie.approved = false;
-        movie.requested = true;
-
-        body[1] = movie;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    interceptPopularMovie(1, {
+      available: false,
+      approved: false,
+      requested: true,
+    });
 
     Page.visit();
 
@@ -195,18 +242,11 @@ describe("Discover Cards Requests Tests", () => {
     cy.then(() => {
       window.localStorage.setItem("DiscoverOptions2", "2");
     });
-    cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[1];
-        movie.available = false;
-        movie.approved = true;
-        movie.requested = true;
-
-        body[1] = movie;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    interceptPopularMovie(1, {
+      available: false,
+      approved: true,
+      requested: true,
+    });
 
     Page.visit();
 
@@ -327,9 +367,12 @@ describe("Discover Cards Requests Tests", () => {
       var expectedId = body[3].id;
       var title = body[3].title;
 
-      cy.wait(3000);
-
       const card = Page.popularCarousel.getCard(expectedId, false, DiscoverType.Popular);
+      // The card resolves its availability via an async detail lookup and only
+      // then renders the request button; a deterministic wait is not reliable
+      // here (the button only renders once the carousel settles and the card is
+      // hovered), so allow that async work a beat before hovering.
+      cy.wait(3000);
       card.title.realHover();
 
       cy.waitUntil(() => {
@@ -389,9 +432,12 @@ describe("Discover Cards Requests Tests", () => {
           var expectedId = body[5].id;
           var title = body[5].title;
 
-          cy.wait(3000);
-
           const card = Page.popularCarousel.getCard(expectedId, false, DiscoverType.Popular);
+          // The card resolves its availability via an async detail lookup and
+          // only then renders the request button; a deterministic wait is not
+          // reliable here (the button only renders once the carousel settles and
+          // the card is hovered), so allow that async work a beat before hovering.
+          cy.wait(3000);
           card.title.realHover();
 
           cy.waitUntil(() => {

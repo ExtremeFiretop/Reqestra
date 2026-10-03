@@ -277,6 +277,9 @@ namespace Ombi.Store.Migrations.OmbiMySql
                     b.Property<DateTime?>("LastLoggedIn")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTime?>("LastActive")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("tinyint(1)");
 
@@ -541,6 +544,9 @@ namespace Ombi.Store.Migrations.OmbiMySql
                     b.Property<int>("ParentRequestId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("QualityOverride")
+                        .HasColumnType("int");
+
                     b.Property<int>("RequestType")
                         .HasColumnType("int");
 
@@ -738,6 +744,9 @@ namespace Ombi.Store.Migrations.OmbiMySql
                         .HasColumnType("longtext");
 
                     b.Property<int>("QualityOverride")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QualityOverride4K")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("ReleaseDate")

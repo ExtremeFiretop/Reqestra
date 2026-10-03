@@ -20,6 +20,8 @@ namespace Ombi.Api.External.MediaServers.Plex.Models.OAuth
         public DateTime createdAt { get; set; }
         public DateTime expiresAt { get; set; }
         public string authToken { get; set; }
+        // Ombi-only opaque handle used to poll this PIN without exposing the numeric Plex PIN id.
+        public string pollToken { get; set; }
     }
 
     public class Location

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -476,6 +476,13 @@ namespace Ombi.Controllers.V1
         [HttpPost("authentication")]
         public async Task<bool> AuthenticationsSettings([FromBody]AuthenticationSettings settings)
         {
+            // Avoid locking every interactive user out. Header authentication remains an
+            // independent option, but disabling Ombi credentials specifically requires Plex OAuth.
+            if (settings.DisableLocalAuthentication && !settings.EnableOAuth)
+            {
+                return false;
+            }
+
             return await Save(settings);
         }
 
@@ -657,6 +664,8 @@ namespace Ombi.Controllers.V1
             j.AutoDeleteRequests = j.AutoDeleteRequests.HasValue() ? j.AutoDeleteRequests : JobSettingsHelper.AutoDeleteRequests(j);
             j.EmbyRecentlyAddedSync = j.EmbyRecentlyAddedSync.HasValue() ? j.EmbyRecentlyAddedSync : JobSettingsHelper.EmbyRecentlyAddedSync(j);
             j.PlexWatchlistImport = j.PlexWatchlistImport.HasValue() ? j.PlexWatchlistImport : JobSettingsHelper.PlexWatchlistImport(j);
+            j.MediaCleanup = j.MediaCleanup.HasValue() ? j.MediaCleanup : JobSettingsHelper.MediaCleanup(j);
+            j.MediaCleanupVoteReminder = j.MediaCleanupVoteReminder.HasValue() ? j.MediaCleanupVoteReminder : JobSettingsHelper.MediaCleanupVoteReminder(j);
 
             return j;
         }
@@ -798,6 +807,39 @@ namespace Ombi.Controllers.V1
         {
             var vote = await Get<VoteSettings>();
             return vote.Enabled;
+        }
+
+        /// <summary>
+        /// Save media cleanup settings.
+        /// </summary>
+        [HttpPost("mediacleanup")]
+        [Admin]
+        public async Task<bool> MediaCleanupSettings([FromBody] MediaCleanupSettings settings)
+        {
+            settings.MinimumDeleteVotes = Math.Max(1, settings.MinimumDeleteVotes);
+            settings.RequiredVoteMargin = Math.Max(0, settings.RequiredVoteMargin);
+            settings.VotingPeriodDays = Math.Max(1, settings.VotingPeriodDays);
+            settings.GracePeriodDays = Math.Max(0, settings.GracePeriodDays);
+            settings.MinimumMediaAgeDays = Math.Max(0, settings.MinimumMediaAgeDays);
+            return await Save(settings);
+        }
+
+        /// <summary>
+        /// Gets media cleanup settings.
+        /// </summary>
+        [HttpGet("mediacleanup")]
+        [Admin]
+        public async Task<MediaCleanupSettings> MediaCleanupSettings()
+        {
+            return await Get<MediaCleanupSettings>();
+        }
+
+        [AllowAnonymous]
+        [HttpGet("mediacleanupenabled")]
+        public async Task<bool> MediaCleanupEnabled()
+        {
+            var cleanup = await Get<MediaCleanupSettings>();
+            return cleanup.Enabled;
         }
 
         /// <summary>

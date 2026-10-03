@@ -50,7 +50,11 @@ export default defineConfig({
         })
       );
 
-      // Add performance monitoring
+      // Keep the administrator token in the Cypress Node process so it can be
+      // reused across spec files. This prevents global per-spec setup from
+      // repeatedly hitting the production authentication rate limiter.
+      const authTokenCache = new Map<string, string>();
+
       on('task', {
         log(message) {
           console.log(message);
@@ -58,6 +62,13 @@ export default defineConfig({
         },
         table(message) {
           console.table(message);
+          return null;
+        },
+        getCachedAuthToken(username: string) {
+          return authTokenCache.get(username) ?? null;
+        },
+        cacheAuthToken({ username, token }: { username: string; token: string }) {
+          authTokenCache.set(username, token);
           return null;
         }
       });

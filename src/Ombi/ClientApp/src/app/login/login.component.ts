@@ -132,6 +132,9 @@ export class LoginComponent implements OnDestroy, OnInit {
       .getAuthentication()
       .subscribe((x) => {
         this.authenticationSettings = x;
+        if (x.disableLocalAuthentication) {
+          this.loginWithOmbi = false;
+        }
         this.headerAuth();
       });
     this.settingsService.getClientId().subscribe((x) => (this.clientId = x));
@@ -149,6 +152,13 @@ export class LoginComponent implements OnDestroy, OnInit {
   }
 
   public onSubmit(form: UntypedFormGroup) {
+    if (this.authenticationSettings?.disableLocalAuthentication) {
+      this.notify.open("Ombi username/password sign-in is disabled", "OK", {
+        duration: 3000,
+      });
+      return;
+    }
+
     if (form.invalid) {
       this.notify.open(this.errorValidation, "OK", {
         duration: 300000,
@@ -161,7 +171,7 @@ export class LoginComponent implements OnDestroy, OnInit {
       username: value.username,
       rememberMe: value.rememberMe,
       usePlexOAuth: false,
-      plexTvPin: { id: 0, code: "" },
+      plexTvPin: { pollToken: "" },
     };
     this.authService.requiresPassword(user).subscribe((x) => {
       if (x && this.authenticationSettings.allowNoPassword) {
@@ -214,7 +224,7 @@ export class LoginComponent implements OnDestroy, OnInit {
         width=500,
         height=500`
     );
-    this.plexTv.GetPin(this.clientId, this.appName).subscribe({
+    this.plexTv.GetPin().subscribe({
       next: (pin: any) => {
         this.authService
           .login({
@@ -233,7 +243,7 @@ export class LoginComponent implements OnDestroy, OnInit {
               }
 
               this.pinTimer = setInterval(() => {
-                this.getPinResult(x.pinId);
+                this.getPinResult(x.pollToken);
               }, 1000);
             },
             error: () => {
@@ -253,13 +263,13 @@ export class LoginComponent implements OnDestroy, OnInit {
     });
   }
 
-  public getPinResult(pinId: number) {
+  public getPinResult(pollToken: string) {
     if (this.oAuthWindow.closed) {
         if (this.pinTimer) {
           clearInterval(this.pinTimer);
         }
     }
-    this.authService.oAuth(pinId).subscribe(
+    this.authService.oAuth(pollToken).subscribe(
       (x) => {
         if (x.access_token) {
           clearInterval(this.pinTimer);

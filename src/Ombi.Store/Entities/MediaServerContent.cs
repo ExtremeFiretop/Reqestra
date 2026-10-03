@@ -27,10 +27,10 @@ namespace Ombi.Store.Entities
         public bool HasImdb => !string.IsNullOrEmpty(ImdbId);
 
         [NotMapped]
-        public bool HasTvDb => !string.IsNullOrEmpty(TvDbId);
+        public bool HasTvDb => int.TryParse(TvDbId, out var tvDbId) && tvDbId > 0;
 
         [NotMapped]
-        public bool HasTheMovieDb => !string.IsNullOrEmpty(TheMovieDbId);
+        public bool HasTheMovieDb => int.TryParse(TheMovieDbId, out var theMovieDbId) && theMovieDbId > 0;
 
         [NotMapped]
         public abstract RecentlyAddedType RecentlyAddedType { get; }

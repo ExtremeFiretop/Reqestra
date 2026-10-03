@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Ombi.Core.Engine;
+using Ombi.Core.Rule.Rules;
 using Ombi.Core.Rule.Interfaces;
 using Ombi.Store.Entities;
 using Ombi.Store.Entities.Requests;
@@ -31,28 +32,92 @@ namespace Ombi.Core.Rule.Rules.Request
             if (obj.RequestType == RequestType.TvShow)
             {
                 var tvRequest = (ChildRequests) obj;
-                
+
+                var requestTheMovieDbId = tvRequest.RequestTheMovieDbId;
+                var requestTheMovieDbIdString = requestTheMovieDbId > 0
+                    ? requestTheMovieDbId.ToString()
+                    : string.Empty;
+                var requestTvDbIdString = tvRequest.RequestTvDbId > 0
+                    ? tvRequest.RequestTvDbId.ToString()
+                    : string.Empty;
+                var requestImdbId = tvRequest.RequestImdbId ?? string.Empty;
+                var hasTheMovieDbId = !string.IsNullOrEmpty(requestTheMovieDbIdString);
+                var hasTvDbId = !string.IsNullOrEmpty(requestTvDbIdString);
+                var hasImdbId = !string.IsNullOrEmpty(requestImdbId);
+
                 var tvContent = _plexContent.GetAll().Include(x => x.Episodes).Where(x => x.Type == MediaType.Series);
-                // We need to do a check on the TVDBId
-                var anyMovieDbMatches = await tvContent.FirstOrDefaultAsync(x => x.TheMovieDbId.Length > 0 && x.TheMovieDbId == tvRequest.Id.ToString()); 
-                if (anyMovieDbMatches == null)
+
+                // Prefer the request's exact TMDB identity before falling back to alternate ids.
+                // This matters when old duplicate rows already exist from a previous provider-id
+                // migration: an exact current identity should always win over an alias match.
+                PlexServerContent providerIdMatch = null;
+                if (hasTheMovieDbId)
                 {
-                    // So we do not have a TVDB Id, that really sucks.
-                    // Let's try and match on the title and year of the show
-                    var titleAndYearMatch = await tvContent.FirstOrDefaultAsync(x =>
-                        x.Title == tvRequest.Title
-                        && x.ReleaseYear == tvRequest.ReleaseYear.Year.ToString());
-                    if (titleAndYearMatch != null)
+                    providerIdMatch = await tvContent.FirstOrDefaultAsync(x => x.TheMovieDbId == requestTheMovieDbIdString);
+                }
+                if (providerIdMatch == null && hasTvDbId)
+                {
+                    providerIdMatch = await tvContent.FirstOrDefaultAsync(x => x.TvDbId == requestTvDbIdString);
+                }
+                if (providerIdMatch == null && hasImdbId)
+                {
+                    providerIdMatch = await tvContent.FirstOrDefaultAsync(x => x.ImdbId == requestImdbId);
+                }
+
+                if (providerIdMatch != null)
+                {
+                    var providerFingerprintMatch = await PlexEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                        _plexContent,
+                        tvRequest.SeasonRequests,
+                        providerIdMatch.Id);
+                    if (providerFingerprintMatch != null)
                     {
-                        // We have a match! Surprise Motherfucker
-                        return CheckExistingContent(tvRequest, titleAndYearMatch);
+                        return CheckExistingContent(
+                            tvRequest,
+                            providerIdMatch,
+                            providerFingerprintMatch.SourceSeasonNumber,
+                            providerFingerprintMatch.PlexSeasonNumber);
                     }
 
-                    // We do not have this
-                    return Success();
+                    return CheckExistingContent(tvRequest, providerIdMatch);
                 }
-                // looks like we have a match on the TVDbID
-                return CheckExistingContent(tvRequest, anyMovieDbMatches);
+
+                // Provider ids can be incomplete on older Plex metadata. Keep the existing
+                // title/year fallback as a last resort.
+                var titleAndYearMatch = await tvContent.FirstOrDefaultAsync(x =>
+                    x.Title == tvRequest.Title
+                    && x.ReleaseYear == tvRequest.ReleaseYear.Year.ToString());
+                if (titleAndYearMatch != null)
+                {
+                    var titleFingerprintMatch = await PlexEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                        _plexContent,
+                        tvRequest.SeasonRequests,
+                        titleAndYearMatch.Id);
+                    if (titleFingerprintMatch != null)
+                    {
+                        return CheckExistingContent(
+                            tvRequest,
+                            titleAndYearMatch,
+                            titleFingerprintMatch.SourceSeasonNumber,
+                            titleFingerprintMatch.PlexSeasonNumber);
+                    }
+
+                    return CheckExistingContent(tvRequest, titleAndYearMatch);
+                }
+
+                var fingerprintMatch = await PlexEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                    _plexContent,
+                    tvRequest.SeasonRequests);
+                if (fingerprintMatch != null)
+                {
+                    return CheckExistingContent(
+                        tvRequest,
+                        fingerprintMatch.Content,
+                        fingerprintMatch.SourceSeasonNumber,
+                        fingerprintMatch.PlexSeasonNumber);
+                }
+
+                return Success();
             }
             if (obj.RequestType == RequestType.Movie)
             {
@@ -67,13 +132,21 @@ namespace Ombi.Core.Rule.Rules.Request
         }
 
 
-        private RuleResult CheckExistingContent(ChildRequests child, PlexServerContent content)
+        private RuleResult CheckExistingContent(
+            ChildRequests child,
+            PlexServerContent content,
+            int? sourceSeasonNumber = null,
+            int? plexSeasonNumber = null)
         {
             foreach (var season in child.SeasonRequests)
             {
                 var episodesToRemove = new List<EpisodeRequests>();
+                var seasonNumberToCheck = sourceSeasonNumber.HasValue && plexSeasonNumber.HasValue &&
+                                          season.SeasonNumber == sourceSeasonNumber.Value
+                    ? plexSeasonNumber.Value
+                    : season.SeasonNumber;
                 var currentSeasonRequest =
-                    content.Episodes.Where(x => x.SeasonNumber == season.SeasonNumber).ToList();
+                    content.Episodes.Where(x => x.SeasonNumber == seasonNumberToCheck).ToList();
                 if (!currentSeasonRequest.Any())
                 {
                     continue;

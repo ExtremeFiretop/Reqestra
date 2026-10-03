@@ -54,6 +54,7 @@ namespace Ombi.Core.Senders
 
         public async Task<SenderResult> Send(MovieRequests model, bool is4K)
         {
+            SenderResult result = null;
             try
             {
                 var cpSettings = await _couchPotatoSettings.GetSettingsAsync();
@@ -69,49 +70,43 @@ namespace Ombi.Core.Senders
                 }
                 if (radarrSettings.Enabled)
                 {
-                    return await SendToRadarr(model, radarrSettings, is4K);
+                    result = await SendToRadarr(model, radarrSettings, is4K);
                 }
-
-                var dogSettings = await _dogNzbSettings.GetSettingsAsync();
-                if (dogSettings.Enabled)
+                else
                 {
-                    await SendToDogNzb(model, dogSettings);
-                    return new SenderResult
+                    var dogSettings = await _dogNzbSettings.GetSettingsAsync();
+                    if (dogSettings.Enabled)
                     {
-                        Success = true,
-                        Sent = true,
-                    };
+                        await SendToDogNzb(model, dogSettings);
+                        result = new SenderResult
+                        {
+                            Success = true,
+                            Sent = true,
+                        };
+                    }
+                    else if (cpSettings.Enabled)
+                    {
+                        result = await SendToCp(model, cpSettings, cpSettings.DefaultProfileId);
+                    }
                 }
 
-                if (cpSettings.Enabled)
+                if (result != null && result.Success)
                 {
-                    return await SendToCp(model, cpSettings, cpSettings.DefaultProfileId);
+                    return result;
                 }
             }
             catch (Exception e)
             {
                 _log.LogError(e, "Error when sending movie to DVR app, added to the request queue");
+                await AddToRequestFailureQueue(model, e.Message);
+                return new SenderResult { Success = false, Sent = false, Message = e.Message };
+            }
 
-                // Check if already in request quee
-                var existingQueue = await _requestQueuRepository.FirstOrDefaultAsync(x => x.RequestId == model.Id);
-                if (existingQueue != null)
-                {
-                    existingQueue.RetryCount++;
-                    existingQueue.Error = e.Message;
-                    await _requestQueuRepository.SaveChangesAsync();
-                }
-                else
-                {
-                    await _requestQueuRepository.Add(new RequestQueue
-                    {
-                        Dts = DateTime.UtcNow,
-                        Error = e.Message,
-                        RequestId = model.Id,
-                        Type = RequestType.Movie,
-                        RetryCount = 0
-                    });
-                    await _notificationHelper.Notify(model, NotificationType.ItemAddedToFaultQueue);
-                }
+            if (result != null && !result.Success)
+            {
+                _log.LogWarning("Movie send to DVR app failed: {Message}, added to the request queue", result.Message);
+                await AddToRequestFailureQueue(model, result.Message);
+                return result;
             }
 
             return new SenderResult
@@ -188,10 +183,13 @@ namespace Ombi.Core.Senders
                 }
             }
 
-            // Overrides on the request take priority
-            if (model.QualityOverride > 0)
+            // Overrides on the request take priority. Normal and 4K requests have
+            // independent profile storage because they can target different Radarr instances.
+            var requestQualityOverride = is4k ? model.QualityOverride4K : model.QualityOverride;
+            var profileOverrideRequested = requestQualityOverride > 0;
+            if (profileOverrideRequested)
             {
-                qualityToUse = model.QualityOverride;
+                qualityToUse = requestQualityOverride;
             }
             if (model.RootPathOverride > 0)
             {
@@ -223,23 +221,41 @@ namespace Ombi.Core.Senders
                 }
                 return new SenderResult { Success = true, Sent = false };
             }
-            // We have the movie, check if we can request it or change the status
+            // We have the movie. A request-time quality selection is an explicit request to
+            // use that profile even when Radarr already contains the movie. Reprofile first,
+            // then search so Radarr can upgrade/reacquire it under the newly selected cutoff.
+            var movieNeedsUpdate = false;
+            if (profileOverrideRequested && existingMovie.qualityProfileId != qualityToUse)
+            {
+                existingMovie.qualityProfileId = qualityToUse;
+                movieNeedsUpdate = true;
+            }
+
             if (!existingMovie.monitored)
             {
-                // let's set it to monitored and search for it
                 existingMovie.monitored = true;
+                movieNeedsUpdate = true;
+            }
 
+            if (movieNeedsUpdate)
+            {
                 await _radarrV3Api.UpdateMovie(existingMovie, settings.ApiKey, settings.FullUri);
-                // Search for it
-                if (!settings.AddOnly)
-                {
-                    await _radarrV3Api.MovieSearch(new[] { existingMovie.id }, settings.ApiKey, settings.FullUri);
-                }
+            }
 
+            if (!settings.AddOnly && (movieNeedsUpdate || profileOverrideRequested))
+            {
+                await _radarrV3Api.MovieSearch(new[] { existingMovie.id }, settings.ApiKey, settings.FullUri);
+            }
+
+            if (movieNeedsUpdate || profileOverrideRequested)
+            {
                 return new SenderResult { Success = true, Sent = true };
             }
 
-            return new SenderResult { Success = false, Sent = false, Message = "Movie is already monitored" };
+            // Radarr is already in the desired monitored state. Treat this as an idempotent
+            // success so Ombi does not create a false retry-queue entry or failure notification.
+            // Availability remains the responsibility of the normal Radarr availability sync.
+            return new SenderResult { Success = true, Sent = false, Message = "Movie is already monitored" };
         }
 
         private async Task<string> RadarrRootPath(int overrideId, RadarrSettings settings)
@@ -272,6 +288,29 @@ namespace Ombi.Core.Senders
             existingTag ??= await _radarrV3Api.CreateTag(s.ApiKey, s.FullUri, tagName);
 
             return existingTag;
+        }
+
+        private async Task AddToRequestFailureQueue(MovieRequests model, string errorMessage)
+        {
+            var existingQueue = await _requestQueuRepository.FirstOrDefaultAsync(x => x.RequestId == model.Id && x.Type == RequestType.Movie);
+            if (existingQueue != null)
+            {
+                existingQueue.RetryCount++;
+                existingQueue.Error = errorMessage;
+                await _requestQueuRepository.SaveChangesAsync();
+            }
+            else
+            {
+                await _requestQueuRepository.Add(new RequestQueue
+                {
+                    Dts = DateTime.UtcNow,
+                    Error = errorMessage,
+                    RequestId = model.Id,
+                    Type = RequestType.Movie,
+                    RetryCount = 0
+                });
+                await _notificationHelper.Notify(model, NotificationType.ItemAddedToFaultQueue);
+            }
         }
     }
 }

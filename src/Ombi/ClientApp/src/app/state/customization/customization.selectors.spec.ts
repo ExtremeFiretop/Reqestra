@@ -6,6 +6,7 @@ const mockSettings = {
   applicationUrl: 'https://ombi.local',
   logo: '/logo.png',
   customCssLink: '',
+  hideOmbiDonation: false,
   enableCustomDonations: false,
   customDonationUrl: '',
   customDonationMessage: '',

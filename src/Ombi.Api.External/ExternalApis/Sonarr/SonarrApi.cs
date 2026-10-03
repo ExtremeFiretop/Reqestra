@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -62,6 +62,26 @@ namespace Ombi.Api.External.ExternalApis.Sonarr
         /// <param name="apiKey"></param>
         /// <param name="baseUrl"></param>
         /// <returns></returns>
+        public async Task<IEnumerable<SonarrSeries>> GetSeriesForCleanup(string apiKey, string baseUrl)
+        {
+            var request = new Request($"{ApiBaseUrl}series", baseUrl, HttpMethod.Get)
+            {
+                ThrowOnErrorStatus = true
+            };
+            request.AddHeader("X-Api-Key", apiKey);
+            var results = await Api.Request<List<SonarrSeries>>(request);
+
+            foreach (var series in results)
+            {
+                if (series.seasons.Length > 0)
+                {
+                    series.seasons.ToList().RemoveAt(0);
+                }
+            }
+
+            return results;
+        }
+
         public async Task<SonarrSeries> GetSeriesById(int id, string apiKey, string baseUrl)
         {
             var request = new Request($"{ApiBaseUrl}series/{id}", baseUrl, HttpMethod.Get);
@@ -87,6 +107,25 @@ namespace Ombi.Api.External.ExternalApis.Sonarr
             request.AddHeader("X-Api-Key", apiKey);
             request.AddJsonBody(updated);
             return await Api.Request<SonarrSeries>(request);
+        }
+
+        public async Task<bool> DeleteSeries(int id, string apiKey, string baseUrl, bool deleteFiles, bool addImportListExclusion)
+        {
+            var request = new Request(
+                $"{ApiBaseUrl}series/{id}?deleteFiles={deleteFiles.ToString().ToLowerInvariant()}&addImportListExclusion={addImportListExclusion.ToString().ToLowerInvariant()}",
+                baseUrl,
+                HttpMethod.Delete);
+            request.AddHeader("X-Api-Key", apiKey);
+            using var response = await Api.Request(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException(
+                    $"Sonarr rejected the series delete request with HTTP {(int)response.StatusCode} ({response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            }
+
+            return true;
         }
 
         public async Task<NewSeries> AddSeries(NewSeries seriesToAdd, string apiKey, string baseUrl)
@@ -124,6 +163,43 @@ namespace Ombi.Api.External.ExternalApis.Sonarr
             var request = new Request($"{ApiBaseUrl}Episode?seriesId={seriesId}", baseUrl, HttpMethod.Get);
             request.AddHeader("X-Api-Key", apiKey);
             return await Api.Request<List<Episode>>(request);
+        }
+
+        /// <summary>
+        /// Returns all episode files for a series. Used by Media Cleanup to show accurate
+        /// per-episode/season sizes and to delete only the files the user selected.
+        /// </summary>
+        public async Task<IEnumerable<Episode>> GetEpisodesForCleanup(int seriesId, string apiKey, string baseUrl)
+        {
+            var request = new Request($"{ApiBaseUrl}Episode?seriesId={seriesId}", baseUrl, HttpMethod.Get)
+            {
+                ThrowOnErrorStatus = true
+            };
+            request.AddHeader("X-Api-Key", apiKey);
+            return await Api.Request<List<Episode>>(request);
+        }
+
+        public async Task<IEnumerable<Episodefile>> GetEpisodeFiles(int seriesId, string apiKey, string baseUrl)
+        {
+            var request = new Request($"{ApiBaseUrl}episodefile?seriesId={seriesId}", baseUrl, HttpMethod.Get);
+            request.AddHeader("X-Api-Key", apiKey);
+            return await Api.Request<List<Episodefile>>(request);
+        }
+
+        public async Task<bool> DeleteEpisodeFile(int episodeFileId, string apiKey, string baseUrl)
+        {
+            var request = new Request($"{ApiBaseUrl}episodefile/{episodeFileId}", baseUrl, HttpMethod.Delete);
+            request.AddHeader("X-Api-Key", apiKey);
+            using var response = await Api.Request(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException(
+                    $"Sonarr rejected the episode-file delete request with HTTP {(int)response.StatusCode} ({response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            }
+
+            return true;
         }
 
         /// <summary>

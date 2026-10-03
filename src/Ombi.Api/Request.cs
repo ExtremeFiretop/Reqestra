@@ -26,6 +26,8 @@ namespace Ombi.Api
         public string BaseUrl { get; }
         public HttpMethod HttpMethod { get; }
         public bool IgnoreErrors { get; set; }
+        public bool DeserializeErrorResponse { get; set; } = true;
+        public bool ThrowOnErrorStatus { get; set; }
         public bool Retry { get; set; }
         public List<HttpStatusCode> StatusCodeToRetry { get; set; } = new List<HttpStatusCode>();
         public bool IgnoreBaseUrlAppend { get; set; }
@@ -68,6 +70,7 @@ namespace Ombi.Api
         public List<KeyValuePair<string, string>> ContentHeaders { get; } = new List<KeyValuePair<string, string>>();
 
         public object JsonBody { get; private set; }
+        public List<KeyValuePair<string, string>> FormBody { get; } = new List<KeyValuePair<string, string>>();
 
         public bool IsValidUrl
         {
@@ -109,6 +112,12 @@ namespace Ombi.Api
         public void AddJsonBody(object obj)
         {
             JsonBody = obj;
+        }
+
+        public void AddFormBody(string key, string value)
+        {
+            if (string.IsNullOrEmpty(key) || value == null) return;
+            FormBody.Add(new KeyValuePair<string, string>(key, value));
         }
     }
 

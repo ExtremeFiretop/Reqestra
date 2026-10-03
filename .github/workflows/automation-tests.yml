@@ -2,14 +2,13 @@ name: Automation Tests
 
 on:
   push:
-    branches: [ develop, feature/** ]
+    branches: [ develop-ombi, develop, master, feature/** ]
   pull_request:
-    branches: [ develop ]
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
-# Required secrets (each Cypress Cloud project has its own ID and record key):
+# Optional Cypress Cloud secrets (tests run locally when these are not configured):
 #   CYPRESS_PROJECT_ID_MYSQL    - Cypress Cloud project ID for MySQL runs
 #   CYPRESS_RECORD_KEY_MYSQL    - Cypress Cloud record key for MySQL runs
 #   CYPRESS_PROJECT_ID_POSTGRES - Cypress Cloud project ID for PostgreSQL runs
@@ -138,14 +137,31 @@ jobs:
     - name: Sleep for server to start
       run: sleep 20
 
+    # The wizard must run against a pristine database. The global Cypress
+    # setup intentionally initializes every non-wizard spec, so allowing the
+    # full-suite glob to choose spec order can complete first-run setup before
+    # the wizard feature executes. Run it explicitly first instead.
+    - name: Cypress Tests (wizard)
+      if: matrix.cypress_spec == ''
+      uses: cypress-io/github-action@v4
+      with:
+        record: false
+        browser: chrome
+        headless: true
+        working-directory: tests
+        spec: cypress/features/01-wizard/wizard.feature
+        wait-on: http://localhost:3577/
+        wait-on-timeout: 600
+
     - name: Cypress Tests (full suite)
       if: matrix.cypress_spec == ''
       uses: cypress-io/github-action@v4
       with:
-        record: true
+        record: ${{ secrets[matrix.cypress_record_key_secret] != '' && secrets[matrix.cypress_project_id_secret] != '' }}
         browser: chrome
         headless: true
         working-directory: tests
+        spec: "cypress/features/login/login.feature,cypress/tests/**/*.spec.ts*"
         wait-on: http://localhost:3577/
         wait-on-timeout: 600
       env:
@@ -157,7 +173,7 @@ jobs:
       if: matrix.cypress_spec != ''
       uses: cypress-io/github-action@v4
       with:
-        record: true
+        record: ${{ secrets[matrix.cypress_record_key_secret] != '' && secrets[matrix.cypress_project_id_secret] != '' }}
         browser: chrome
         headless: true
         working-directory: tests
@@ -231,29 +247,32 @@ jobs:
     - name: Cypress Tests (smoke)
       uses: cypress-io/github-action@v4
       with:
-        record: true
+        record: ${{ secrets.CYPRESS_RECORD_KEY_SQLITE != '' && secrets.CYPRESS_PROJECT_ID_SQLITE != '' }}
         browser: chrome
         headless: true
         working-directory: tests
         spec: "cypress/features/01-wizard/wizard.feature,cypress/features/login/login.feature,cypress/tests/login/login.spec.ts"
         wait-on: http://localhost:3577/
         wait-on-timeout: 600
-        spec: cypress/features/01-wizard/wizard.feature
       env:
-        CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+        CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY_SQLITE }}
+        CYPRESS_PROJECT_ID: ${{ secrets.CYPRESS_PROJECT_ID_SQLITE }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Cypress Tests - All other tests
       uses: cypress-io/github-action@v4
       with:
-        record: true
+        record: ${{ secrets.CYPRESS_RECORD_KEY_SQLITE != '' && secrets.CYPRESS_PROJECT_ID_SQLITE != '' }}
         browser: chrome
         headless: true
         working-directory: tests
         wait-on: http://localhost:3577/
         wait-on-timeout: 600
+        # The smoke step above already runs cypress/tests/login/login.spec.ts.
+        # Keep this step to the remaining suites so authentication scenarios are
+        # not exercised twice against the same rate-limited backend process.
         spec: >-
-          cypress/tests/**/*
+          cypress/tests/{api,details,discover,navigation,requests,search,settings,user-preferences,usermanagement}/**/*.spec.ts
       env:
         CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY_SQLITE }}
         CYPRESS_PROJECT_ID: ${{ secrets.CYPRESS_PROJECT_ID_SQLITE }}

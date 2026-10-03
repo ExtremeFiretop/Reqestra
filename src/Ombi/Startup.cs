@@ -1,8 +1,8 @@
-﻿using AutoMapper.EquivalencyExpression;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,11 +22,13 @@ using Serilog;
 using System;
 using System.IO;
 using Microsoft.AspNetCore.StaticFiles.Infrastructure;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using ILogger = Serilog.ILogger;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Ombi.HealthChecks;
 using Ombi.Attributes;
+using System.Threading.RateLimiting;
 
 namespace Ombi
 {
@@ -84,6 +86,112 @@ namespace Ombi
             services.AddLazyCache();
             services.AddHttpClient();
 
+            string AuthenticatedUserOrIpPartition(HttpContext httpContext)
+            {
+                var userId = httpContext.User?.FindFirst("Id")?.Value;
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    return $"user:{userId}";
+                }
+
+                return $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+            }
+
+            services.AddRateLimiter(options =>
+            {
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                options.AddPolicy("PlexPinCreation", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 10,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                // The username/password token endpoint is intentionally IP-partitioned because
+                // there is no authenticated Ombi user yet. Keep the window tight enough to slow
+                // credential guessing without penalizing normal interactive login retries.
+                options.AddPolicy("TokenLogin", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 10,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                // Plex tokens are high entropy, so brute-force guessing is not the primary concern.
+                // A looser anonymous limit still prevents expensive repeated token validation from
+                // being used as a resource-abuse path.
+                options.AddPolicy("PlexTokenLogin", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 30,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                // Plex login polls once per second. Keep the limit comfortably above normal UI
+                // behavior while preventing anonymous clients from hammering arbitrary sessions.
+                options.AddPolicy("PlexPinPolling", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 90,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                // These endpoints can fan out to request storage, Sonarr/Radarr and Plex. Partition
+                // by authenticated Ombi user when available, with the forwarded client IP as a
+                // fallback for malformed/unauthenticated requests.
+                options.AddPolicy("MediaCleanupOverviewRead", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: AuthenticatedUserOrIpPartition(httpContext),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 30,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                options.AddPolicy("MediaCleanupTvSelectionRead", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: AuthenticatedUserOrIpPartition(httpContext),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 20,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+
+                // Media Cleanup mutations change persisted workflow state and some can authorize or
+                // trigger destructive external operations. Partition by authenticated Ombi user so
+                // unrelated users behind the same NAT do not consume each other's mutation budget.
+                options.AddPolicy("MediaCleanupMutation", httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: AuthenticatedUserOrIpPartition(httpContext),
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            PermitLimit = 20,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+            });
+
             services.AddJwtAuthentication();
 
             services.AddMvc()
@@ -93,7 +201,6 @@ namespace Ombi
                 });
 
             services.AddOmbiMappingProfile();
-            services.AddAutoMapper(expression => expression.AddCollectionMappers());
 
             services.RegisterApplicationDependencies(); // Ioc and EF
             services.AddSwagger();
@@ -169,8 +276,12 @@ namespace Ombi
             app.UseMiddleware<ErrorHandlingMiddleware>();
             app.UseMiddleware<ApiKeyMiddlewear>();
             app.UseRouting();
-
+            // Authentication must run before endpoint rate limiting so authenticated policies can
+            // partition by Ombi user id. Anonymous policies still fall back to the client IP.
             app.UseAuthentication();
+            app.UseRateLimiter();
+
+            app.UseMiddleware<UserActivityMiddleware>();
             app.UseAuthorization();
 
 
@@ -204,6 +315,31 @@ namespace Ombi
                     //    opts.AddCustomStylesheet("HealthCheck.css");
                     //});
                 }
+            });
+
+            // Only browser navigation requests should reach the SPA fallback.
+            // Unmatched non-GET/HEAD requests otherwise cause SpaDefaultPageMiddleware
+            // to throw a misleading "index.html was not found" exception.
+            app.Use(async (context, next) =>
+            {
+                if (!HttpMethods.IsGet(context.Request.Method) &&
+                    !HttpMethods.IsHead(context.Request.Method))
+                {
+                    var requestPath = $"{context.Request.PathBase}{context.Request.Path}";
+
+                    Log.Warning(
+                        "Unmatched non-SPA request: {Method} {Path} from {RemoteIp}, User-Agent: {UserAgent}, Referer: {Referer}",
+                        context.Request.Method,
+                        requestPath,
+                        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        context.Request.Headers.UserAgent.ToString(),
+                        context.Request.Headers.Referer.ToString());
+
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+
+                await next();
             });
 
             app.UseSpa(spa =>

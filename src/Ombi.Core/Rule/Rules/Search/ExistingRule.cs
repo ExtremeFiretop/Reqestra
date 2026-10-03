@@ -3,8 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Ombi.Core.Models.Search;
 using Ombi.Core.Models.Search.V2.Music;
+using Ombi.Core.Helpers;
 using Ombi.Core.Rule.Interfaces;
 using Ombi.Store.Entities;
+using Ombi.Store.Entities.Requests;
 using Ombi.Store.Repository.Requests;
 
 namespace Ombi.Core.Rule.Rules.Search
@@ -54,45 +56,103 @@ namespace Ombi.Core.Rule.Rules.Search
             {
                 var request = (SearchTvShowViewModel)obj;
                 var tvRequests = Tv.GetRequest(obj.Id);
-                if (tvRequests != null) // Do we already have a request for this?
+                TvRequestAliasIdentityMatch aliasMatch = null;
+
+                if (tvRequests == null)
                 {
-                    request.RequestId = tvRequests.Id;
-                    request.Requested = true;
-                    request.Approved = tvRequests.ChildRequests.Any(x => x.Approved);
-
-                    // Let's modify the seasonsrequested to reflect what we have requested...
-                    foreach (var season in request.SeasonRequests)
+                    var source = BuildSearchRequestIdentity(request);
+                    var candidateQuery = Tv.Get();
+                    if (candidateQuery != null)
                     {
-                        foreach (var existingRequestChildRequest in tvRequests.ChildRequests)
+                        var hasTvDbId = source.RequestTvDbId > 0;
+                        var hasImdbId = !string.IsNullOrWhiteSpace(source.RequestImdbId);
+                        var sourceYear = source.ReleaseYear.Year;
+                        var hasMetadata = !string.IsNullOrWhiteSpace(source.Title) && sourceYear > 1;
+
+                        if (hasTvDbId || hasImdbId || hasMetadata)
                         {
-                            // Find the existing request season
-                            var existingSeason =
-                                existingRequestChildRequest.SeasonRequests.FirstOrDefault(x => x.SeasonNumber == season.SeasonNumber);
-                            if (existingSeason == null) continue;
+                            var candidates = candidateQuery
+                                .Where(x =>
+                                    (hasTvDbId && x.TvDbId == source.RequestTvDbId) ||
+                                    (hasImdbId && x.ImdbId == source.RequestImdbId) ||
+                                    (hasMetadata && x.Title == source.Title && x.ReleaseDate.Year == sourceYear))
+                                .ToList();
 
-
-                            foreach (var ep in existingSeason.Episodes)
-                            {
-                                // Find the episode from what we are searching
-                                var episodeSearching = season.Episodes.FirstOrDefault(x => x.EpisodeNumber == ep.EpisodeNumber);
-                                if (episodeSearching == null)
-                                {
-                                    continue;
-                                }
-                                episodeSearching.Requested = true;
-                                episodeSearching.Available = ep.Available;
-                                episodeSearching.Approved = ep.Season.ChildRequest.Approved;
-                                episodeSearching.Denied = ep.Season.ChildRequest.Denied;
-                                episodeSearching.DeniedReason = ep.Season.ChildRequest.DeniedReason;
-                            }
+                            aliasMatch = TvRequestSeasonIdentityMatcher.FindSafeAliasMatch(source, candidates);
+                            tvRequests = aliasMatch?.Parent;
                         }
                     }
                 }
 
-                if (request.SeasonRequests.Any() && request.SeasonRequests.All(x => x.Episodes.All(e => e.Denied ?? false)))
+                if (tvRequests != null) // Do we already have a request for this?
                 {
-                    request.Denied = true;
-                    request.DeniedReason = tvRequests.ChildRequests.FirstOrDefault(x => x.Denied ?? false)?.DeniedReason;
+                    request.RequestId = tvRequests.Id;
+                    request.Requested = true;
+
+                    var targetSeasonNumbers = new System.Collections.Generic.HashSet<int>();
+                    if (aliasMatch == null || aliasMatch.UseLiteralSeasonNumbers)
+                    {
+                        foreach (var season in request.SeasonRequests)
+                        {
+                            targetSeasonNumbers.Add(season.SeasonNumber);
+                        }
+                    }
+                    else
+                    {
+                        foreach (var targetSeason in aliasMatch.SeasonMappings.Values)
+                        {
+                            targetSeasonNumbers.Add(targetSeason);
+                        }
+                    }
+
+                    var relevantChildren = tvRequests.ChildRequests
+                        .Where(x => targetSeasonNumbers.Count == 0 ||
+                                    x.SeasonRequests.Any(s => targetSeasonNumbers.Contains(s.SeasonNumber)))
+                        .ToList();
+                    request.Approved = relevantChildren.Any(x => x.Approved);
+
+                    // Reflect existing requests in the search result. Provider aliases only compare
+                    // against the season number proven by the identity matcher; a shared TVDB/IMDb
+                    // parent does not imply equivalent season numbering.
+                    foreach (var season in request.SeasonRequests)
+                    {
+                        var targetSeasonNumber = season.SeasonNumber;
+                        if (aliasMatch != null && !aliasMatch.UseLiteralSeasonNumbers &&
+                            !aliasMatch.SeasonMappings.TryGetValue(season.SeasonNumber, out targetSeasonNumber))
+                        {
+                            continue;
+                        }
+
+                        foreach (var existingRequestChildRequest in relevantChildren)
+                        {
+                            var existingSeason = existingRequestChildRequest.SeasonRequests
+                                .FirstOrDefault(x => x.SeasonNumber == targetSeasonNumber);
+                            if (existingSeason == null) continue;
+
+                            foreach (var ep in existingSeason.Episodes)
+                            {
+                                var episodeSearching = season.Episodes
+                                    .FirstOrDefault(x => x.EpisodeNumber == ep.EpisodeNumber);
+                                if (episodeSearching == null)
+                                {
+                                    continue;
+                                }
+
+                                episodeSearching.Requested = true;
+                                episodeSearching.Available = ep.Available;
+                                episodeSearching.Approved = existingRequestChildRequest.Approved;
+                                episodeSearching.Denied = existingRequestChildRequest.Denied;
+                                episodeSearching.DeniedReason = existingRequestChildRequest.DeniedReason;
+                            }
+                        }
+                    }
+
+                    if (request.SeasonRequests.Any() &&
+                        request.SeasonRequests.All(x => x.Episodes.All(e => e.Denied ?? false)))
+                    {
+                        request.Denied = true;
+                        request.DeniedReason = relevantChildren.FirstOrDefault(x => x.Denied ?? false)?.DeniedReason;
+                    }
                 }
 
                 AvailabilityRuleHelper.CheckForUnairedEpisodes(request);
@@ -134,5 +194,27 @@ namespace Ombi.Core.Rule.Rules.Search
             }
             return Success();
         }
+
+        private static ChildRequests BuildSearchRequestIdentity(SearchTvShowViewModel request)
+        {
+            var releaseYear = DateTime.MinValue;
+            if (!string.IsNullOrWhiteSpace(request.FirstAired))
+            {
+                DateTime.TryParse(request.FirstAired, out releaseYear);
+            }
+
+            _ = int.TryParse(request.TheTvDbId, out var tvDbId);
+
+            return new ChildRequests
+            {
+                Title = request.Title,
+                ReleaseYear = releaseYear,
+                RequestTheMovieDbId = request.Id,
+                RequestTvDbId = tvDbId,
+                RequestImdbId = request.ImdbId,
+                SeasonRequests = request.SeasonRequests
+            };
+        }
+
     }
 }

@@ -292,6 +292,9 @@ namespace Ombi.Store.Migrations.OmbiPostgres
                     b.Property<DateTime?>("LastLoggedIn")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("LastActive")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -566,6 +569,9 @@ namespace Ombi.Store.Migrations.OmbiPostgres
                     b.Property<int>("ParentRequestId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("QualityOverride")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RequestType")
                         .HasColumnType("integer");
 
@@ -771,6 +777,9 @@ namespace Ombi.Store.Migrations.OmbiPostgres
                         .HasColumnType("text");
 
                     b.Property<int>("QualityOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QualityOverride4K")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("ReleaseDate")

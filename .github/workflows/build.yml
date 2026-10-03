@@ -60,17 +60,75 @@ jobs:
   versioning:
      runs-on: ubuntu-latest
      needs: [ build-ui, unit-test ]
+     permissions:
+      contents: write
      outputs:
       changelog: ${{ steps.changelog.outputs.clean_changelog }}
       tag: ${{ steps.changelog.outputs.tag }}
       version: ${{ steps.changelog.outputs.version }}
      steps:
-       - uses: actions/checkout@v2
+       - uses: actions/checkout@v4
+         with:
+          fetch-depth: 0
+
+       - name: Verify release tag baseline
+         shell: bash
+         run: |
+           set -euo pipefail
+           git fetch --force --tags origin
+
+           file_version="$(python3 -c 'import json; print(json.load(open("version.json", encoding="utf-8"))["version"])')"
+           latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+
+           echo "version.json: $file_version"
+           if [[ -z "$latest_tag" ]]; then
+             echo "No existing semantic release tag found; the changelog action will use its fallback version."
+             exit 0
+           fi
+
+           tag_version="${latest_tag#v}"
+           echo "Latest semantic release tag: $latest_tag"
+
+           python3 - "$file_version" "$tag_version" <<'PY'
+           import re
+           import sys
+
+           pattern = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+           def parse(value):
+               match = pattern.fullmatch(value)
+               if not match:
+                   raise SystemExit(f"Invalid release version: {value}")
+               return tuple(int(part) for part in match.groups())
+
+           file_version, tag_version = sys.argv[1], sys.argv[2]
+           file_semver, tag_semver = parse(file_version), parse(tag_version)
+
+           if file_semver > tag_semver:
+               print(
+                   f"::error::version.json ({file_version}) is ahead of the latest release tag "
+                   f"(v{tag_version}). Git tags are the release source of truth; refusing to "
+                   "silently move the tracked version backward."
+               )
+               raise SystemExit(1)
+
+           if file_semver < tag_semver:
+               print(
+                   f"::warning::version.json ({file_version}) is behind the latest release tag "
+                   f"(v{tag_version}). The release will be calculated from Git tags and "
+                   "version.json will be repaired in the release commit."
+               )
+           else:
+               print("Release tag and version.json are aligned.")
+           PY
+
        - name: Conventional Changelog Action
          id: changelog
          uses: TriPSs/conventional-changelog-action@v3
          with:
           version-file: 'version.json'
+          skip-version-file: 'true'
+          pre-commit: '.github/scripts/release-precommit.js'
           release-count: 40
           skip-on-empty: 'false'
           git-message: 'chore(release): :rocket: {version}'
@@ -79,7 +137,6 @@ jobs:
          run: |
            echo "outputs: ${{ steps.changelog.outputs.tag }}"
            echo "Version: ${{ steps.changelog.outputs.version }}"
-           echo "log: ${{ steps.changelog.outputs.clean_changelog }}"
 
   publish:
     runs-on: ubuntu-latest
@@ -132,6 +189,19 @@ jobs:
         run: dotnet publish -c Release -r ${{ matrix.os }} -o "${{ matrix.os }}" --self-contained true -p:PublishSingleFile=true
         working-directory: src/Ombi
 
+      - name: Publish Updater ${{ matrix.os }}
+        run: dotnet publish -c Release -r ${{ matrix.os }} -o "../Ombi/${{ matrix.os }}/updater" --self-contained true -p:PublishSingleFile=true
+        working-directory: src/Ombi.Updater
+
+      - name: Verify Packaged Updater ${{ matrix.os }}
+        shell: bash
+        run: |
+          updater="src/Ombi/${{ matrix.os }}/updater/Ombi.Updater"
+          if [[ "${{ matrix.os }}" == win-* ]]; then
+            updater="${updater}.exe"
+          fi
+          test -f "$updater" || { echo "Missing packaged updater: $updater"; exit 1; }
+
       - name: Download Angular
         uses: actions/download-artifact@v4
         with:
@@ -177,9 +247,9 @@ jobs:
         with:
           path: artifacts
 
-      - name: Publish to GitHub Master
+      - name: Publish Reqestra Stable Release
         uses: softprops/action-gh-release@v1
-        if: contains(github.ref, 'master')
+        if: github.ref == 'refs/heads/master'
         with:
           body: ${{ needs.versioning.outputs.changelog }}
           name: ${{ needs.versioning.outputs.tag }}
@@ -188,9 +258,9 @@ jobs:
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
 
-      - name: Publish to GitHub Develop
+      - name: Publish Reqestra Develop Release
         uses: softprops/action-gh-release@v1
-        if: contains(github.ref, 'develop')
+        if: github.ref == 'refs/heads/develop'
         with:
           prerelease: true
           generate_release_notes: false
@@ -243,20 +313,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.versioning.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  update-apt:
-    needs: [ release, versioning ]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Trigger APT Build
-      uses: fjogeleit/http-request-action@master
-      with:
-        url: 'https://api.github.com/repos/Ombi-app/Ombi.Apt/actions/workflows/build-deb.yml/dispatches'
-        method: 'POST'
-        contentType: 'application/json'
-        data: '{ "ref":"main", "inputs": { "version": "${{ needs.versioning.outputs.tag }}"} }'
-        customHeaders: '{"Accept":"application/vnd.github.v3+json", "Authorization":"Bearer ${{secrets.APT_PAT}}", "User-Agent":"Ombi"}'
-
-

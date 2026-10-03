@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ombi.Core.Models.Search;
 using Ombi.Core.Rule.Interfaces;
@@ -20,6 +22,8 @@ namespace Ombi.Core.Rule.Rules.Search
         private readonly ISettingsService<SonarrSettings> _sonarrSettings;
 
         protected ILogger Log { get; }
+        private bool? _deferToRadarr;
+        private bool? _deferToSonarr;
 
         protected MediaServerAvailabilityRule(
             ILogger log,
@@ -109,20 +113,50 @@ namespace Ombi.Core.Rule.Rules.Search
 
         private async Task CheckEpisodeAvailability(SearchTvShowViewModel search, ContentLookupResult lookup, IMediaServerContent item)
         {
+            if (await ShouldDeferToSonarr())
+            {
+                return;
+            }
+
             if (!search.SeasonRequests.Any())
             {
                 return;
             }
 
-            var allEpisodes = GetAllEpisodes();
-            foreach (var season in search.SeasonRequests.ToList())
+            try
             {
-                foreach (var episode in season.Episodes.ToList())
+                // FindContent has already resolved one specific media-server content row.
+                // Scope episode availability to that exact row rather than re-querying by the
+                // provider ID that happened to find it. Provider IDs are not guaranteed to be
+                // unique in a stale or migrated media-server cache, and querying by them can
+                // merge episodes from multiple series into one availability result.
+                var matchingEpisodes = GetAllEpisodes().Where(x => x.Series.Id == item.Id);
+
+                var availableEpisodes = await matchingEpisodes
+                    .Select(x => new { x.SeasonNumber, x.EpisodeNumber })
+                    .ToListAsync();
+                var availableEpisodeKeys = availableEpisodes
+                    .Select(x => (x.SeasonNumber, x.EpisodeNumber))
+                    .ToHashSet();
+
+                foreach (var season in search.SeasonRequests)
                 {
-                    await AvailabilityRuleHelper.SingleEpisodeCheck(
-                        lookup.UseImdb, allEpisodes, episode, season, item,
-                        lookup.UseTheMovieDb, lookup.UseTvDb, Log);
+                    var mediaServerSeasonNumber = lookup.SeasonNumberMap.TryGetValue(season.SeasonNumber, out var mappedSeasonNumber)
+                        ? mappedSeasonNumber
+                        : season.SeasonNumber;
+
+                    foreach (var episode in season.Episodes)
+                    {
+                        if (availableEpisodeKeys.Contains((mediaServerSeasonNumber, episode.EpisodeNumber)))
+                        {
+                            episode.Available = true;
+                        }
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                Log.LogError(e, "Exception thrown when attempting to check if something is available");
             }
 
             AvailabilityRuleHelper.CheckForUnairedEpisodes(search);
@@ -130,26 +164,40 @@ namespace Ombi.Core.Rule.Rules.Search
 
         private async Task<bool> ShouldDeferToRadarr()
         {
+            if (_deferToRadarr.HasValue)
+            {
+                return _deferToRadarr.Value;
+            }
+
             if (_radarrSettings == null)
             {
+                _deferToRadarr = false;
                 return false;
             }
 
             var settings = await _radarrSettings.GetSettingsAsync();
-            return settings != null && settings.Enabled &&
+            _deferToRadarr = settings != null && settings.Enabled &&
                    settings.ScanForAvailability && settings.PrioritizeArrAvailability;
+            return _deferToRadarr.Value;
         }
 
         private async Task<bool> ShouldDeferToSonarr()
         {
+            if (_deferToSonarr.HasValue)
+            {
+                return _deferToSonarr.Value;
+            }
+
             if (_sonarrSettings == null)
             {
+                _deferToSonarr = false;
                 return false;
             }
 
             var settings = await _sonarrSettings.GetSettingsAsync();
-            return settings != null && settings.Enabled &&
+            _deferToSonarr = settings != null && settings.Enabled &&
                    settings.ScanForAvailability && settings.PrioritizeArrAvailability;
+            return _deferToSonarr.Value;
         }
 
         /// <summary>
@@ -166,11 +214,19 @@ namespace Ombi.Core.Rule.Rules.Search
             var result = new ContentLookupResult();
             IMediaServerContent item = null;
 
+            // TheMovieDb (and potentially other providers) use separate ID namespaces for
+            // movies and TV shows, so the same ID can refer to both a movie and a series.
+            // Only accept content whose type matches the thing we are searching for, otherwise
+            // a movie can be wrongly marked as available because a series shares its ID (and vice versa).
+            var expectedType = obj is SearchMovieViewModel ? MediaType.Movie : MediaType.Series;
+            bool Matches(IMediaServerContent content) => content != null && content.Type == expectedType;
+
             if (obj.ImdbId.HasValue())
             {
-                item = await getByImdbId(obj.ImdbId);
-                if (item != null)
+                var match = await getByImdbId(obj.ImdbId);
+                if (Matches(match))
                 {
+                    item = match;
                     result.UseImdb = true;
                 }
             }
@@ -179,9 +235,10 @@ namespace Ombi.Core.Rule.Rules.Search
             {
                 if (lookupById && obj.Id > 0)
                 {
-                    item = await getByTheMovieDbId(obj.Id.ToString());
-                    if (item != null)
+                    var match = await getByTheMovieDbId(obj.Id.ToString());
+                    if (Matches(match))
                     {
+                        item = match;
                         obj.TheMovieDbId = obj.Id.ToString();
                         result.UseTheMovieDb = true;
                     }
@@ -189,18 +246,20 @@ namespace Ombi.Core.Rule.Rules.Search
 
                 if (item == null && obj.TheMovieDbId.HasValue())
                 {
-                    item = await getByTheMovieDbId(obj.TheMovieDbId);
-                    if (item != null)
+                    var match = await getByTheMovieDbId(obj.TheMovieDbId);
+                    if (Matches(match))
                     {
+                        item = match;
                         result.UseTheMovieDb = true;
                     }
                 }
 
                 if (item == null && obj.TheTvDbId.HasValue())
                 {
-                    item = await getByTvDbId(obj.TheTvDbId);
-                    if (item != null)
+                    var match = await getByTvDbId(obj.TheTvDbId);
+                    if (Matches(match))
                     {
+                        item = match;
                         result.UseTvDb = true;
                     }
                 }
@@ -220,5 +279,7 @@ namespace Ombi.Core.Rule.Rules.Search
         public bool UseImdb { get; set; }
         public bool UseTheMovieDb { get; set; }
         public bool UseTvDb { get; set; }
+        public bool UseContentId { get; set; }
+        public Dictionary<int, int> SeasonNumberMap { get; } = new Dictionary<int, int>();
     }
 }

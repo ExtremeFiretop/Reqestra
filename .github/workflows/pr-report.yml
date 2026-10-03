@@ -9,31 +9,25 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   checks: write
+  contents: read
   pull-requests: write
 
 jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      - name: Download test results artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: test-results
-          path: test-results
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
+      # Use test-reporter's workflow_run artifact mode. It downloads the artifact
+      # from the triggering PR Build without requiring a checkout of untrusted PR code.
       - name: Publish test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
+          artifact: test-results
           name: Unit Test Results
           path: '**/test-results.trx'
           reporter: dotnet-trx
-          # Pin the check run to the commit from the triggering workflow,
-          # not the merge commit that workflow_run uses.
-          working-directory: test-results
 
       - name: Find associated PR
         id: find-pr

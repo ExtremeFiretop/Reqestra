@@ -82,6 +82,7 @@ namespace Ombi.Core.Tests.Rule.Request
                     }
                 },
                 Id = 1,
+                RequestTheMovieDbId = 1,
             };
             var result = await Rule.Execute(req);
 
@@ -124,6 +125,7 @@ namespace Ombi.Core.Tests.Rule.Request
                     }
                 },
                 Id = 1,
+                RequestTheMovieDbId = 1,
             };
             var result = await Rule.Execute(req);
 
@@ -133,6 +135,128 @@ namespace Ombi.Core.Tests.Rule.Request
             var episodes = req.SeasonRequests.SelectMany(x => x.Episodes);
             Assert.That(episodes.Count() == 1, "We didn't remove the episodes that have already been requested!");
             Assert.That(episodes.First().EpisodeNumber == 3, "We removed the wrong episode");
+        }
+
+
+        [Test]
+        public async Task RequestShow_MatchesPlexContentByImdb_WhenTmdbIdChanges()
+        {
+            var content = new List<PlexServerContent>
+            {
+                new PlexServerContent
+                {
+                    Type = MediaType.Series,
+                    TheMovieDbId = "299939",
+                    ImdbId = "tt13207736",
+                    Title = "Monster (2022)",
+                    ReleaseYear = "2022",
+                    Episodes = new List<IMediaServerEpisode>
+                    {
+                        new PlexEpisode
+                        {
+                            SeasonNumber = 1,
+                            EpisodeNumber = 1
+                        }
+                    }
+                }
+            };
+            PlexContentRepo.Setup(x => x.GetAll()).Returns(content.AsQueryable().BuildMock());
+
+            var req = new ChildRequests
+            {
+                RequestType = RequestType.TvShow,
+                RequestTheMovieDbId = 335840,
+                RequestImdbId = "tt13207736",
+                Title = "Monster",
+                ReleaseYear = new System.DateTime(2022, 9, 21),
+                SeasonRequests = new List<SeasonRequests>
+                {
+                    new SeasonRequests
+                    {
+                        SeasonNumber = 1,
+                        Episodes = new List<EpisodeRequests>
+                        {
+                            new EpisodeRequests { EpisodeNumber = 1 }
+                        }
+                    }
+                }
+            };
+
+            var result = await Rule.Execute(req);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.ErrorCode, Is.EqualTo(ErrorCode.EpisodesAlreadyRequested));
+        }
+
+        [Test]
+        public async Task RequestShow_StandaloneSeasonMappedToAnthologySeason_IsAlreadyAvailable()
+        {
+            var plexSeries = new PlexServerContent
+            {
+                Id = 552121,
+                Type = MediaType.Series,
+                TheMovieDbId = "335840",
+                TvDbId = "389492",
+                ImdbId = "tt13207736",
+                Title = "Monster (2022)",
+                ReleaseYear = "2022"
+            };
+
+            var titles = new[]
+            {
+                "Bloodbath",
+                "Strong Kitty",
+                "Whack Job!",
+                "R.I.P (Rest in Pestilence) Abby Borden",
+                "41",
+                "Bed and Breakfast",
+                "The Trial of the Century",
+                "Carnival"
+            };
+
+            var plexEpisodes = titles
+                .Select((title, index) => (IMediaServerEpisode)new PlexEpisode
+                {
+                    SeasonNumber = 4,
+                    EpisodeNumber = index + 1,
+                    Title = title,
+                    Series = plexSeries
+                })
+                .ToList();
+            plexSeries.Episodes = plexEpisodes;
+
+            PlexContentRepo.Setup(x => x.GetAll())
+                .Returns(new List<PlexServerContent> { plexSeries }.AsQueryable().BuildMock());
+            PlexContentRepo.Setup(x => x.GetAllEpisodes())
+                .Returns(plexEpisodes.AsQueryable().BuildMock());
+
+            var request = new ChildRequests
+            {
+                RequestType = RequestType.TvShow,
+                RequestTheMovieDbId = 299939,
+                Title = "Monster: The Lizzie Borden Story",
+                ReleaseYear = new System.DateTime(2026, 9, 17),
+                SeasonRequests = new List<SeasonRequests>
+                {
+                    new SeasonRequests
+                    {
+                        SeasonNumber = 1,
+                        Episodes = titles
+                            .Select((title, index) => new EpisodeRequests
+                            {
+                                EpisodeNumber = index + 1,
+                                Title = title
+                            })
+                            .ToList()
+                    }
+                }
+            };
+
+            var result = await Rule.Execute(request);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.ErrorCode, Is.EqualTo(ErrorCode.EpisodesAlreadyRequested));
+            Assert.That(request.SeasonRequests[0].Episodes, Is.Empty);
         }
 
         [Test]
@@ -169,10 +293,40 @@ namespace Ombi.Core.Tests.Rule.Request
                     }
                 },
                 Id = 1,
+                RequestTheMovieDbId = 1,
             };
             var result = await Rule.Execute(req);
 
             Assert.That(result.Success, Is.True);
+        }
+
+        [Test]
+        public async Task RequestShow_DatabaseIdIsNotUsedAsTmdbFallback()
+        {
+            SetupMockData();
+
+            var req = new ChildRequests
+            {
+                RequestType = RequestType.TvShow,
+                Id = 1,
+                RequestTheMovieDbId = 0,
+                SeasonRequests = new List<SeasonRequests>
+                {
+                    new SeasonRequests
+                    {
+                        SeasonNumber = 1,
+                        Episodes = new List<EpisodeRequests>
+                        {
+                            new EpisodeRequests { EpisodeNumber = 1 }
+                        }
+                    }
+                }
+            };
+
+            var result = await Rule.Execute(req);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(req.SeasonRequests[0].Episodes, Has.Count.EqualTo(1));
         }
 
         [Test]

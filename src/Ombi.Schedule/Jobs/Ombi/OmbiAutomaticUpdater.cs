@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Reflection;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -19,10 +18,10 @@ using Ombi.Settings.Settings.Models;
 using Ombi.Store.Entities;
 using Ombi.Store.Repository;
 using Ombi.Updater;
+using OctokitApiException = Octokit.ApiException;
 using Quartz;
 using SharpCompress.Common;
 using SharpCompress.Readers;
-using SharpCompress.Readers.Tar;
 
 namespace Ombi.Schedule.Jobs.Ombi
 {
@@ -55,11 +54,64 @@ namespace Ombi.Schedule.Jobs.Ombi
         }
         public async Task<bool> UpdateAvailable(string currentVersion)
         {
-
             var updates = await Processor.Process();
-            var serverVersion = updates.UpdateVersionString;
-            return !serverVersion.Equals(currentVersion, StringComparison.CurrentCultureIgnoreCase);
 
+            // GitHub release tags include a leading "v" (for example v4.60.37),
+            // while AssemblyHelper.GetRuntimeVersion() returns the numeric runtime
+            // version (for example 4.60.37). Compare parsed versions rather than
+            // raw strings so an equal version is not incorrectly reported as an
+            // available update.
+            if (TryParseVersion(updates.UpdateVersionString, out var serverVersion) &&
+                TryParseVersion(currentVersion, out var installedVersion))
+            {
+                return serverVersion > installedVersion;
+            }
+
+            // ChangeLogProcessor already performs a semantic version comparison
+            // against the running assembly. Fall back to that result if either
+            // supplied version cannot be parsed.
+            return updates.UpdateAvailable;
+        }
+
+        private static bool TryParseVersion(string value, out Version version)
+        {
+            version = null;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var normalized = value.Trim().TrimStart('v', 'V');
+            var suffixIndex = normalized.IndexOf('-');
+            if (suffixIndex >= 0)
+            {
+                normalized = normalized.Substring(0, suffixIndex);
+            }
+
+            return Version.TryParse(normalized, out version);
+        }
+
+        private static bool IsTransientUpdateCheckException(Exception exception)
+        {
+            if (exception is HttpRequestException || exception is TaskCanceledException)
+            {
+                return true;
+            }
+
+            // Octokit converts temporary GitHub HTTP responses into ApiException rather than
+            // HttpRequestException. Treat rate limiting, request timeouts and server-side
+            // failures as retryable for the scheduled update check.
+            if (exception is OctokitApiException apiException)
+            {
+                var statusCode = (int)apiException.StatusCode;
+                return statusCode == 403 ||
+                       statusCode == 408 ||
+                       statusCode == 429 ||
+                       (statusCode >= 500 && statusCode <= 599);
+            }
+
+            return exception.InnerException != null &&
+                   IsTransientUpdateCheckException(exception.InnerException);
         }
 
         public async Task Execute(IJobExecutionContext job)
@@ -73,7 +125,7 @@ namespace Ombi.Schedule.Jobs.Ombi
                 return;
             }
 
-            var currentLocation = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            var currentLocation = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
             Logger.LogDebug(LoggingEvents.Updater, "Path: {0}", currentLocation);
 
             var productVersion = AssemblyHelper.GetRuntimeVersion();
@@ -82,17 +134,33 @@ namespace Ombi.Schedule.Jobs.Ombi
             try
             {
                 var productArray = GetVersion();
-                var version = productArray[0];
+                var version = productArray.FirstOrDefault() ?? productVersion;
                 Logger.LogDebug(LoggingEvents.Updater, "Version {0}", version);
-                var branch = productArray[1];
-                Logger.LogDebug(LoggingEvents.Updater, "Branch Version {0}", branch);
 
-                Logger.LogDebug(LoggingEvents.Updater, "Version {0}", version);
-                Logger.LogDebug(LoggingEvents.Updater, "Branch {0}", branch);
-
+                // Runtime versions are no longer guaranteed to contain the old
+                // "version-branch" suffix. Older updater code unconditionally
+                // accessed productArray[1], which crashes with IndexOutOfRangeException
+                // for normal versions such as "4.60.37". The configured update
+                // branch is already handled by ChangeLogProcessor, so no branch
+                // token is needed here.
                 Logger.LogDebug(LoggingEvents.Updater, "Looking for updates now");
-                //TODO this fails because the branch = featureupdater when it should be feature/updater
-                var updates = await Processor.Process();
+                UpdateModel updates;
+                try
+                {
+                    updates = await Processor.Process();
+                }
+                catch (Exception e) when (IsTransientUpdateCheckException(e))
+                {
+                    // A scheduled update check should not fail the Quartz job just because
+                    // GitHub, DNS or the local network is temporarily unavailable. Log one
+                    // concise warning and let the next scheduled run try again.
+                    Logger.LogWarning(LoggingEvents.Updater,
+                        "Reqestra could not reach GitHub while checking for updates: {0}. " +
+                        "The updater will retry at the next scheduled check.",
+                        e.Message);
+                    Logger.LogDebug(e, "Transient Reqestra update-check failure");
+                    return;
+                }
                 Logger.LogDebug(LoggingEvents.Updater, "Updates: {0}", updates);
 
 
@@ -101,61 +169,45 @@ namespace Ombi.Schedule.Jobs.Ombi
                 Logger.LogDebug(LoggingEvents.Updater, "Service Version {0}", updates.UpdateVersionString);
 
 
-                if (!serverVersion.Equals(version, StringComparison.CurrentCultureIgnoreCase) || settings.TestMode)
+                // Use ChangeLogProcessor's semantic Version comparison. A raw
+                // string comparison would treat "v4.60.37" and "4.60.37" as
+                // different and could repeatedly trigger the updater even when the
+                // installed version is already current.
+                if (updates.UpdateAvailable || settings.TestMode)
                 {
                     try
                     {
-                        await _notificationHubService.SendNotificationToAdmins($"Ombi update available: v{serverVersion}. Downloading...");
+                        var displayVersion = serverVersion?.TrimStart('v', 'V');
+                        await _notificationHubService.SendNotificationToAdmins($"Reqestra update available: v{displayVersion}. Downloading...");
                     }
                     catch (Exception notifyEx)
                     {
                         Logger.LogWarning(notifyEx, "Failed to send updater start notification");
                     }
 
-                    // Let's download the correct zip
+                    // Reqestra release assets use the RID-based names produced by build.yml.
+                    // Match the exact artifact for this OS/architecture instead of the old Ombi
+                    // names (for example windows.* / linux.*), which no longer exist.
                     var desc = RuntimeInformation.OSDescription;
                     var process = RuntimeInformation.ProcessArchitecture;
+                    var expectedAssetName = GetReleaseAssetName(process);
 
                     Logger.LogDebug(LoggingEvents.Updater, "OS Information: {0} {1}", desc, process);
-                    Downloads download;
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    if (expectedAssetName.IsNullOrEmpty())
                     {
-                        Logger.LogDebug(LoggingEvents.Updater, "We are Windows");
-                        if (process == Architecture.X64)
-                        {
-                            download = updates.Downloads.FirstOrDefault(x =>
-                                x.Name.Contains("windows.", CompareOptions.IgnoreCase));
-                        }
-                        else
-                        {
-                            download = updates.Downloads.FirstOrDefault(x =>
-                                x.Name.Contains("windows-32bit", CompareOptions.IgnoreCase));
-                        }
+                        Logger.LogWarning(LoggingEvents.Updater,
+                            "Reqestra does not publish an automatic-update artifact for this platform: {0} {1}",
+                            desc, process);
+                        return;
                     }
-                    else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    {
-                        Logger.LogDebug(LoggingEvents.Updater, "We are OSX");
-                        download = updates.Downloads.FirstOrDefault(x => x.Name.Contains("osx", CompareOptions.IgnoreCase));
-                    }
-                    else
-                    {
-                        Logger.LogDebug(LoggingEvents.Updater, "We are linux");
-                        if (process == Architecture.Arm)
-                        {
-                            download = updates.Downloads.FirstOrDefault(x => x.Name.Contains("arm.", CompareOptions.IgnoreCase));
-                        }
-                        else if (process == Architecture.Arm64)
-                        {
-                            download = updates.Downloads.FirstOrDefault(x => x.Name.Contains("arm64.", CompareOptions.IgnoreCase));
-                        }
-                        else
-                        {
-                            download = updates.Downloads.FirstOrDefault(x => x.Name.Contains("linux.", CompareOptions.IgnoreCase));
-                        }
-                    }
+
+                    var download = updates.Downloads.FirstOrDefault(x =>
+                        string.Equals(x.Name, expectedAssetName, StringComparison.OrdinalIgnoreCase));
                     if (download == null)
                     {
-                        Logger.LogDebug(LoggingEvents.Updater, "There were no downloads");
+                        Logger.LogWarning(LoggingEvents.Updater,
+                            "Reqestra release did not contain the expected update artifact {0}",
+                            expectedAssetName);
                         return;
                     }
 
@@ -214,12 +266,21 @@ namespace Ombi.Schedule.Jobs.Ombi
                     {
                         updaterExtension = ".exe";
                     }
-                    var updaterFile = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location),
-                        "TempUpdate", "updater", $"Ombi.Updater{updaterExtension}");
+                    var updaterFile = Path.Combine(tempPath, "updater", $"Ombi.Updater{updaterExtension}");
+                    if (!File.Exists(updaterFile))
+                    {
+                        throw new FileNotFoundException(
+                            "The Reqestra release does not contain the packaged updater executable.",
+                            updaterFile);
+                    }
 
-                    // Make sure the file is an executable
-                    //ExecLinuxCommand($"chmod +x {updaterFile}");
-
+                    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        File.SetUnixFileMode(updaterFile,
+                            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                    }
 
                     // There must be an update
                     var start = new ProcessStartInfo
@@ -228,7 +289,7 @@ namespace Ombi.Schedule.Jobs.Ombi
                         CreateNoWindow = true, // Ignored if UseShellExecute is set to true
                         FileName = updaterFile,
                         Arguments = GetArgs(settings),
-                        WorkingDirectory = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "TempUpdate"),
+                        WorkingDirectory = tempPath,
                     };
                     //if (settings.Username.HasValue())
                     //{
@@ -262,31 +323,78 @@ namespace Ombi.Schedule.Jobs.Ombi
             }
         }
 
+        private static string GetReleaseAssetName(Architecture architecture)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return architecture switch
+                {
+                    Architecture.X64 => "win-x64.zip",
+                    Architecture.X86 => "win-x86.zip",
+                    _ => null,
+                };
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return architecture == Architecture.X64 ? "osx-x64.tar.gz" : null;
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return architecture switch
+                {
+                    Architecture.X64 => "linux-x64.tar.gz",
+                    Architecture.Arm => "linux-arm.tar.gz",
+                    Architecture.Arm64 => "linux-arm64.tar.gz",
+                    _ => null,
+                };
+            }
+
+            return null;
+        }
+
         private string GetArgs(UpdateSettings settings)
         {
             var url = _appConfig.Get(ConfigurationTypes.Url);
             var storage = _appConfig.Get(ConfigurationTypes.StoragePath);
 
-            var currentLocation = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
-            var processName = (settings.ProcessName.HasValue() ? settings.ProcessName : "Ombi");
+            var currentLocation = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+            var processName = settings.ProcessName.HasValue() ? settings.ProcessName : "Ombi";
+            var processId = _processProvider.GetCurrentProcessId();
 
             var sb = new StringBuilder();
-            sb.Append($"--applicationPath \"{currentLocation}\" --processname \"{processName}\" ");
-            //if (settings.WindowsService)
-            //{
-            //    sb.Append($"--windowsServiceName \"{settings.WindowsServiceName}\" ");
-            //}
-            var sb2 = new StringBuilder();
+            sb.Append($"--applicationPath \"{currentLocation}\" --processname \"{processName}\" --processId {processId} ");
+
+            if (settings.WindowsService)
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    throw new InvalidOperationException("Windows service update mode can only be used on Windows.");
+                }
+
+                if (!settings.WindowsServiceName.HasValue())
+                {
+                    throw new InvalidOperationException(
+                        "Windows service update mode is enabled but no Windows service name is configured.");
+                }
+
+                sb.Append($"--windowsServiceName \"{settings.WindowsServiceName}\" ");
+            }
+
+            // Preserve the arguments used by non-service installations when the updater
+            // restarts Reqestra. The old implementation built these arguments in a second
+            // StringBuilder that was never returned.
             if (url?.Value.HasValue() ?? false)
             {
-                sb2.Append($" --host {url.Value}");
+                sb.Append($"--host \"{url.Value}\" ");
             }
             if (storage?.Value.HasValue() ?? false)
             {
-                sb2.Append($" --storage {storage.Value}");
+                sb.Append($"--storage \"{storage.Value}\" ");
             }
 
-            return sb.ToString();
+            return sb.ToString().Trim();
         }
 
         private void RunScript(UpdateSettings settings, string downloadUrl)
@@ -331,7 +439,7 @@ namespace Ombi.Schedule.Jobs.Ombi
             {
                 // Something else!
                 using (var stream = File.Open(zipDir, FileMode.Open))
-                using (var files = TarReader.Open(stream))
+                using (var files = ReaderFactory.OpenReader(stream))
                 {
                     Directory.CreateDirectory(tempPath);
                     files.WriteAllToDirectory(tempPath, new ExtractionOptions { Overwrite = true });

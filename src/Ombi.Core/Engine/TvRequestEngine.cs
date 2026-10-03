@@ -7,7 +7,6 @@ using Ombi.Core.Models.Search;
 using Ombi.Helpers;
 using Ombi.Store.Entities;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Security.Principal;
@@ -20,10 +19,12 @@ using Ombi.Core.Models.UI;
 using Ombi.Core.Rule;
 using Ombi.Core.Rule.Interfaces;
 using Ombi.Core.Senders;
+using Ombi.Core.Services;
 using Ombi.Core.Settings;
 using Ombi.Settings.Settings.Models;
 using Ombi.Store.Entities.Requests;
 using Ombi.Store.Repository;
+using Ombi.Store.Repository.Requests;
 using Ombi.Core.Models;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -37,7 +38,10 @@ namespace Ombi.Core.Engine
             INotificationHelper helper, IRuleEvaluator rule, OmbiUserManager manager, ILogger<TvRequestEngine> logger,
             ITvSender sender, IRepository<RequestLog> rl, ISettingsService<OmbiSettings> settings, ICacheService cache,
             IRepository<RequestSubscription> sub, IMediaCacheService mediaCacheService,
-            IUserPlayedEpisodeRepository userPlayedEpisodeRepository) : base(user, requestService, rule, manager, cache, settings, sub)
+            IUserPlayedEpisodeRepository userPlayedEpisodeRepository,
+            IQualityProfileSelectionService qualityProfileSelectionService,
+            IRepository<RequestQueue> requestQueue,
+            IMediaCleanupEngine mediaCleanupEngine = null) : base(user, requestService, rule, manager, cache, settings, sub)
         {
             TvApi = tvApi;
             MovieDbApi = movApi;
@@ -47,6 +51,9 @@ namespace Ombi.Core.Engine
             _requestLog = rl;
             _mediaCacheService = mediaCacheService;
             _userPlayedEpisodeRepository = userPlayedEpisodeRepository;
+            _qualityProfileSelectionService = qualityProfileSelectionService;
+            _requestQueueRepository = requestQueue;
+            _mediaCleanupEngine = mediaCleanupEngine;
         }
 
         private INotificationHelper NotificationHelper { get; }
@@ -58,6 +65,9 @@ namespace Ombi.Core.Engine
         private readonly IRepository<RequestLog> _requestLog;
         private readonly IMediaCacheService _mediaCacheService;
         private readonly IUserPlayedEpisodeRepository _userPlayedEpisodeRepository;
+        private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
+        private readonly IRepository<RequestQueue> _requestQueueRepository;
+        private readonly IMediaCleanupEngine _mediaCleanupEngine;
 
         public async Task<RequestEngineResult> RequestTvShow(TvRequestViewModel tv)
         {
@@ -79,6 +89,71 @@ namespace Ombi.Core.Engine
                 }
             }
 
+            var isAdmin = Username.Equals("API", StringComparison.CurrentCultureIgnoreCase) ||
+                          await UserManager.IsInRoleAsync(user, OmbiRoles.PowerUser) ||
+                          await UserManager.IsInRoleAsync(user, OmbiRoles.Admin);
+            var canSelectQualityProfile = isAdmin || await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+
+            if ((tv.RootFolderOverride.HasValue || tv.LanguageProfile.HasValue) && !isAdmin)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.NoPermissions,
+                    Message = "You do not have the correct permissions to change advanced Sonarr options!",
+                    ErrorMessage = "You do not have the correct permissions to change advanced Sonarr options!"
+                };
+            }
+
+            if (tv.QualityPathOverride.HasValue && !canSelectQualityProfile)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.NoPermissions,
+                    Message = "You do not have the correct permissions to select a quality profile!",
+                    ErrorMessage = "You do not have the correct permissions to select a quality profile!"
+                };
+            }
+
+            if (tv.QualityPathOverride.HasValue && tv.QualityPathOverride.Value < 0)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.NoPermissions,
+                    Message = "The selected Sonarr quality profile is invalid.",
+                    ErrorMessage = "The selected Sonarr quality profile is invalid."
+                };
+            }
+
+            if (tv.QualityPathOverride.GetValueOrDefault() > 0 && !isAdmin)
+            {
+                try
+                {
+                    if (!await _qualityProfileSelectionService.IsValidSonarrProfile(tv.QualityPathOverride.Value))
+                    {
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorCode = ErrorCode.NoPermissions,
+                            Message = "The selected Sonarr quality profile is no longer available.",
+                            ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId}", tv.QualityPathOverride.Value);
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        Message = "Ombi could not validate the selected Sonarr quality profile because Sonarr is unavailable.",
+                        ErrorMessage = "Ombi could not validate the selected Sonarr quality profile because Sonarr is unavailable."
+                    };
+                }
+            }
+
             var tvBuilder = new TvShowRequestBuilder(TvApi, MovieDbApi, _logger);
             (await tvBuilder
                 .GetShowInfo(tv.TvDbId))
@@ -86,14 +161,18 @@ namespace Ombi.Core.Engine
                 .CreateChild(tv, canRequestOnBehalf ? tv.RequestOnBehalf : user.Id);
 
             await tvBuilder.BuildEpisodes(tv);
+            tvBuilder.ChildRequest.QualityOverride = tv.QualityPathOverride;
 
             var ruleResults = await RunRequestRules(tvBuilder.ChildRequest);
             var results = ruleResults as RuleResult[] ?? ruleResults.ToArray();
-            if (results.Any(x => !x.Success))
+            var ruleResultInError = results.FirstOrDefault(x => !x.Success);
+            if (ruleResultInError != null)
             {
                 return new RequestEngineResult
                 {
-                    ErrorMessage = results.FirstOrDefault(x => !string.IsNullOrEmpty(x.Message)).Message
+                    ErrorMessage = results.FirstOrDefault(x => !x.Success && !string.IsNullOrEmpty(x.Message))?.Message
+                        ?? ruleResultInError.Message,
+                    ErrorCode = ruleResultInError.ErrorCode
                 };
             }
 
@@ -139,9 +218,6 @@ namespace Ombi.Core.Engine
                         }
                     }
 
-                // Remove the ID since this is a new child
-                // This was a TVDBID for the request rules to run
-                tvBuilder.ChildRequest.Id = 0;
                 if (!tvBuilder.ChildRequest.SeasonRequests.Any())
                 {
                     // Looks like we have removed them all! They were all duplicates...
@@ -152,11 +228,14 @@ namespace Ombi.Core.Engine
                         ErrorMessage = "This has already been requested"
                     };
                 }
-                return await AddExistingRequest(tvBuilder.ChildRequest, existingRequest, tv.RequestOnBehalf, tv.RootFolderOverride.GetValueOrDefault(), tv.QualityPathOverride.GetValueOrDefault());
+                return await AddExistingRequest(tvBuilder.ChildRequest, existingRequest, tv.RequestOnBehalf, tv.RootFolderOverride.GetValueOrDefault(), tv.QualityPathOverride);
             }
 
-            // This is a new request
+            // This is a new request. Preserve the legacy API's request-time overrides too.
             var newRequest = tvBuilder.CreateNewRequest(tv);
+            newRequest.NewRequest.RootFolder = tv.RootFolderOverride;
+            newRequest.NewRequest.QualityOverride = tv.QualityPathOverride;
+            newRequest.NewRequest.LanguageProfile = tv.LanguageProfile;
             return await AddRequest(newRequest.NewRequest, tv.RequestOnBehalf);
         }
 
@@ -177,32 +256,97 @@ namespace Ombi.Core.Engine
                 };
             }
 
-            if ((tv.RootFolderOverride.HasValue || tv.QualityPathOverride.HasValue || tv.LanguageProfile.HasValue) && !isAdmin)
+            var canSelectQualityProfile = isAdmin || await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+
+            if ((tv.RootFolderOverride.HasValue || tv.LanguageProfile.HasValue) && !isAdmin)
             {
                 return new RequestEngineResult
                 {
                     Result = false,
                     ErrorCode = ErrorCode.NoPermissions,
-                    Message = "You do not have the correct permissions!",
-                    ErrorMessage = $"You do not have the correct permissions!"
+                    Message = "You do not have the correct permissions to change advanced Sonarr options!",
+                    ErrorMessage = "You do not have the correct permissions to change advanced Sonarr options!"
                 };
             }
 
+            if (tv.QualityPathOverride.HasValue && !canSelectQualityProfile)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.NoPermissions,
+                    Message = "You do not have the correct permissions to select a quality profile!",
+                    ErrorMessage = "You do not have the correct permissions to select a quality profile!"
+                };
+            }
+
+            if (tv.QualityPathOverride.HasValue && tv.QualityPathOverride.Value < 0)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.NoPermissions,
+                    Message = "The selected Sonarr quality profile is invalid.",
+                    ErrorMessage = "The selected Sonarr quality profile is invalid."
+                };
+            }
+
+            if (tv.QualityPathOverride.GetValueOrDefault() > 0 && !isAdmin)
+            {
+                try
+                {
+                    if (!await _qualityProfileSelectionService.IsValidSonarrProfile(tv.QualityPathOverride.Value))
+                    {
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorCode = ErrorCode.NoPermissions,
+                            Message = "The selected Sonarr quality profile is no longer available.",
+                            ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId}", tv.QualityPathOverride.Value);
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        Message = "Ombi could not validate the selected Sonarr quality profile because Sonarr is unavailable.",
+                        ErrorMessage = "Ombi could not validate the selected Sonarr quality profile because Sonarr is unavailable."
+                    };
+                }
+            }
+
             var tvBuilder = new TvShowRequestBuilderV2(MovieDbApi);
-            (await tvBuilder
-                .GetShowInfo(tv.TheMovieDbId, tv.languageCode))
+            var showBuilder = await tvBuilder.GetShowInfo(tv.TheMovieDbId, tv.languageCode);
+            if (showBuilder == null)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    Message = "TheMovieDb could not return TV show information. Please try again later.",
+                    ErrorMessage = "TheMovieDb could not return TV show information. Please try again later."
+                };
+            }
+
+            showBuilder
                 .CreateTvList(tv)
                 .CreateChild(tv, canRequestOnBehalf ? tv.RequestOnBehalf : user.Id, tv.Source);
 
             await tvBuilder.BuildEpisodes(tv);
+            tvBuilder.ChildRequest.QualityOverride = tv.QualityPathOverride;
 
             var ruleResults = await RunRequestRules(tvBuilder.ChildRequest);
             var results = ruleResults as RuleResult[] ?? ruleResults.ToArray();
-            if (results.Any(x => !x.Success))
+            var ruleResultInError = results.FirstOrDefault(x => !x.Success);
+            if (ruleResultInError != null)
             {
                 return new RequestEngineResult
                 {
-                    ErrorMessage = results.FirstOrDefault(x => !string.IsNullOrEmpty(x.Message)).Message
+                    ErrorMessage = results.FirstOrDefault(x => !x.Success && !string.IsNullOrEmpty(x.Message))?.Message
+                        ?? ruleResultInError.Message,
+                    ErrorCode = ruleResultInError.ErrorCode
                 };
             }
 
@@ -219,38 +363,98 @@ namespace Ombi.Core.Engine
                 }
             }
 
-            var existingRequest = await TvRepository.Get().FirstOrDefaultAsync(x => x.ExternalProviderId == tv.TheMovieDbId);
+            var requestTvDbId = tvBuilder.ChildRequest.RequestTvDbId;
+            var requestImdbId = tvBuilder.ChildRequest.RequestImdbId;
+
+            // Prefer an exact TMDB parent. TVDB/IMDb aliases can identify the same anthology
+            // parent while referring to different standalone TMDB seasons, so an alias is only
+            // eligible for attachment when title/year metadata or an episode fingerprint proves
+            // that the request belongs to that Ombi parent.
+            var existingRequest = await TvRepository.Get()
+                .FirstOrDefaultAsync(x => x.ExternalProviderId == tv.TheMovieDbId);
+            var matchedByExactTmdb = existingRequest != null;
+
+            TvRequestAliasIdentityMatch aliasMatch = null;
+            if (existingRequest == null && (requestTvDbId > 0 || !string.IsNullOrEmpty(requestImdbId)))
+            {
+                var aliasCandidates = await TvRepository.Get()
+                    .Where(x =>
+                        (requestTvDbId > 0 && x.TvDbId == requestTvDbId) ||
+                        (!string.IsNullOrEmpty(requestImdbId) && x.ImdbId == requestImdbId))
+                    .ToListAsync();
+
+                if (tvBuilder.ChildRequest.RequestExistingParentId > 0)
+                {
+                    existingRequest = aliasCandidates.FirstOrDefault(
+                        x => x.Id == tvBuilder.ChildRequest.RequestExistingParentId);
+                }
+
+                if (existingRequest == null)
+                {
+                    aliasMatch = TvRequestSeasonIdentityMatcher.FindSafeAliasMatch(
+                        tvBuilder.ChildRequest,
+                        aliasCandidates);
+                    existingRequest = aliasMatch?.Parent;
+                }
+            }
+
             if (existingRequest != null)
             {
-                // Remove requests we already have, we just want new ones
-                foreach (var existingSeason in existingRequest.ChildRequests)
-                    foreach (var existing in existingSeason.SeasonRequests)
+                var existingSeasons = (existingRequest.ChildRequests ?? new List<ChildRequests>())
+                    .Where(x => x?.SeasonRequests != null)
+                    .SelectMany(x => x.SeasonRequests)
+                    .ToList();
+                var useLiteralSeasonNumbers = matchedByExactTmdb ||
+                    TvRequestSeasonIdentityMatcher.SeriesMetadataMatches(tvBuilder.ChildRequest, existingRequest) ||
+                    aliasMatch?.UseLiteralSeasonNumbers == true;
+
+                // Remove requests we already have, we just want new ones. For alias-only matches,
+                // map each season by fingerprint before comparing episode numbers so standalone S1
+                // cannot be confused with an unrelated anthology S1.
+                foreach (var newChild in tvBuilder.ChildRequest.SeasonRequests.ToList())
+                {
+                    int? targetSeasonNumber;
+                    if (useLiteralSeasonNumbers)
                     {
-                        var newChild = tvBuilder.ChildRequest.SeasonRequests.FirstOrDefault(x => x.SeasonNumber == existing.SeasonNumber);
-                        if (newChild != null)
-                        {
-                            // We have some requests in this season...
-                            // Let's find the episodes.
-                            foreach (var existingEp in existing.Episodes)
-                            {
-                                var duplicateEpisode = newChild.Episodes.FirstOrDefault(x => x.EpisodeNumber == existingEp.EpisodeNumber);
-                                if (duplicateEpisode != null)
-                                {
-                                    // Remove it.
-                                    newChild.Episodes.Remove(duplicateEpisode);
-                                }
-                            }
-                            if (!newChild.Episodes.Any())
-                            {
-                                // We may have removed all episodes
-                                tvBuilder.ChildRequest.SeasonRequests.Remove(newChild);
-                            }
-                        }
+                        targetSeasonNumber = newChild.SeasonNumber;
+                    }
+                    else if (tvBuilder.ChildRequest.RequestSeasonMappings.TryGetValue(
+                                 newChild.SeasonNumber,
+                                 out var hintedSeasonNumber))
+                    {
+                        targetSeasonNumber = hintedSeasonNumber;
+                    }
+                    else if (aliasMatch != null && aliasMatch.SeasonMappings.TryGetValue(
+                                 newChild.SeasonNumber,
+                                 out var aliasSeasonNumber))
+                    {
+                        targetSeasonNumber = aliasSeasonNumber;
+                    }
+                    else
+                    {
+                        targetSeasonNumber = TvRequestSeasonIdentityMatcher.FindSingleSeasonMatch(
+                            newChild,
+                            existingSeasons);
                     }
 
-                // Remove the ID since this is a new child
-                // This was a TVDBID for the request rules to run
-                tvBuilder.ChildRequest.Id = 0;
+                    if (!targetSeasonNumber.HasValue)
+                    {
+                        continue;
+                    }
+
+                    var existingEpisodeNumbers = existingSeasons
+                        .Where(x => x.SeasonNumber == targetSeasonNumber.Value)
+                        .SelectMany(x => x.Episodes ?? new List<EpisodeRequests>())
+                        .Select(x => x.EpisodeNumber)
+                        .ToHashSet();
+
+                    newChild.Episodes.RemoveAll(x => existingEpisodeNumbers.Contains(x.EpisodeNumber));
+                    if (!newChild.Episodes.Any())
+                    {
+                        tvBuilder.ChildRequest.SeasonRequests.Remove(newChild);
+                    }
+                }
+
                 if (!tvBuilder.ChildRequest.SeasonRequests.Any())
                 {
                     // Looks like we have removed them all! They were all duplicates...
@@ -261,7 +465,7 @@ namespace Ombi.Core.Engine
                         ErrorMessage = "This has already been requested"
                     };
                 }
-                return await AddExistingRequest(tvBuilder.ChildRequest, existingRequest, tv.RequestOnBehalf, tv.RootFolderOverride.GetValueOrDefault(), tv.QualityPathOverride.GetValueOrDefault());
+                return await AddExistingRequest(tvBuilder.ChildRequest, existingRequest, tv.RequestOnBehalf, tv.RootFolderOverride.GetValueOrDefault(), tv.QualityPathOverride);
             }
 
             // This is a new request
@@ -359,7 +563,7 @@ namespace Ombi.Core.Engine
             return allRequests;
         }
 
-        public async Task<RequestsViewModel<ChildRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder)
+        public async Task<RequestsViewModel<ChildRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             List<ChildRequests> allRequests;
@@ -382,29 +586,16 @@ namespace Ombi.Core.Engine
                 return new RequestsViewModel<ChildRequests>();
             }
 
-            var total = allRequests.Count;
+            allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
-            var prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find(sortProperty, true);
-
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find("Title", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-            allRequests = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.OrderBy(x => prop.GetValue(x)).ToList()
-                : allRequests.OrderByDescending(x => prop.GetValue(x)).ToList();
-            
             await FillAdditionalFields(shouldHide, allRequests);
 
             // Make sure we do not show duplicate child requests
             allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
 
+            var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
 
             return new RequestsViewModel<ChildRequests>
@@ -414,7 +605,7 @@ namespace Ombi.Core.Engine
             };
         }
 
-        public async Task<RequestsViewModel<ChildRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder, RequestStatus status)
+        public async Task<RequestsViewModel<ChildRequests>> GetRequests(int count, int position, string sortProperty, string sortOrder, RequestStatus status, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             List<ChildRequests> allRequests;
@@ -431,6 +622,8 @@ namespace Ombi.Core.Engine
                 allRequests = await TvRepository.GetChild().ToListAsync();
 
             }
+
+            allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
             switch (status)
             {
@@ -455,29 +648,14 @@ namespace Ombi.Core.Engine
                 return new RequestsViewModel<ChildRequests>();
             }
 
-            var total = allRequests.Count;
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
-
-            var prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find(sortProperty, true);
-
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find("Title", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-            allRequests = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.OrderBy(x => prop.GetValue(x)).ToList()
-                : allRequests.OrderByDescending(x => prop.GetValue(x)).ToList();
-            
             await FillAdditionalFields(shouldHide, allRequests);
 
             // Make sure we do not show duplicate child requests
             allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
 
+            var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
 
             return new RequestsViewModel<ChildRequests>
@@ -487,7 +665,7 @@ namespace Ombi.Core.Engine
             };
         }
 
-        public async Task<RequestsViewModel<ChildRequests>> GetUnavailableRequests(int count, int position, string sortProperty, string sortOrder)
+        public async Task<RequestsViewModel<ChildRequests>> GetUnavailableRequests(int count, int position, string sortProperty, string sortOrder, string requestedByUserId = null)
         {
             var shouldHide = await HideFromOtherUsers();
             List<ChildRequests> allRequests;
@@ -510,27 +688,16 @@ namespace Ombi.Core.Engine
                 return new RequestsViewModel<ChildRequests>();
             }
 
-            var total = allRequests.Count;
+            allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
-            var prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find(sortProperty, true);
-
-            if (sortProperty.Contains('.'))
-            {
-                // This is a navigation property currently not supported
-                prop = TypeDescriptor.GetProperties(typeof(ChildRequests)).Find("Title", true);
-                //var properties = sortProperty.Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries);
-                //var firstProp = TypeDescriptor.GetProperties(typeof(MovieRequests)).Find(properties[0], true);
-                //var propType = firstProp.PropertyType;
-                //var secondProp = TypeDescriptor.GetProperties(propType).Find(properties[1], true);
-            }
-            allRequests = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase)
-                ? allRequests.OrderBy(x => prop.GetValue(x)).ToList()
-                : allRequests.OrderByDescending(x => prop.GetValue(x)).ToList();
             await FillAdditionalFields(shouldHide, allRequests);
 
             // Make sure we do not show duplicate child requests
             allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+
+            var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
 
             return new RequestsViewModel<ChildRequests>
@@ -578,6 +745,17 @@ namespace Ombi.Core.Engine
             return request;
         }
 
+        private static List<ChildRequests> ApplySortTv(List<ChildRequests> requests, string sortProperty, string sortOrder)
+        {
+            var asc = sortOrder.Equals("asc", StringComparison.InvariantCultureIgnoreCase);
+            return sortProperty.ToLowerInvariant() switch
+            {
+                "id" => asc ? requests.OrderBy(x => x.Id).ToList() : requests.OrderByDescending(x => x.Id).ToList(),
+                "title" => asc ? requests.OrderBy(x => x.Title).ToList() : requests.OrderByDescending(x => x.Title).ToList(),
+                _ => asc ? requests.OrderBy(x => x.RequestedDate).ToList() : requests.OrderByDescending(x => x.RequestedDate).ToList()
+            };
+        }
+
         private static void FilterChildren(IEnumerable<TvRequests> allRequests, HideResult shouldHide)
         {
             if (allRequests == null)
@@ -621,11 +799,11 @@ namespace Ombi.Core.Engine
             List<ChildRequests> allRequests;
             if (shouldHide.Hide)
             {
-                allRequests = await TvRepository.GetChild(shouldHide.UserId).Include(x => x.SeasonRequests).Where(x => x.ParentRequestId == tvId).ToListAsync();
+                allRequests = await TvRepository.GetChild(shouldHide.UserId).Where(x => x.ParentRequestId == tvId).ToListAsync();
             }
             else
             {
-                allRequests = await TvRepository.GetChild().Include(x => x.SeasonRequests).Where(x => x.ParentRequestId == tvId).ToListAsync();
+                allRequests = await TvRepository.GetChild().Where(x => x.ParentRequestId == tvId).ToListAsync();
             }
 
             await FillAdditionalFields(shouldHide, allRequests);
@@ -645,7 +823,9 @@ namespace Ombi.Core.Engine
             {
                 allRequests = TvRepository.Get();
             }
-            var results = await allRequests.Where(x => x.Title.Contains(search, CompareOptions.IgnoreCase)).ToListAsync();
+            var results = (await allRequests.ToListAsync())
+                .Where(x => x.Title.Contains(search, CompareOptions.IgnoreCase))
+                .ToList();
 
             await FillAdditionalFields(shouldHide, results);
             return results;
@@ -722,12 +902,38 @@ namespace Ombi.Core.Engine
                     await NotificationHelper.Notify(request, NotificationType.RequestApproved);
                 }
                 // Autosend
-                await TvSender.Send(request);
+                var sendResult = await TvSender.Send(request);
+                if (sendResult.Success)
+                {
+                    await CompleteActiveTvRequestFailures(request.Id);
+                }
             }
             return new RequestEngineResult
             {
                 Result = true
             };
+        }
+
+        private async Task CompleteActiveTvRequestFailures(int requestId)
+        {
+            var activeFailures = await _requestQueueRepository.GetAll()
+                .Where(x => x.RequestId == requestId &&
+                    x.Type == RequestType.TvShow &&
+                    !x.Completed.HasValue)
+                .ToListAsync();
+
+            if (activeFailures.Count == 0)
+            {
+                return;
+            }
+
+            var completedAt = DateTime.UtcNow;
+            foreach (var failure in activeFailures)
+            {
+                failure.Completed = completedAt;
+            }
+
+            await _requestQueueRepository.SaveChangesAsync();
         }
 
         public async Task<RequestEngineResult> DenyChildRequest(int requestId, string reason)
@@ -782,18 +988,28 @@ namespace Ombi.Core.Engine
                 }
             });
 
-            TvRepository.Db.ChildRequests.Remove(request);
-            var all = TvRepository.Db.TvRequests.Include(x => x.ChildRequests);
-            var parent = all.FirstOrDefault(x => x.Id == request.ParentRequestId);
+            var parent = await TvRepository.Get()
+                .FirstOrDefaultAsync(x => x.Id == request.ParentRequestId);
 
-            // Is this the only child? If so delete the parent
-            if (parent.ChildRequests.Count <= 1)
+            // If this is the only child, delete the complete request graph. Otherwise remove only
+            // this child's season/episode graph explicitly. The repository also cleans up legacy
+            // orphan rows left by older databases where cascading deletes were not enforced.
+            if (parent != null && parent.ChildRequests.Count <= 1)
             {
-                // Delete the parent
-                TvRepository.Db.TvRequests.Remove(parent);
+                await TvRepository.DeleteRequest(parent);
+                if (_mediaCleanupEngine != null)
+                {
+                    await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                        RequestType.TvShow,
+                        parent.Id,
+                        parent.ExternalProviderId,
+                        parent.TvDbId);
+                }
             }
-
-            await TvRepository.Db.SaveChangesAsync();
+            else
+            {
+                await TvRepository.DeleteChild(request);
+            }
             await _mediaCacheService.Purge();
 
             return new RequestEngineResult
@@ -828,7 +1044,15 @@ namespace Ombi.Core.Engine
                 });
             }
 
-            await TvRepository.Delete(request);
+            await TvRepository.DeleteRequest(request);
+            if (_mediaCleanupEngine != null)
+            {
+                await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                    RequestType.TvShow,
+                    request.Id,
+                    request.ExternalProviderId,
+                    request.TvDbId);
+            }
             await _mediaCacheService.Purge();
         }
 
@@ -927,7 +1151,7 @@ namespace Ombi.Core.Engine
             var sub = _subscriptionRepository.GetAll();
             var childIds = childRequests.Select(x => x.Id);
             var relevantSubs = await sub.Where(s =>
-                s.UserId == shouldHide.UserId && childIds.Contains(s.Id) && s.RequestType == RequestType.TvShow).ToListAsync();
+                s.UserId == shouldHide.UserId && childIds.Contains(s.RequestId) && s.RequestType == RequestType.TvShow).ToListAsync();
             foreach (var x in childRequests)
             {
                 if (shouldHide.UserId == x.RequestedUserId)
@@ -954,14 +1178,19 @@ namespace Ombi.Core.Engine
 
         private void CheckForPlayed(HideResult shouldHide, List<ChildRequests> childRequests)
         {
-            var theMovieDbIds = childRequests.Select(x => x.Id);
             foreach (var request in childRequests)
             {
                 var requestedEpisodes = GetEpisodesKeys(request);
+                var theMovieDbId = request.ParentRequest?.ExternalProviderId ?? 0;
+                if (theMovieDbId <= 0)
+                {
+                    request.RequestedUserPlayedProgress = 0;
+                    continue;
+                }
 
                 var playedEpisodes = _userPlayedEpisodeRepository
                     .GetAll()
-                    .Where(x => x.TheMovieDbId == request.Id && x.UserId == request.RequestedUserId)
+                    .Where(x => x.TheMovieDbId == theMovieDbId && x.UserId == request.RequestedUserId)
                     .AsEnumerable()
                     .Join(requestedEpisodes,
                         played => new { played.SeasonNumber, played.EpisodeNumber },
@@ -999,13 +1228,15 @@ namespace Ombi.Core.Engine
             return result;
         }
 
-        private async Task<RequestEngineResult> AddExistingRequest(ChildRequests newRequest, TvRequests existingRequest, string requestOnBehalf, int rootFolder, int qualityProfile)
+        private async Task<RequestEngineResult> AddExistingRequest(ChildRequests newRequest, TvRequests existingRequest, string requestOnBehalf, int rootFolder, int? qualityProfile)
         {
             // Add the child
             existingRequest.ChildRequests.Add(newRequest);
-            if (qualityProfile > 0)
+            if (qualityProfile.HasValue)
             {
-                existingRequest.QualityOverride = qualityProfile;
+                // Zero explicitly clears a previous request-level override and restores the
+                // normal Ombi/Sonarr profile behavior for future processing.
+                existingRequest.QualityOverride = qualityProfile.Value;
             }
             if (rootFolder > 0)
             {
@@ -1037,7 +1268,7 @@ namespace Ombi.Core.Engine
                 };
             }
 
-            return await ProcessSendingShow(request);
+            return await ProcessSendingShow(request, completeActiveFailuresOnSuccess: true);
         }
 
 
@@ -1062,7 +1293,7 @@ namespace Ombi.Core.Engine
             return await ProcessSendingShow(model);
         }
 
-        private async Task<RequestEngineResult> ProcessSendingShow(ChildRequests model)
+        private async Task<RequestEngineResult> ProcessSendingShow(ChildRequests model, bool completeActiveFailuresOnSuccess = false)
         {
             if (model.Approved)
             {
@@ -1075,6 +1306,10 @@ namespace Ombi.Core.Engine
                 var result = await TvSender.Send(model);
                 if (result.Success)
                 {
+                    if (completeActiveFailuresOnSuccess)
+                    {
+                        await CompleteActiveTvRequestFailures(model.Id);
+                    }
                     return new RequestEngineResult { Result = true, RequestId = model.Id };
                 }
                 return new RequestEngineResult

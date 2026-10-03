@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -55,6 +55,17 @@ namespace Ombi.Api.External.ExternalApis.Radarr
             return await Api.Request<List<MovieResponse>>(request);
         }
 
+        public async Task<List<MovieResponse>> GetMoviesForCleanup(string apiKey, string baseUrl)
+        {
+            var request = new Request("/api/v3/movie", baseUrl, HttpMethod.Get)
+            {
+                ThrowOnErrorStatus = true
+            };
+            AddHeaders(request, apiKey);
+
+            return await Api.Request<List<MovieResponse>>(request);
+        }
+
         public async Task<MovieResponse> GetMovie(int id, string apiKey, string baseUrl)
         {
             var request = new Request($"/api/v3/movie/{id}", baseUrl, HttpMethod.Get);
@@ -70,6 +81,25 @@ namespace Ombi.Api.External.ExternalApis.Radarr
             request.AddJsonBody(movie);
 
             return await Api.Request<MovieResponse>(request);
+        }
+
+        public async Task<bool> DeleteMovie(int id, string apiKey, string baseUrl, bool deleteFiles, bool addImportExclusion)
+        {
+            var request = new Request(
+                $"/api/v3/movie/{id}?deleteFiles={deleteFiles.ToString().ToLowerInvariant()}&addImportExclusion={addImportExclusion.ToString().ToLowerInvariant()}",
+                baseUrl,
+                HttpMethod.Delete);
+            AddHeaders(request, apiKey);
+            using var response = await Api.Request(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException(
+                    $"Radarr rejected the movie delete request with HTTP {(int)response.StatusCode} ({response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            }
+
+            return true;
         }
 
         public async Task<RadarrAddMovie> AddMovie(int tmdbId, string title, int year, int qualityId, string rootPath, string apiKey, string baseUrl, bool searchNow, string minimumAvailability, List<int> tags)

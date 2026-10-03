@@ -31,6 +31,7 @@ function createMockAuthService() {
 describe('AuthService', () => {
   let service: AuthService;
   let mockJwtHelper: ReturnType<typeof createMockAuthService>['mockJwtHelper'];
+  let mockHttp: ReturnType<typeof createMockAuthService>['mockHttp'];
   let mockStore: StorageService;
 
   beforeEach(() => {
@@ -38,7 +39,18 @@ describe('AuthService', () => {
     const mocks = createMockAuthService();
     service = mocks.service;
     mockJwtHelper = mocks.mockJwtHelper;
+    mockHttp = mocks.mockHttp;
     mockStore = mocks.mockStore;
+  });
+
+  describe('oAuth', () => {
+    it('should POST the opaque poll token in the request body', () => {
+      const pollToken = 'a'.repeat(64);
+
+      service.oAuth(pollToken);
+
+      expect(mockHttp.post).toHaveBeenCalledWith('/api/v1/token/plexoauth', { pollToken }, expect.anything());
+    });
   });
 
   describe('loggedIn', () => {

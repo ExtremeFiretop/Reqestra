@@ -3,8 +3,9 @@
 }
 
 export interface IPlexPin {
-    id: number;
-    code: string;
+    pollToken: string;
+    expiresIn?: number;
+    expiresAt?: string;
 }
 
 export interface IPlexOAuthViewModel {

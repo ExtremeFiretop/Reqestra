@@ -5,6 +5,7 @@
         public string ApplicationName { get; set; }
         public string ApplicationUrl { get; set; }
         public string CustomCss { get; set; }
+        public bool HideOmbiDonation { get; set; }
         public bool EnableCustomDonations { get; set; }
         public string CustomDonationUrl { get; set; }
         public string CustomDonationMessage { get; set; }

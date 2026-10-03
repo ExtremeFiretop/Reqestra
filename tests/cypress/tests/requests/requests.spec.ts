@@ -29,7 +29,7 @@ describe("Requests Tests", () => {
   it("Deleting TV requests, removes from grid", () => {
     cy.intercept("POST", "request/tv").as("tvRequest");
     cy.intercept("token").as("login");
-    cy.intercept('DELETE','api/v1/Request/tv/child/60735').as('deleteRequest');
+    cy.intercept('DELETE', '**/api/v1/Request/tv/child/*').as('deleteRequest');
     cy.login();
 
     // cy.wait('@login');
@@ -44,6 +44,9 @@ describe("Requests Tests", () => {
     row.optionsDelete.click();
 
     cy.wait('@deleteRequest').then((intercept) => {
+      // The delete endpoint uses the generated child-request ID, not the
+      // show's TMDB ID (60735), so match the route dynamically.
+      expect(intercept.request.url).to.match(/\/api\/v1\/Request\/tv\/child\/\d+$/);
       expect(intercept.response!.body.result).is.true;
     })
 

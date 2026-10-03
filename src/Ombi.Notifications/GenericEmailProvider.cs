@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using EnsureThat;
 using MailKit.Net.Smtp;
@@ -23,6 +24,13 @@ namespace Ombi.Notifications
         }
         private ISettingsService<CustomizationSettings> CustomizationSettings { get; }
         private readonly ILogger<GenericEmailProvider> _log;
+
+        private static readonly TimeSpan[] DnsRetryDelays =
+        {
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromSeconds(10),
+        };
 
         /// <summary>
         /// This will load up the Email template and generate the HTML
@@ -89,16 +97,7 @@ namespace Ombi.Notifications
                         client.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
                     }
 
-                    if (settings.DisableTLS)
-                    {
-                        // Does not attempt to use either TLS or SSL
-                        // Helpful when MailKit finds a TLS certificate, but it unable to use it
-                        client.Connect(settings.Host, settings.Port, MailKit.Security.SecureSocketOptions.None); 
-                    }
-                    else
-                    {
-                        client.Connect(settings.Host, settings.Port); // Let MailKit figure out the correct SecureSocketOptions.
-                    }
+                    await ConnectWithDnsRetryAsync(client, settings);
                     
                     // Note: since we don't have an OAuth2 token, disable
                     // the XOAUTH2 authentication mechanism.
@@ -162,14 +161,7 @@ namespace Ombi.Notifications
                         client.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
                     }
 
-                    if (settings.DisableTLS)
-                    {
-                        client.Connect(settings.Host, settings.Port, MailKit.Security.SecureSocketOptions.None);
-                    }
-                    else
-                    {
-                        client.Connect(settings.Host, settings.Port); // Let MailKit figure out the correct SecureSocketOptions.
-                    }
+                    await ConnectWithDnsRetryAsync(client, settings);
 
                     // Note: since we don't have an OAuth2 token, disable
                     // the XOAUTH2 authentication mechanism.
@@ -190,5 +182,53 @@ namespace Ombi.Notifications
                 throw;
             }
         }
+
+        private async Task ConnectWithDnsRetryAsync(SmtpClient client, EmailNotificationSettings settings)
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    if (settings.DisableTLS)
+                    {
+                        // Does not attempt to use either TLS or SSL.
+                        await client.ConnectAsync(settings.Host, settings.Port, MailKit.Security.SecureSocketOptions.None);
+                    }
+                    else
+                    {
+                        // Let MailKit determine the appropriate SecureSocketOptions.
+                        await client.ConnectAsync(settings.Host, settings.Port);
+                    }
+
+                    return;
+                }
+                catch (Exception ex) when (IsDnsResolutionFailure(ex) && attempt < DnsRetryDelays.Length)
+                {
+                    var delay = DnsRetryDelays[attempt];
+                    _log.LogWarning(
+                        "DNS resolution failed for the configured SMTP server. Retrying in {DelaySeconds} seconds (attempt {NextAttempt}/{TotalAttempts})",
+                        delay.TotalSeconds, attempt + 2, DnsRetryDelays.Length + 1);
+                    await Task.Delay(delay);
+                }
+            }
+        }
+
+        private static bool IsDnsResolutionFailure(Exception exception)
+        {
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                if (current is SocketException socketException &&
+                    (socketException.SocketErrorCode == SocketError.HostNotFound ||
+                     socketException.SocketErrorCode == SocketError.TryAgain ||
+                     socketException.SocketErrorCode == SocketError.NoData ||
+                     socketException.SocketErrorCode == SocketError.NoRecovery))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
     }
 }

@@ -201,6 +201,7 @@ export interface ICustomizationSettings extends ISettings {
   applicationUrl: string;
   logo: string;
   customCss: string;
+  hideOmbiDonation: boolean;
   enableCustomDonations: boolean;
   customDonationUrl: string;
   customDonationMessage: string;
@@ -227,6 +228,8 @@ export interface IJobSettings {
   retryRequests: string;
   mediaDatabaseRefresh: string;
   autoDeleteRequests: string;
+  mediaCleanup: string;
+  mediaCleanupVoteReminder: string;
   embyRecentlyAddedSync: string;
   plexWatchlistImport: string;
 }
@@ -248,6 +251,7 @@ export interface IAuthenticationSettings extends ISettings {
   requireNonAlphanumeric: boolean;
   requireUppercase: boolean;
   enableOAuth: boolean;
+  disableLocalAuthentication: boolean;
   enableHeaderAuth: boolean;
   headerAuthVariable: string;
   headerAuthCreateUser: boolean;

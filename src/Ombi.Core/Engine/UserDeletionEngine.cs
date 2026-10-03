@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualBasic;
 using Ombi.Core.Authentication;
+using Ombi.Core.Engine.Interfaces;
 using Ombi.Store.Entities;
 using Ombi.Store.Entities.Requests;
 using Ombi.Store.Repository;
@@ -27,6 +28,7 @@ namespace Ombi.Core.Engine
         private readonly IMusicRequestRepository _musicRepository;
         private readonly IRepository<Votes> _voteRepository;
         private readonly IRepository<MobileDevices> _mobileDevicesRepository;
+        private readonly IMediaCleanupEngine _mediaCleanupEngine;
 
         public UserDeletionEngine(IMovieRequestRepository movieRepository,
                                     OmbiUserManager userManager,
@@ -40,7 +42,8 @@ namespace Ombi.Core.Engine
                                     IRepository<UserNotificationPreferences> notificationPreferencesRepo,
                                     IRepository<UserQualityProfiles> qualityProfilesRepo,
                                     IRepository<Votes> voteRepository,
-                                    IRepository<MobileDevices> mobileDevicesRepository
+                                    IRepository<MobileDevices> mobileDevicesRepository,
+                                    IMediaCleanupEngine mediaCleanupEngine = null
                                     )
         {
             _movieRepository = movieRepository;
@@ -57,6 +60,7 @@ namespace Ombi.Core.Engine
             _userQualityProfiles = qualityProfilesRepo;
             _voteRepository = voteRepository;
             _mobileDevicesRepository = mobileDevicesRepository;
+            _mediaCleanupEngine = mediaCleanupEngine;
         }
 
 
@@ -64,19 +68,46 @@ namespace Ombi.Core.Engine
         {
             var userId = userToDelete.Id;
             // We need to delete all the requests first
-            var moviesUserRequested = _movieRepository.GetAll().Where(x => x.RequestedUserId == userId);
-            var tvUserRequested = _tvRepository.GetChild().Where(x => x.RequestedUserId == userId);
+            var moviesUserRequested = await _movieRepository.GetAll().Where(x => x.RequestedUserId == userId).ToListAsync();
+            var tvUserRequested = await _tvRepository.GetChild().Where(x => x.RequestedUserId == userId).ToListAsync();
+            var tvParentIds = tvUserRequested.Select(x => x.ParentRequestId).Distinct().ToList();
             var musicRequested = _musicRepository.GetAll().Where(x => x.RequestedUserId == userId);
             var notificationPreferences = _userNotificationPreferences.GetAll().Where(x => x.UserId == userId);
             var userQuality = await _userQualityProfiles.GetAll().FirstOrDefaultAsync(x => x.UserId == userId);
 
-            if (moviesUserRequested.Any())
+            if (moviesUserRequested.Count > 0)
             {
                 await _movieRepository.DeleteRange(moviesUserRequested);
+                if (_mediaCleanupEngine != null)
+                {
+                    foreach (var request in moviesUserRequested)
+                    {
+                        await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                            RequestType.Movie,
+                            request.Id,
+                            request.TheMovieDbId);
+                    }
+                }
             }
-            if (tvUserRequested.Any())
+            if (tvUserRequested.Count > 0)
             {
                 await _tvRepository.DeleteChildRange(tvUserRequested);
+
+                if (_mediaCleanupEngine != null && tvParentIds.Count > 0)
+                {
+                    var emptiedParents = await _tvRepository.Get()
+                        .Where(x => tvParentIds.Contains(x.Id) && !x.ChildRequests.Any())
+                        .ToListAsync();
+
+                    foreach (var parent in emptiedParents)
+                    {
+                        await _mediaCleanupEngine.CancelForDeletedMediaRequest(
+                            RequestType.TvShow,
+                            parent.Id,
+                            parent.ExternalProviderId,
+                            parent.TvDbId);
+                    }
+                }
             }
             if (musicRequested.Any())
             {

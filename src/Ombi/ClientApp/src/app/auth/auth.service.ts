@@ -20,8 +20,8 @@ export class AuthService extends ServiceHelpers {
         return this.http.post(`${this.url}/`, JSON.stringify(login), { headers: this.headers });
     }
 
-    public oAuth(pin: number): Observable<any> {
-        return this.http.get<any>(`${this.url}/${pin}`, { headers: this.headers });
+    public oAuth(pollToken: string): Observable<any> {
+        return this.http.post<any>(`${this.url}/plexoauth`, { pollToken }, { headers: this.headers });
     }
 
     public requiresPassword(login: IUserLogin): Observable<boolean> {

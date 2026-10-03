@@ -12,6 +12,7 @@ describe('Customization Actions', () => {
       applicationUrl: 'http://localhost',
       logo: '/logo.png',
       customCss: '',
+      hideOmbiDonation: false,
       enableCustomDonations: false,
       customDonationUrl: '',
       customDonationMessage: '',

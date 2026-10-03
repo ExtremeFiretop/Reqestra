@@ -5,6 +5,7 @@ declare namespace Cypress {
     interface Chainable {
 
         landingSettings(enabled: boolean): Chainable<any>;
+        getAdminToken(): Chainable<string>;
         loginWithCreds(username: string, password: string): Chainable<any>;
         login(): Chainable<any>;
         removeLogin(): Chainable<any>;

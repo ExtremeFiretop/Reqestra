@@ -72,6 +72,8 @@ namespace Ombi.Api.External.MediaServers.Plex
         private const string ServerUri = "https://plex.tv/api/resources";
         private const string WatchlistUri = "https://discover.provider.plex.tv/";
         private const string CommunityApiUri = "https://community.plex.tv/api";
+        private const string ApplicationJson = "application/json";
+        private static readonly string PlexTvBaseUri = new Uri(SignInUri).GetLeftPart(UriPartial.Authority);
 
         private const string AllFriendsQuery = @"query GetAllFriends { allFriendsV2 { user { id username displayName avatar } createdAt } }";
         private const string UserWatchlistQuery = @"query GetWatchlistHub($user: UserInput!, $first: PaginationInt!, $after: String) { userV2(user: $user) { ... on User { watchlist(first: $first, after: $after) { nodes { id title type } pageInfo { hasNextPage endCursor } } } } }";
@@ -159,6 +161,24 @@ namespace Ombi.Api.External.MediaServers.Plex
             return await Api.Request<PlexContainer>(request);
         }
 
+        public async Task<PlexContainer> GetHistory(string authToken, string plexFullHost, string metadataItemId, CancellationToken cancellationToken = default)
+        {
+            var request = new Request("status/sessions/history/all", plexFullHost, HttpMethod.Get);
+            request.AddQueryString("metadataItemID", metadataItemId);
+            request.AddQueryString("sort", "viewedAt:desc");
+            AddLimitHeaders(request, 0, 1);
+
+            // Play history is optional Media Cleanup enrichment, but callers must be able to
+            // distinguish a successful empty history response from an HTTP/API failure. Do not
+            // let the generic API layer turn a 404/500 error body into a default PlexContainer.
+            // The Media Cleanup caller handles the failure with title-specific context.
+            request.IgnoreErrors = true;
+            request.ThrowOnErrorStatus = true;
+
+            await AddHeaders(request, authToken);
+            return await Api.Request<PlexContainer>(request, cancellationToken);
+        }
+
         public async Task<PlexLibrariesForMachineId> GetLibrariesForMachineId(string authToken, string machineId)
         {
             var request = new Request("", $"https://plex.tv/api/servers/{machineId}", HttpMethod.Get, ContentType.Xml);
@@ -240,10 +260,49 @@ namespace Ombi.Api.External.MediaServers.Plex
             return await Api.Request<PlexMetadata>(request);
         }
 
-        public async Task<OAuthContainer> GetPin(int pinId)
+        public async Task<OAuthContainer> CreatePin()
         {
-            var request = new Request($"api/v2/pins/{pinId}", "https://plex.tv/", HttpMethod.Get);
-            await AddHeaders(request);
+            // Create the strong Plex PIN from the Ombi backend rather than directly from the
+            // browser. Plex PINs created by a cross-origin browser request can authenticate
+            // successfully in the Plex popup but subsequently fail redemption with code 1020.
+            // This mirrors Plex's working server-side form flow.
+            var request = new Request("api/v2/pins", PlexTvBaseUri, HttpMethod.Post);
+            var settings = await _plexSettings.GetSettingsAsync();
+
+            request.AddHeader("Accept", ApplicationJson);
+            request.AddFormBody("strong", "true");
+            request.AddFormBody("X-Plex-Product", ApplicationName);
+            request.AddFormBody("X-Plex-Client-Identifier", settings.InstallId.ToString("N"));
+
+            var response = await Api.RequestContent(request);
+
+            if (response.Contains("errors"))
+            {
+                var errors = JsonConvert.DeserializeObject<OAuthErrorsContainer>(response, Ombi.Api.Api.Settings);
+                return new OAuthContainer
+                {
+                    Errors = errors
+                };
+            }
+
+            var pinResult = JsonConvert.DeserializeObject<OAuthPin>(response, Ombi.Api.Api.Settings);
+            return new OAuthContainer
+            {
+                Result = pinResult
+            };
+        }
+
+        public async Task<OAuthContainer> GetPin(int pinId, string pinCode)
+        {
+            var request = new Request($"api/v2/pins/{pinId}", PlexTvBaseUri, HttpMethod.Get);
+
+            // Plex's strong-PIN polling flow expects both the PIN code and the client identifier
+            // as application/x-www-form-urlencoded values on the GET request. Supplying only the
+            // client identifier header causes Plex to answer 404 / code 1020 (code not found or expired).
+            var settings = await _plexSettings.GetSettingsAsync();
+            request.AddHeader("Accept", ApplicationJson);
+            request.AddFormBody("code", pinCode);
+            request.AddFormBody("X-Plex-Client-Identifier", settings.InstallId.ToString("N"));
 
             var response = await Api.RequestContent(request);
 
@@ -355,6 +414,7 @@ namespace Ombi.Api.External.MediaServers.Plex
         {
             var request = new Request(string.Empty, CommunityApiUri, HttpMethod.Post);
             request.IgnoreBaseUrlAppend = true;
+            request.DeserializeErrorResponse = false;
             await AddHeaders(request, adminToken);
             request.AddJsonBody(new { query = AllFriendsQuery, operationName = "GetAllFriends" });
 
@@ -365,6 +425,7 @@ namespace Ombi.Api.External.MediaServers.Plex
         {
             var request = new Request(string.Empty, CommunityApiUri, HttpMethod.Post);
             request.IgnoreBaseUrlAppend = true;
+            request.DeserializeErrorResponse = false;
             await AddHeaders(request, adminToken);
             request.AddJsonBody(new
             {
@@ -438,8 +499,8 @@ namespace Ombi.Api.External.MediaServers.Plex
             request.AddHeader("X-Plex-Version", "3");
             request.AddHeader("X-Plex-Device", "Ombi");
             request.AddHeader("X-Plex-Platform", "Web");
-            request.AddContentHeader("Content-Type", request.ContentType == ContentType.Json ? "application/json" : "application/xml");
-            request.AddHeader("Accept", "application/json");
+            request.AddContentHeader("Content-Type", request.ContentType == ContentType.Json ? ApplicationJson : "application/xml");
+            request.AddHeader("Accept", ApplicationJson);
         }
 
         private void AddLimitHeaders(Request request, int from, int to)

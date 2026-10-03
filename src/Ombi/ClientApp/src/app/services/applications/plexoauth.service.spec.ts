@@ -4,7 +4,7 @@ import { of } from 'rxjs';
 
 function createService() {
   const mockHttp = {
-    get: vi.fn().mockReturnValue(of({})),
+    post: vi.fn().mockReturnValue(of({})),
   };
   const service = Object.create(PlexOAuthService.prototype);
   service.http = mockHttp;
@@ -23,8 +23,9 @@ describe('PlexOAuthService', () => {
     mockHttp = mocks.mockHttp;
   });
 
-  it('should GET for oAuth with pin', () => {
-    service.oAuth(12345);
-    expect(mockHttp.get).toHaveBeenCalledWith('/api/v1/PlexOAuth/12345', expect.anything());
+  it('should POST the opaque poll token in the request body', () => {
+    const pollToken = 'a'.repeat(64);
+    service.oAuth(pollToken);
+    expect(mockHttp.post).toHaveBeenCalledWith('/api/v1/PlexOAuth/', { pollToken }, expect.anything());
   });
 });
