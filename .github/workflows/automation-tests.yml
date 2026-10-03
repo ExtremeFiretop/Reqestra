@@ -137,6 +137,22 @@ jobs:
     - name: Sleep for server to start
       run: sleep 20
 
+    # The wizard must run against a pristine database. The global Cypress
+    # setup intentionally initializes every non-wizard spec, so allowing the
+    # full-suite glob to choose spec order can complete first-run setup before
+    # the wizard feature executes. Run it explicitly first instead.
+    - name: Cypress Tests (wizard)
+      if: matrix.cypress_spec == ''
+      uses: cypress-io/github-action@v4
+      with:
+        record: false
+        browser: chrome
+        headless: true
+        working-directory: tests
+        spec: cypress/features/01-wizard/wizard.feature
+        wait-on: http://localhost:3577/
+        wait-on-timeout: 600
+
     - name: Cypress Tests (full suite)
       if: matrix.cypress_spec == ''
       uses: cypress-io/github-action@v4
@@ -145,6 +161,7 @@ jobs:
         browser: chrome
         headless: true
         working-directory: tests
+        spec: "cypress/features/login/login.feature,cypress/tests/**/*.spec.ts*"
         wait-on: http://localhost:3577/
         wait-on-timeout: 600
       env:
