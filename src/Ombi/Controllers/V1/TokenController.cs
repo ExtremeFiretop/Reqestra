@@ -90,7 +90,7 @@ namespace Ombi.Controllers.V1
                     _log.LogError(
                         "Plex PIN creation failed. Code: '{Code}' : '{Message}'",
                         err.code,
-                        err.message);
+                        SafeForLogging(err.message));
                 }
             }
 
@@ -113,7 +113,7 @@ namespace Ombi.Controllers.V1
                 var authSettings = await _authSettings.GetSettingsAsync();
                 if (authSettings.DisableLocalAuthentication)
                 {
-                    _log.LogWarning("Blocked Ombi username/password login attempt by IP: {IpAddress}", GetRequestIP());
+                    _log.LogWarning("Blocked Ombi username/password login attempt by IP: {IpAddress}", SafeForLogging(GetRequestIP()));
                     return new UnauthorizedResult();
                 }
 
@@ -126,7 +126,7 @@ namespace Ombi.Controllers.V1
 
                     if (user == null)
                     {
-                        _log.LogWarning(string.Format("Failed login attempt by IP: {0}", GetRequestIP()));
+                        _log.LogWarning("Failed login attempt by IP: {IpAddress}", SafeForLogging(GetRequestIP()));
                         return new UnauthorizedResult();
                     }
 
@@ -163,7 +163,7 @@ namespace Ombi.Controllers.V1
                 return new JsonResult(new { url = url.ToString(), pollToken });
             }
 
-            _log.LogWarning(string.Format("Failed login attempt by IP: {0}", GetRequestIP()));
+            _log.LogWarning("Failed login attempt by IP: {IpAddress}", SafeForLogging(GetRequestIP()));
             return new UnauthorizedResult();
         }
 
@@ -280,7 +280,7 @@ namespace Ombi.Controllers.V1
                 var plexUserName = GetPlexUserName(account);
                 _log.LogWarning(
                     "Plex OAuth account {PlexUserId} ({PlexUserName}) could not be matched to an authorized Plex user or linked as the configured Plex server owner.",
-                    account.user.id, plexUserName);
+                    SafeForLogging(account.user.id), SafeForLogging(plexUserName));
                 return PlexOAuthError(PlexAccountUnauthorizedMessage);
             }
 
@@ -587,7 +587,7 @@ namespace Ombi.Controllers.V1
             {
                 _log.LogError(ex,
                     "Failed to roll back auto-created Plex admin user {UserName} after role assignment failure",
-                    user.UserName);
+                    SafeForLogging(user.UserName));
             }
         }
 
@@ -601,7 +601,7 @@ namespace Ombi.Controllers.V1
 
             if (user == null)
             {
-                LogIdentityErrors(createErrors, $"Failed to auto-create Plex admin user {plexUserName}");
+                LogIdentityErrors(createErrors, $"Failed to auto-create Plex admin user {SafeForLogging(plexUserName)}");
                 return PlexUserResolution.Empty();
             }
 
@@ -616,7 +616,7 @@ namespace Ombi.Controllers.V1
                 return PlexUserResolution.FromUser(user);
             }
 
-            LogIdentityErrors(roleResult.Errors, $"Failed to add fallback Plex admin user {user.UserName} to Admin role");
+            LogIdentityErrors(roleResult.Errors, $"Failed to add fallback Plex admin user {SafeForLogging(user.UserName)} to Admin role");
             return PlexUserResolution.FromError(
                 PlexOAuthError("Failed to assign admin permissions to the fallback Plex admin user"));
         }
@@ -625,7 +625,7 @@ namespace Ombi.Controllers.V1
         {
             foreach (var error in errors)
             {
-                _log.LogError("{Operation}: {Description}", operation, error.Description);
+                _log.LogError("{Operation}: {Description}", SafeForLogging(operation), SafeForLogging(error.Description));
             }
         }
 
@@ -759,7 +759,7 @@ namespace Ombi.Controllers.V1
         public async Task<IActionResult> HeaderAuth()
         {
             var authSettings = await _authSettings.GetSettingsAsync();
-            _log.LogInformation("Logging with header: " + authSettings.HeaderAuthVariable);
+            _log.LogInformation("Logging with header: {HeaderName}", SafeForLogging(authSettings.HeaderAuthVariable));
             if (authSettings.HeaderAuthVariable != null && authSettings.EnableHeaderAuth)
             {
                 if (Request.HttpContext?.Request?.Headers != null && Request.HttpContext.Request.Headers.ContainsKey(authSettings.HeaderAuthVariable))

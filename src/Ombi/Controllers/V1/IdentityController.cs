@@ -170,7 +170,7 @@ namespace Ombi.Controllers.V1
             }
             if (result.Succeeded)
             {
-                _log.LogInformation("Created User {0}", userToCreate.UserName);
+                _log.LogInformation("Created user {UserName}", SafeForLogging(userToCreate.UserName));
                 await CreateRoles();
                 _log.LogInformation("Created the roles");
                 var roleResult = await UserManager.AddToRoleAsync(userToCreate, OmbiRoles.Admin);
@@ -205,7 +205,7 @@ namespace Ombi.Controllers.V1
         {
             foreach (var err in result.Errors)
             {
-                _log.LogCritical(err.Description);
+                _log.LogCritical("Identity operation failed: {Description}", SafeForLogging(err.Description));
             }
         }
 

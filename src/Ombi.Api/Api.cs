@@ -56,14 +56,18 @@ namespace Ombi.Api
             if (shouldCache)
             {
                 var cacheKey = GenerateCacheKey(request);
-                Logger.LogDebug($"ApiCache: Checking cache for {request.HttpMethod.Method} {request.FullUri}");
+                Logger.LogDebug(
+                    "ApiCache: Checking cache for {Method} {RequestUri}",
+                    request.HttpMethod.Method, SafeUriForLogging(request.FullUri));
 
                 try
                 {
                     var wasSuccessful = true;
                     var cachedResult = await _cacheService.GetOrAddAsync(cacheKey, async () =>
                     {
-                        Logger.LogDebug($"ApiCache: MISS for {request.HttpMethod.Method} {request.FullUri}");
+                        Logger.LogDebug(
+                            "ApiCache: MISS for {Method} {RequestUri}",
+                            request.HttpMethod.Method, SafeUriForLogging(request.FullUri));
                         var (value, requestSucceeded) = await ExecuteRequest<T>(request, cancellationToken);
                         wasSuccessful = requestSucceeded;
                         return value;
@@ -82,14 +86,18 @@ namespace Ombi.Api
                 catch (JsonException ex)
                 {
                     // Deserialization failed - evict cache and retry
-                    Logger.LogWarning(ex, $"ApiCache: Deserialization failed for {request.FullUri}, evicting and retrying");
+                    Logger.LogWarning(ex,
+                        "ApiCache: Deserialization failed for {RequestUri}, evicting and retrying",
+                        SafeUriForLogging(request.FullUri));
                     _cacheService.Remove(cacheKey);
                     return (await ExecuteRequest<T>(request, cancellationToken)).value;
                 }
                 catch (Exception ex)
                 {
                     // Cache service failed - log and proceed without cache
-                    Logger.LogWarning(ex, $"ApiCache: Cache read failed for {request.FullUri}, proceeding without cache");
+                    Logger.LogWarning(ex,
+                        "ApiCache: Cache read failed for {RequestUri}, proceeding without cache",
+                        SafeUriForLogging(request.FullUri));
                     return (await ExecuteRequest<T>(request, cancellationToken)).value;
                 }
             }
@@ -147,7 +155,8 @@ namespace Ombi.Api
                     catch (Exception ex)
                     {
                         Logger.LogWarning(ex,
-                            $"Could not deserialize the error response from {request.FullUri} (Status Code: {httpResponseMessage.StatusCode}) into {typeof(T).Name}, returning default");
+                            "Could not deserialize the error response from {RequestUri} (Status Code: {StatusCode}) into {ResponseType}, returning default",
+                            SafeUriForLogging(request.FullUri), httpResponseMessage.StatusCode, typeof(T).Name);
                         return (default, false);
                     }
                 }
@@ -353,7 +362,7 @@ namespace Ombi.Api
             // values even though the request method is GET, while most Ombi APIs use JSON bodies.
             if (request.JsonBody != null)
             {
-                LogDebugContent("REQUEST: " + request.JsonBody);
+                LogDebugContent(request.JsonBody);
                 httpRequestMessage.Content = new JsonContent(request.JsonBody);
                 httpRequestMessage.Content.Headers.ContentType =
                     new MediaTypeHeaderValue("application/json"); // Emby connect fails if we have the charset in the header
@@ -373,7 +382,8 @@ namespace Ombi.Api
         private async Task LogError(Request request, HttpResponseMessage httpResponseMessage)
         {
             Logger.LogError(LoggingEvents.Api,
-                $"StatusCode: {httpResponseMessage.StatusCode}, Reason: {httpResponseMessage.ReasonPhrase}, RequestUri: {request.FullUri}");
+                "External API request failed. StatusCode: {StatusCode}, RequestUri: {RequestUri}",
+                httpResponseMessage.StatusCode, SafeUriForLogging(request.FullUri));
             await LogDebugContent(httpResponseMessage);
         }
 
@@ -382,7 +392,9 @@ namespace Ombi.Api
             if (Logger.IsEnabled(LogLevel.Debug))
             {
                 var content = await message.Content.ReadAsStringAsync();
-                Logger.LogDebug(content);
+                Logger.LogDebug(
+                    "External API response body omitted from logs. Length: {ContentLength}",
+                    content?.Length ?? 0);
             }
         }
 
@@ -390,7 +402,9 @@ namespace Ombi.Api
         {
             if (Logger.IsEnabled(LogLevel.Debug))
             {
-                Logger.LogDebug(message);
+                Logger.LogDebug(
+                    "External API payload omitted from logs. Length: {ContentLength}",
+                    message?.Length ?? 0);
             }
         }
     }
