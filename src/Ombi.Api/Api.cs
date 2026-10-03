@@ -362,7 +362,10 @@ namespace Ombi.Api
             // values even though the request method is GET, while most Ombi APIs use JSON bodies.
             if (request.JsonBody != null)
             {
-                LogDebugContent(request.JsonBody);
+                if (Logger.IsEnabled(LogLevel.Debug))
+                {
+                    Logger.LogDebug("External API request body omitted from logs.");
+                }
                 httpRequestMessage.Content = new JsonContent(request.JsonBody);
                 httpRequestMessage.Content.Headers.ContentType =
                     new MediaTypeHeaderValue("application/json"); // Emby connect fails if we have the charset in the header
