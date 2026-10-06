@@ -172,17 +172,26 @@ describe("Discover Recently Requested Tests", () => {
 
     cy.requestMovie(55341);
 
-    cy.intercept("GET", "**/v2/Requests/recentlyRequested", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[0];
-        movie.available = false;
-        movie.approved = false;
+    // Only force the initial load into a pending state. After approval, any
+    // refresh must be allowed to return the real persisted approval state.
+    cy.intercept(
+      {
+        method: "GET",
+        url: "**/v2/Requests/recentlyRequested",
+        times: 1,
+      },
+      (req) => {
+        req.reply((res) => {
+          const body = res.body;
+          const movie = body[0];
+          movie.available = false;
+          movie.approved = false;
 
-        body[0] = movie;
-        res.send(body);
-      });
-    }).as("response");
+          body[0] = movie;
+          res.send(body);
+        });
+      }
+    ).as("response");
 
     cy.intercept("POST", "**/v1/Request/Movie/Approve").as("approveCall");
 
@@ -206,17 +215,26 @@ describe("Discover Recently Requested Tests", () => {
 
     cy.requestAllTv(71712);
 
-    cy.intercept("GET", "**/v2/Requests/recentlyRequested", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[0];
-        movie.available = false;
-        movie.approved = false;
+    // Only force the initial load into a pending state. After approval, any
+    // refresh must be allowed to return the real persisted approval state.
+    cy.intercept(
+      {
+        method: "GET",
+        url: "**/v2/Requests/recentlyRequested",
+        times: 1,
+      },
+      (req) => {
+        req.reply((res) => {
+          const body = res.body;
+          const movie = body[0];
+          movie.available = false;
+          movie.approved = false;
 
-        body[0] = movie;
-        res.send(body);
-      });
-    }).as("response");
+          body[0] = movie;
+          res.send(body);
+        });
+      }
+    ).as("response");
 
     cy.intercept("POST", "**/v1/Request/tv/approve").as("approveCall");
 
