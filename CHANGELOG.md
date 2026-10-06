@@ -1,3 +1,14 @@
+## [4.61.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.8...v4.61.9) (2026-10-06)
+
+
+### Bug Fixes
+
+* **ci:** reconcile release tag ancestry before versioning ([91a2310](https://github.com/ExtremeFiretop/Reqestra/commit/91a2310d4ee5676378dda23b3cadc69aaa9a07ab))
+* **plex:** handle rate-limited API failures safely ([a19e043](https://github.com/ExtremeFiretop/Reqestra/commit/a19e043f1c8bc5d3b8c727455e4a8197542b0c9b))
+* **tests:** import Plex friends models in API tests ([a787933](https://github.com/ExtremeFiretop/Reqestra/commit/a7879331163373502374ec6798d265b2431bbe2a))
+
+
+
 ## [4.61.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.7...v4.61.8) (2026-10-03)
 
 
@@ -84,16 +95,7 @@
 
 
 
-# [4.61.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.60.92...v4.61.0) (2026-10-01)
-
-
-### Features
-
-* **media-cleanup:** add structured destructive-operation audit logging ([e8c00bb](https://github.com/ExtremeFiretop/Reqestra/commit/e8c00bb2a9d89b5fb076c1ad651f785e7732d8d4))
-
-
-
-## [4.60.92](https://github.com/ExtremeFiretop/Reqestra/compare/c57f33151bc07819bc950675f5a0a7978ba26348...v4.60.92) (2026-10-01)
+# [4.61.0](https://github.com/ExtremeFiretop/Reqestra/compare/c57f33151bc07819bc950675f5a0a7978ba26348...v4.61.0) (2026-10-01)
 
 
 ### Bug Fixes
@@ -566,6 +568,7 @@
 * Hide watched status when request is not available ([#4934](https://github.com/ExtremeFiretop/Reqestra/issues/4934)) ([82c7f1c](https://github.com/ExtremeFiretop/Reqestra/commit/82c7f1c44fd7c87d57cc2b0c34a10fcda7628f4e))
 * improve contributor guidance ([d045f32](https://github.com/ExtremeFiretop/Reqestra/commit/d045f32b85fd4c019239e13a6a0eefb842ed1b31))
 * **mass-email:** :sparkles: Added the ability to configure the Mass Email, we can now send BCC and we are less likely to be rate limited when not using bcc [#4377](https://github.com/ExtremeFiretop/Reqestra/issues/4377) ([ca655ae](https://github.com/ExtremeFiretop/Reqestra/commit/ca655ae57042dec44106a2f2ef5ba2e6f1019ee4))
+* **media-cleanup:** add structured destructive-operation audit logging ([e8c00bb](https://github.com/ExtremeFiretop/Reqestra/commit/e8c00bb2a9d89b5fb076c1ad651f785e7732d8d4))
 * **media-details:** Add Trakt to social icons ([#4522](https://github.com/ExtremeFiretop/Reqestra/issues/4522)) ([d6ae79c](https://github.com/ExtremeFiretop/Reqestra/commit/d6ae79ce9eddbd5b7b888ab1b9f7e342d9d9ff9e))
 * **newsletter:** Started to localize the newsletter ([#4485](https://github.com/ExtremeFiretop/Reqestra/issues/4485)) ([b5ec556](https://github.com/ExtremeFiretop/Reqestra/commit/b5ec5562435021ea4b8af07c9b64a3f7249b570a))
 * **notifications:** :sparkles: Added Partially Available Notifications ([1ef45dc](https://github.com/ExtremeFiretop/Reqestra/commit/1ef45dc44c93d566a0f04c011bfcefe2009a24b5))
