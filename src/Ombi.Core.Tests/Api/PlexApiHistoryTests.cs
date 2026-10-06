@@ -7,6 +7,7 @@ using Ombi.Api;
 using Ombi.Api.External.MediaServers.Plex;
 using Ombi.Api.External.MediaServers.Plex.Models;
 using Ombi.Api.External.MediaServers.Plex.Models.Community;
+using Ombi.Api.External.MediaServers.Plex.Models.Friends;
 using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
 using Ombi.Settings.Settings.Models;
