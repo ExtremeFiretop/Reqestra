@@ -1,3 +1,13 @@
+## [4.61.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.7...v4.61.8) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ci:** isolate wizard from full E2E suite ([0fb9839](https://github.com/ExtremeFiretop/Reqestra/commit/0fb983961a9be135435f08379fd5b8d9c1c3f716))
+* **security:** harden user-controlled logging ([c65a46c](https://github.com/ExtremeFiretop/Reqestra/commit/c65a46c8bb2653bf91a07ea0f83ee01d98a6cc89))
+
+
+
 ## [4.61.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.6...v4.61.7) (2026-10-03)
 
 
@@ -38,15 +48,11 @@
 * **ci:** harden multi-arch frontend Docker build ([3824f35](https://github.com/ExtremeFiretop/Reqestra/commit/3824f35d0c2a5bf5dbf61b85560bc3a0752783d4))
 
 
-### Features
 
 ## [4.61.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.2...v4.61.3) (2026-10-02)
 
 
-### Reverts
-
-* Revert "Update src/Ombi/Controllers/V1/TokenController.cs" ([0294dba](https://github.com/Ombi-app/Ombi/commit/0294dba4cc8d27ace0503fd2518b4419c3f0f08f))
-
+### Bug Fixes
 
 * **ci:** provide version metadata to Docker build ([513f557](https://github.com/ExtremeFiretop/Reqestra/commit/513f55781d8abafbd9650cc3f196e3e7d4af56a5))
 * **metadata:** repair legacy invalid TMDB identifiers ([3340005](https://github.com/ExtremeFiretop/Reqestra/commit/33400053090c017959c6f3d489eee49d44503faa))
@@ -71,7 +77,7 @@
 ## [4.61.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.0...v4.61.1) (2026-10-02)
 
 
-### Performance Improvements
+### Bug Fixes
 
 * **api:** skip Plex Community error-body deserialization ([8ef59cc](https://github.com/ExtremeFiretop/Reqestra/commit/8ef59cc7a803bf06d4859c8969894707e516759a))
 * **media-cleanup:** backfill legacy scheduled deletion plans ([411edcf](https://github.com/ExtremeFiretop/Reqestra/commit/411edcffba33e01d3a913fbaa241337f22e61dc6))
@@ -523,7 +529,7 @@
 * **wizard:** Fixed an issue when using Plex OAuth it could fail setting up ([b743cf4](https://github.com/ExtremeFiretop/Reqestra/commit/b743cf4fafa7341ad1b163276f006d7ab0e9dcff))
 
 
-### Bug Fixes
+### Features
 
 * :sparkles: Added the ability to provide your own custom plex url ([6c6b7bb](https://github.com/ExtremeFiretop/Reqestra/commit/6c6b7bb498f142002e5b407a30896f4aa91a7c6c))
 * :sparkles: Added the ability to specify which branch you are on ([61f3e94](https://github.com/ExtremeFiretop/Reqestra/commit/61f3e94308fb3d239140b73d34c12f1496459989))
@@ -605,7 +611,7 @@
 * stop populating obsolete subscribe fields ([#4625](https://github.com/ExtremeFiretop/Reqestra/issues/4625)) ([9a73463](https://github.com/ExtremeFiretop/Reqestra/commit/9a734637665f671b17c2bb440d93b35a891c142b))
 
 
-### Features
+### Reverts
 
 * Revert "Restore Reqestra changelog after merge conflict" ([1f9e686](https://github.com/ExtremeFiretop/Reqestra/commit/1f9e68665f2e680d4b70001bb29232eb88de5b9b))
 * Revert "deterministic refresh (rather than 3 second wait)" ([a8bd017](https://github.com/ExtremeFiretop/Reqestra/commit/a8bd01793f67d86f6da345d7a3fe3adbaee920ca))
