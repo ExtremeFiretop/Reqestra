@@ -1,3 +1,12 @@
+## [4.61.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.9...v4.61.10) (2026-10-07)
+
+
+### Bug Fixes
+
+* **plex:** serialize content sync and database refresh ([339c106](https://github.com/ExtremeFiretop/Reqestra/commit/339c106d7026e023a16e8f326df4f22da5a77e81))
+
+
+
 ## [4.61.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.8...v4.61.9) (2026-10-06)
 
 
