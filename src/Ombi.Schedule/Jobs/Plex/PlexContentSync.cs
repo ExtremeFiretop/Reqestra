@@ -109,6 +109,15 @@ namespace Ombi.Schedule.Jobs.Plex
                 await NotifyClient(recentlyAddedSearch ? "Plex Recently Added Sync, Settings Not Valid" : "Plex Content, Settings Not Valid");
                 return;
             }
+
+            using (await PlexContentSyncLock.AcquireAsync())
+            {
+                await ExecuteSerialized(recentlyAddedSearch, plexSettings);
+            }
+        }
+
+        private async Task ExecuteSerialized(bool recentlyAddedSearch, PlexSettings plexSettings)
+        {
             var processedContent = new ProcessedContent();
             Logger.LogInformation(recentlyAddedSearch
                 ? "Starting Plex Content Cacher Recently Added Scan"
