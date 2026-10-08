@@ -254,6 +254,50 @@ namespace Ombi.Core.Tests.Senders
         }
 
         [Test]
+        public void ExactSeason_WithSixEpisodePlaceholderPrefixAndOneTrailingProviderEpisode_IsSafe()
+        {
+            var sourceTitles = Enumerable.Range(1, 6)
+                .Select(x => $"The Chosen Episode {x}")
+                .Concat(new[] { "Crucifixion" })
+                .ToArray();
+            var source = BuildSeason(6, sourceTitles);
+            var sonarrEpisodes = BuildEpisodes(6, Enumerable.Repeat("TBA", 6).ToArray()).ToList();
+
+            var result = SonarrEpisodeFingerprintMatcher.FindSingleSeasonMatch(source, sonarrEpisodes);
+
+            Assert.That(result, Is.Null, "A provider-only trailing episode must not fabricate a fingerprint remap");
+            Assert.That(SonarrEpisodeFingerprintMatcher.HasConflictingExactSeason(source, sonarrEpisodes), Is.False);
+        }
+
+        [Test]
+        public void ExactSeason_WithTrailingProviderEpisodeAndMeaningfulConflict_RemainsUnsafe()
+        {
+            var sourceTitles = Enumerable.Range(1, 6)
+                .Select(x => $"The Chosen Episode {x}")
+                .Concat(new[] { "Crucifixion" })
+                .ToArray();
+            var source = BuildSeason(6, sourceTitles);
+            var sonarrTitles = Enumerable.Repeat("TBA", 6).ToArray();
+            sonarrTitles[2] = "A Different Real Episode";
+            var sonarrEpisodes = BuildEpisodes(6, sonarrTitles).ToList();
+
+            Assert.That(SonarrEpisodeFingerprintMatcher.HasConflictingExactSeason(source, sonarrEpisodes), Is.True);
+        }
+
+        [Test]
+        public void ExactSeason_WithMissingMiddleEpisode_RemainsUnsafe()
+        {
+            var sourceTitles = Enumerable.Range(1, 7)
+                .Select(x => $"The Chosen Episode {x}")
+                .ToArray();
+            var source = BuildSeason(6, sourceTitles);
+            var sonarrEpisodes = BuildEpisodes(6, Enumerable.Repeat("TBA", 6).ToArray()).ToList();
+            sonarrEpisodes[5].episodeNumber = 7;
+
+            Assert.That(SonarrEpisodeFingerprintMatcher.HasConflictingExactSeason(source, sonarrEpisodes), Is.True);
+        }
+
+        [Test]
         public void ExactSeason_WithBlankPlaceholderTitlesAndMatchingStructure_IsSafe()
         {
             var source = BuildSeason(6, Enumerable.Range(1, 6)
