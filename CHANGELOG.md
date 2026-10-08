@@ -1,3 +1,12 @@
+## [4.61.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.13...v4.61.14) (2026-10-08)
+
+
+### Bug Fixes
+
+* **sonarr:** normalize monitoring for newly-added series ([310469a](https://github.com/ExtremeFiretop/Reqestra/commit/310469abdf82324c81c2c6372f7ead2b38ae74bd))
+
+
+
 ## [4.61.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.12...v4.61.13) (2026-10-08)
 
 
