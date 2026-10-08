@@ -420,6 +420,123 @@ namespace Ombi.Core.Tests.Senders
         }
 
         [Test]
+        public async Task NewlyAddedSeries_NormalizesMonitoringToRequestedSeasonAndEpisodes()
+        {
+            var settings = CreateSettings();
+            settings.AddOnly = true;
+            var request = new ChildRequests
+            {
+                RequestedUserId = "user",
+                SeriesType = SeriesType.Standard,
+                ParentRequest = new TvRequests
+                {
+                    Title = "The Chosen",
+                    TvDbId = 123,
+                    TotalSeasons = 6
+                },
+                SeasonRequests = new List<SeasonRequests>
+                {
+                    new SeasonRequests
+                    {
+                        SeasonNumber = 6,
+                        Episodes = new List<EpisodeRequests>
+                        {
+                            new EpisodeRequests { EpisodeNumber = 1, Title = "Episode 1" }
+                        }
+                    }
+                }
+            };
+            var createdSeries = new SonarrSeries
+            {
+                id = 42,
+                tvdbId = request.ParentRequest.TvDbId,
+                monitored = true,
+                seasons = Enumerable.Range(1, 6)
+                    .Select(x => new Season { seasonNumber = x, monitored = true })
+                    .ToArray()
+            };
+            var episodes = Enumerable.Range(1, 6)
+                .Select(x => new Episode
+                {
+                    id = 100 + x,
+                    seriesId = createdSeries.id,
+                    seasonNumber = x,
+                    episodeNumber = 1,
+                    title = x == 6 ? "Episode 1" : $"Season {x} Episode 1",
+                    monitored = true
+                })
+                .ToArray();
+
+            SetupNewSeriesPath(settings, createdSeries);
+            _sonarr.Setup(x => x.GetEpisodes(createdSeries.id, settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(episodes);
+            _sonarr.Setup(x => x.UpdateSeries(It.IsAny<SonarrSeries>(), settings.ApiKey, settings.FullUri))
+                .ReturnsAsync((SonarrSeries updated, string _, string __) => updated);
+
+            var result = await _subject.SendToSonarr(request, settings);
+
+            Assert.That(result, Is.Not.Null);
+            _sonarr.Verify(x => x.UpdateSeries(
+                    It.Is<SonarrSeries>(updated =>
+                        updated.seasons.Single(season => season.seasonNumber == 6).monitored &&
+                        updated.seasons.Where(season => season.seasonNumber != 6).All(season => !season.monitored)),
+                    settings.ApiKey,
+                    settings.FullUri),
+                Times.Once);
+            _sonarr.Verify(x => x.MonitorEpisode(
+                    It.Is<int[]>(ids => ids.OrderBy(id => id).SequenceEqual(episodes.Select(ep => ep.id).OrderBy(id => id))),
+                    false,
+                    settings.ApiKey,
+                    settings.FullUri),
+                Times.Once);
+            _sonarr.Verify(x => x.MonitorEpisode(
+                    It.Is<int[]>(ids => ids.SequenceEqual(new[] { 106 })),
+                    true,
+                    settings.ApiKey,
+                    settings.FullUri),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task ExistingSeries_DoesNotNormalizeUnrequestedMonitoringState()
+        {
+            var settings = CreateSettings();
+            settings.AddOnly = true;
+            var request = CreateSingleEpisodeRequest();
+            var existingSeries = new SonarrSeries
+            {
+                id = 42,
+                tvdbId = request.ParentRequest.TvDbId,
+                monitored = true,
+                seasons = new[]
+                {
+                    new Season { seasonNumber = 1, monitored = true },
+                    new Season { seasonNumber = 2, monitored = true }
+                }
+            };
+
+            SetupRootFolder(settings);
+            _sonarr.Setup(x => x.GetSeries(settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(new[] { existingSeries });
+            _sonarr.Setup(x => x.GetEpisodes(existingSeries.id, settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(new[]
+                {
+                    new Episode { id = 101, seriesId = existingSeries.id, seasonNumber = 1, episodeNumber = 1, title = "Pilot", monitored = true },
+                    new Episode { id = 201, seriesId = existingSeries.id, seasonNumber = 2, episodeNumber = 1, title = "Other", monitored = true }
+                });
+
+            await _subject.SendToSonarr(request, settings);
+
+            Assert.That(existingSeries.seasons.Single(x => x.seasonNumber == 2).monitored, Is.True);
+            _sonarr.Verify(x => x.MonitorEpisode(
+                    It.IsAny<int[]>(),
+                    false,
+                    settings.ApiKey,
+                    settings.FullUri),
+                Times.Never);
+        }
+
+        [Test]
         public void NewlyAddedSeries_RollbackFailure_PreservesOriginalConfigurationException()
         {
             var settings = CreateSettings();
