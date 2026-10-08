@@ -1,3 +1,12 @@
+## [4.61.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.12...v4.61.13) (2026-10-08)
+
+
+### Bug Fixes
+
+* **sonarr:** allow safe trailing provider episode gaps ([d36a349](https://github.com/ExtremeFiretop/Reqestra/commit/d36a3499ebdbcba920afd8adabebc51df9a30a25))
+
+
+
 ## [4.61.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.11...v4.61.12) (2026-10-08)
 
 
