@@ -1,3 +1,12 @@
+## [4.61.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.10...v4.61.11) (2026-10-08)
+
+
+### Bug Fixes
+
+* **sonarr:** allow placeholder metadata for exact seasons ([177d226](https://github.com/ExtremeFiretop/Reqestra/commit/177d2265cc5e2f28c6386056f6adbce9b260958d))
+
+
+
 ## [4.61.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.9...v4.61.10) (2026-10-07)
 
 
