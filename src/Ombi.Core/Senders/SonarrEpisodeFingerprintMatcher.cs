@@ -250,6 +250,26 @@ namespace Ombi.Core.Senders
                 return false;
             }
 
+            // Newly-announced/unreleased seasons often exist in Sonarr before TVDB has supplied
+            // usable episode titles. Values such as "TBA" (or an empty title) are absence of
+            // identity evidence, not evidence that the exact-number season is wrong. Fall back to
+            // the exact season only when the complete episode-number structure agrees and every
+            // title mismatch is a placeholder. A single meaningful conflicting title keeps the
+            // normal fail-closed behavior below.
+            var sourceEpisodeNumbers = new HashSet<int>(sourceSeason?.Episodes?
+                .Where(x => x != null)
+                .Select(x => x.EpisodeNumber)
+                ?? Enumerable.Empty<int>());
+
+            if (sourceEpisodeNumbers.Count > 0 &&
+                exactSeason.Count == sourceEpisodeNumbers.Count &&
+                sourceEpisodeNumbers.SetEquals(exactSeason.Keys) &&
+                mismatchedTitles.All(expected =>
+                    IsPlaceholderEpisodeTitle(exactSeason[expected.EpisodeNumber])))
+            {
+                return false;
+            }
+
             // TMDB and TVDB occasionally use different display names for a small number of
             // episodes in an otherwise identical season (for example "Fear the Ripper (2)" vs
             // "Fear the Ripper Pt. 2"). Do not reject the exact season solely because of those
@@ -450,6 +470,16 @@ namespace Ombi.Core.Senders
                 NormalizeTitle(actualTitle),
                 normalizedExpectedTitle,
                 StringComparison.Ordinal);
+        }
+
+        private static bool IsPlaceholderEpisodeTitle(string title)
+        {
+            var normalizedTitle = NormalizeTitle(title);
+            return string.IsNullOrEmpty(normalizedTitle) ||
+                   normalizedTitle == "tba" ||
+                   normalizedTitle == "tbd" ||
+                   normalizedTitle == "tobeannounced" ||
+                   normalizedTitle == "tobedetermined";
         }
 
         private static string NormalizeTitle(string title)
