@@ -194,8 +194,13 @@ describe("Discover Recently Requested Tests", () => {
       const card = Page.recentlyRequested.getRequest("55341");
       card.status.should('contain.text', 'Pending');
       card.reveal();
-      card.approveButton.should('be.visible');
-      card.approveButton.click();
+      // The card scales on hover while its action buttons animate into view. A
+      // Cypress .click() moves the virtual pointer onto the button and can race
+      // that transform, causing the click to miss even though the button was
+      // already reported visible. Dispatch the DOM click directly after the
+      // visibility check so we still exercise Angular's real approval handler
+      // and backend request without depending on pointer coordinates.
+      card.approveButton.should('be.visible').trigger('click');
 
       cy.wait("@approveCall").then((interception) => {
         expect(interception.response?.statusCode).to.be.within(200, 299);
@@ -228,8 +233,7 @@ describe("Discover Recently Requested Tests", () => {
       const card = Page.recentlyRequested.getRequest("71712");
       card.status.should('contain.text', 'Pending');
       card.reveal();
-      card.approveButton.should('be.visible');
-      card.approveButton.click();
+      card.approveButton.should('be.visible').trigger('click');
 
       cy.wait("@approveCall").then((interception) => {
         expect(interception.response?.statusCode).to.be.within(200, 299);
