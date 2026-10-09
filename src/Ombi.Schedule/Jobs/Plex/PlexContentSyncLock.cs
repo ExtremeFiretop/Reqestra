@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 namespace Ombi.Schedule.Jobs.Plex
 {
     /// <summary>
-    /// Serializes full and recently-added Plex content syncs with destructive Plex
-    /// media database refreshes. This lock is process-local and does not coordinate
+    /// Serializes full, recently-added, and episode Plex content syncs with destructive
+    /// Plex media database refreshes. This lock is process-local and does not coordinate
     /// multiple Reqestra instances.
     /// </summary>
     public static class PlexContentSyncLock
