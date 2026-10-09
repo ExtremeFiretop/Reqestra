@@ -117,6 +117,28 @@ namespace Ombi.Schedule.Tests
             Assert.That(result.Count, Is.EqualTo(2));
         }
 
+        [Test]
+        public async Task GetMoviesContent_DoesNotRefreshMovieDbId_WhenAlreadyPresent()
+        {
+            var refreshCalls = 0;
+
+            await RunGetMoviesContent(new[]
+            {
+                new PlexServerContent
+                {
+                    Id = 1,
+                    Type = MediaType.Movie,
+                    TheMovieDbId = "123",
+                    ImdbId = "tt123",
+                    Title = "Movie A",
+                    AddedAt = DateTime.UtcNow,
+                    Key = "movie-1"
+                }
+            }, "999", () => refreshCalls++);
+
+            Assert.That(refreshCalls, Is.Zero);
+        }
+
         [TestCaseSource(nameof(EpisodeListData))]
         public string BuildEpisodeListTest(List<int> episodes)
         {
@@ -202,6 +224,55 @@ namespace Ombi.Schedule.Tests
             Assert.That(result.Single(), Is.SameAs(validEpisode));
         }
 
+        [Test]
+        public void FilterEpisodes_EnumeratesRecentlyAddedOnlyOnce()
+        {
+            var mocker = new AutoMocker();
+            var subject = mocker.CreateInstance<NewsletterJob>();
+            var method = typeof(NewsletterJob).GetMethod("FilterEpisodes", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+
+            var series = new PlexServerContent
+            {
+                TvDbId = "123",
+                TheMovieDbId = "456",
+                Title = "Valid Series"
+            };
+            var source = new List<IMediaServerEpisode>
+            {
+                new PlexEpisode { Series = series, SeasonNumber = 1, EpisodeNumber = 1, Title = "Episode 1" },
+                new PlexEpisode { Series = series, SeasonNumber = 1, EpisodeNumber = 2, Title = "Episode 2" }
+            };
+            var recentlyAdded = new CountingEnumerable<RecentlyAddedLog>(Array.Empty<RecentlyAddedLog>());
+
+            var result = (HashSet<IMediaServerEpisode>)method.Invoke(
+                subject,
+                new object[] { source, recentlyAdded });
+
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(recentlyAdded.EnumerationCount, Is.EqualTo(1));
+        }
+
+        private sealed class CountingEnumerable<T> : IEnumerable<T>
+        {
+            private readonly IEnumerable<T> _source;
+
+            public CountingEnumerable(IEnumerable<T> source)
+            {
+                _source = source;
+            }
+
+            public int EnumerationCount { get; private set; }
+
+            public IEnumerator<T> GetEnumerator()
+            {
+                EnumerationCount++;
+                return _source.GetEnumerator();
+            }
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
         private sealed class TestExternalContext : ExternalContext
         {
             public TestExternalContext(DbContextOptions<TestExternalContext> options) : base(options)
@@ -221,7 +292,7 @@ namespace Ombi.Schedule.Tests
             return await RunGetMoviesContent(items, "123");
         }
 
-        private static async Task<HashSet<IMediaServerContent>> RunGetMoviesContent(IEnumerable<PlexServerContent> items, string refreshMovieDbId)
+        private static async Task<HashSet<IMediaServerContent>> RunGetMoviesContent(IEnumerable<PlexServerContent> items, string refreshMovieDbId, Action onRefresh = null)
         {
             var externalOptions = new DbContextOptionsBuilder<TestExternalContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -272,6 +343,7 @@ namespace Ombi.Schedule.Tests
                 .Setup(x => x.GetSettingsAsync()).ReturnsAsync(new JellyfinSettings());
             mocker.GetMock<IRefreshMetadata>()
                 .Setup(x => x.GetTheMovieDbId(false, true, null, It.IsAny<string>(), It.IsAny<string>(), true))
+                .Callback(() => onRefresh?.Invoke())
                 .ReturnsAsync(refreshMovieDbId);
 
             var subject = mocker.CreateInstance<NewsletterJob>();
