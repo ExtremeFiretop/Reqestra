@@ -1,3 +1,12 @@
+## [4.61.20](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.19...v4.61.20) (2026-10-09)
+
+
+### Bug Fixes
+
+* **newsletter:** avoid redundant metadata and N+1 queries ([57105df](https://github.com/ExtremeFiretop/Reqestra/commit/57105dfcb16308b34f4b1e5cb97e1fbb90f13688))
+
+
+
 ## [4.61.19](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.18...v4.61.19) (2026-10-09)
 
 
