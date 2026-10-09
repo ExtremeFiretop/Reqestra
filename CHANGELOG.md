@@ -1,3 +1,12 @@
+## [4.61.19](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.18...v4.61.19) (2026-10-09)
+
+
+### Bug Fixes
+
+* **updater:** harden Windows update extraction ([dabbe88](https://github.com/ExtremeFiretop/Reqestra/commit/dabbe88a4ce05cee2414411282b89f9e2be1eaa4))
+
+
+
 ## [4.61.18](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.17...v4.61.18) (2026-10-09)
 
 
