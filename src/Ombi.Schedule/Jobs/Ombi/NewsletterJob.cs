@@ -408,10 +408,24 @@ namespace Ombi.Schedule.Jobs.Ombi
         private HashSet<IMediaServerEpisode> FilterEpisodes(IEnumerable<IMediaServerEpisode> source, IEnumerable<RecentlyAddedLog> recentlyAdded)
         {
             var itemsToReturn = new HashSet<IMediaServerEpisode>();
-            foreach (var ep in source.Where(x => x.Series.HasTvDb // needed for recentlyAddedLog
-                                         && x.Series.HasTheMovieDb // needed to fetch info to publish, this is just in case...
-                                         ))
+            foreach (var ep in source)
             {
+                if (ep?.Series == null)
+                {
+                    _log.LogWarning(
+                        "Skipping media-server episode S{SeasonNumber}E{EpisodeNumber} ({EpisodeTitle}) while building newsletter because its parent series is missing",
+                        ep?.SeasonNumber,
+                        ep?.EpisodeNumber,
+                        ep?.Title);
+                    continue;
+                }
+
+                // These IDs are required for the recently-added log and TMDB metadata lookup.
+                if (!ep.Series.HasTvDb || !ep.Series.HasTheMovieDb)
+                {
+                    continue;
+                }
+
                 var tvDbId = StringHelper.IntParseLinq(ep.Series.TvDbId);
                 if (recentlyAdded.Any(x => x.ContentId == tvDbId && x.EpisodeNumber == ep.EpisodeNumber && x.SeasonNumber == ep.SeasonNumber))
                 {

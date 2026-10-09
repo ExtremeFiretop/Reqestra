@@ -164,6 +164,44 @@ namespace Ombi.Schedule.Tests
             Assert.That(result, Does.Contain("1-2"));
         }
 
+        [Test]
+        public void FilterEpisodes_SkipsEpisodeWithMissingParentSeries()
+        {
+            var mocker = new AutoMocker();
+            var subject = mocker.CreateInstance<NewsletterJob>();
+            var method = typeof(NewsletterJob).GetMethod("FilterEpisodes", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+
+            var validSeries = new PlexServerContent
+            {
+                TvDbId = "123",
+                TheMovieDbId = "456",
+                Title = "Valid Series"
+            };
+            var validEpisode = new PlexEpisode
+            {
+                Series = validSeries,
+                SeasonNumber = 1,
+                EpisodeNumber = 2,
+                Title = "Valid Episode"
+            };
+            var orphanedEpisode = new PlexEpisode
+            {
+                SeasonNumber = 1,
+                EpisodeNumber = 1,
+                Title = "Orphaned Episode"
+            };
+            var source = new List<IMediaServerEpisode> { orphanedEpisode, validEpisode };
+
+            var result = (HashSet<IMediaServerEpisode>)method.Invoke(
+                subject,
+                new object[] { source, Enumerable.Empty<RecentlyAddedLog>() });
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result.Single(), Is.SameAs(validEpisode));
+        }
+
         private sealed class TestExternalContext : ExternalContext
         {
             public TestExternalContext(DbContextOptions<TestExternalContext> options) : base(options)
