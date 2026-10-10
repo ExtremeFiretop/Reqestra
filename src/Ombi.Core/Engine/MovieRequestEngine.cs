@@ -1,4 +1,4 @@
-﻿using Ombi.Api.External.ExternalApis.TheMovieDb;
+using Ombi.Api.External.ExternalApis.TheMovieDb;
 using Ombi.Core.Models.Requests;
 using Ombi.Helpers;
 using Ombi.Store.Entities;
@@ -36,7 +36,8 @@ namespace Ombi.Core.Engine
             IFeatureService featureService,
             IUserPlayedMovieRepository userPlayedMovieRepository,
             IQualityProfileSelectionService qualityProfileSelectionService,
-            IMediaCleanupEngine mediaCleanupEngine = null)
+            IMediaCleanupEngine mediaCleanupEngine = null,
+            IDownloadStatusService downloadStatusService = null)
             : base(user, requestService, r, manager, cache, ombiSettings, sub)
         {
             MovieApi = movieApi;
@@ -49,6 +50,7 @@ namespace Ombi.Core.Engine
             _userPlayedMovieRepository = userPlayedMovieRepository;
             _qualityProfileSelectionService = qualityProfileSelectionService;
             _mediaCleanupEngine = mediaCleanupEngine;
+            _downloadStatusService = downloadStatusService;
         }
 
         private IMovieDbApi MovieApi { get; }
@@ -61,6 +63,7 @@ namespace Ombi.Core.Engine
         protected readonly IUserPlayedMovieRepository _userPlayedMovieRepository;
         private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
         private readonly IMediaCleanupEngine _mediaCleanupEngine;
+        private readonly IDownloadStatusService _downloadStatusService;
 
         /// <summary>
         /// Requests the movie.
@@ -565,6 +568,10 @@ namespace Ombi.Core.Engine
         {
             await CheckForSubscription(shouldHide.UserId, requests);
             await CheckForPlayed(shouldHide, requests);
+            if (_downloadStatusService != null)
+            {
+                await _downloadStatusService.PopulateMovieDownloadStatus(requests);
+            }
         }
 
         private async Task CheckForSubscription(string UserId, List<MovieRequests> movieRequests)

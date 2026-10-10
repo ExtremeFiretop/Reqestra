@@ -1,4 +1,4 @@
-﻿import { IUser } from "./IUser";
+import { IUser } from "./IUser";
 
 export enum RequestType {
   tvShow = 0,
@@ -16,6 +16,7 @@ export interface IMovieRequests extends IFullBaseRequest {
   subscribed: boolean;
   showSubscribe: boolean;
   requestStatus: string;
+  downloading: boolean;
   has4KRequest: boolean;
   approved4K: boolean;
   available4K: boolean;
@@ -156,6 +157,7 @@ export interface IChildRequests extends IBaseRequest {
   subscribed: boolean;
   showSubscribe: boolean;
   requestStatus: string;
+  downloading: boolean;
 }
 
 export interface ITvUpdateModel {

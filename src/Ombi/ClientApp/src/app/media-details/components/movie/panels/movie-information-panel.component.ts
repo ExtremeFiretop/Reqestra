@@ -60,6 +60,10 @@ export class MovieInformationPanelComponent implements OnInit {
     }
 
     public getStatus(movie: ISearchMovieResultV2) {
+      if (this.request?.downloading) {
+        return "Common.Downloading";
+      }
+
       if (!movie.available && movie.requested) {
         if (movie.denied) {
           return "Common.RequestDenied";

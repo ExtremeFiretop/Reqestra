@@ -131,6 +131,7 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
     public getStatusClass(item: any): string {
         const status = (item.requestStatus || '').toLowerCase();
         if (status.includes('available')) return 'status-available';
+        if (status.includes('downloading')) return 'status-downloading';
         if (status.includes('pending') || status.includes('notyetrequest')) return 'status-pending';
         if (status.includes('processing') || status.includes('approved')) return 'status-processing';
         if (status.includes('denied')) return 'status-denied';

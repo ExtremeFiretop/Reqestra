@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Ombi.Api.External.ExternalApis.Radarr.Models;
 using Ombi.Api.External.ExternalApis.Radarr.Models.V3;
@@ -19,6 +20,7 @@ namespace Ombi.Api.External.ExternalApis.Radarr
         Task<bool> MovieSearch(int[] movieIds, string apiKey, string baseUrl);
         Task<RadarrAddMovie> AddMovie(int tmdbId, string title, int year, int qualityId, string rootPath,string apiKey, string baseUrl, bool searchNow, string minimumAvailability, List<int> tags);
         Task<List<Tag>> GetTags(string apiKey, string baseUrl);
+        Task<RadarrQueueResponse> GetQueue(string apiKey, string baseUrl, int page, int pageSize, CancellationToken cancellationToken = default);
         Task<Tag> CreateTag(string apiKey, string baseUrl, string tagName);
     }
 }

@@ -339,6 +339,7 @@
   letter-spacing: 0.03em;
 
   &.status-available { background: #0d3d2d; color: #34d399; }
+  &.status-downloading { background: #102f3d; color: #38bdf8; }
   &.status-pending { background: #3d3010; color: #fbbf24; }
   &.status-processing { background: #132644; color: #60a5fa; }
   &.status-denied { background: #3d1515; color: #f87171; }

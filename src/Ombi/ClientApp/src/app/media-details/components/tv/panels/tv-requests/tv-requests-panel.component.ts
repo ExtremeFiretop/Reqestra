@@ -65,6 +65,7 @@ export class TvRequestsPanelComponent {
     }
 
     public getRequestStatusClass(request: IChildRequests): string {
+        if (request.downloading) return "downloading";
         if (request.available) return "available";
         if (request.denied) return "denied";
         if (request.approved) return "approved";

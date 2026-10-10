@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using AutoMapper;
 using Ombi.Api.External.ExternalApis.TvMaze;
 using Ombi.Api.External.ExternalApis.TheMovieDb;
@@ -41,7 +41,8 @@ namespace Ombi.Core.Engine
             IUserPlayedEpisodeRepository userPlayedEpisodeRepository,
             IQualityProfileSelectionService qualityProfileSelectionService,
             IRepository<RequestQueue> requestQueue,
-            IMediaCleanupEngine mediaCleanupEngine = null) : base(user, requestService, rule, manager, cache, settings, sub)
+            IMediaCleanupEngine mediaCleanupEngine = null,
+            IDownloadStatusService downloadStatusService = null) : base(user, requestService, rule, manager, cache, settings, sub)
         {
             TvApi = tvApi;
             MovieDbApi = movApi;
@@ -54,6 +55,7 @@ namespace Ombi.Core.Engine
             _qualityProfileSelectionService = qualityProfileSelectionService;
             _requestQueueRepository = requestQueue;
             _mediaCleanupEngine = mediaCleanupEngine;
+            _downloadStatusService = downloadStatusService;
         }
 
         private INotificationHelper NotificationHelper { get; }
@@ -68,6 +70,7 @@ namespace Ombi.Core.Engine
         private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
         private readonly IRepository<RequestQueue> _requestQueueRepository;
         private readonly IMediaCleanupEngine _mediaCleanupEngine;
+        private readonly IDownloadStatusService _downloadStatusService;
 
         public async Task<RequestEngineResult> RequestTvShow(TvRequestViewModel tv)
         {
@@ -1144,6 +1147,10 @@ namespace Ombi.Core.Engine
         {
             await CheckForSubscription(shouldHide, childRequests);
             CheckForPlayed(shouldHide, childRequests);
+            if (_downloadStatusService != null)
+            {
+                await _downloadStatusService.PopulateTvDownloadStatus(childRequests);
+            }
         }
 
         private async Task CheckForSubscription(HideResult shouldHide, List<ChildRequests> childRequests)

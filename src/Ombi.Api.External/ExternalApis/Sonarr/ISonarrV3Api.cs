@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Ombi.Api.External.ExternalApis.Sonarr.Models;
 using Ombi.Api.External.ExternalApis.Sonarr.Models.V3;
@@ -12,5 +13,6 @@ namespace Ombi.Api.External.ExternalApis.Sonarr
         Task<Tag> GetTag(int tagId, string apiKey, string baseUrl);
         Task<List<MonitoredEpisodeResult>> MonitorEpisode(int[] episodeIds, bool monitor, string apiKey, string baseUrl);
         Task<List<MonitoredEpisodeResult>> MonitorEpisodeForCleanup(int[] episodeIds, bool monitor, string apiKey, string baseUrl);
+        Task<SonarrQueueResponse> GetQueue(string apiKey, string baseUrl, int page, int pageSize, CancellationToken cancellationToken = default);
     }
 }

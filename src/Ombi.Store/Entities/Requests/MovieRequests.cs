@@ -1,4 +1,4 @@
-﻿using Ombi.Helpers;
+using Ombi.Helpers;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
@@ -20,6 +20,8 @@ namespace Ombi.Store.Entities.Requests
 
         [NotMapped]
         public bool Subscribed { get; set; }
+        [NotMapped]
+        public bool Downloading { get; set; }
         [NotMapped]
         public bool ShowSubscribe { get; set; }
 
@@ -74,6 +76,11 @@ namespace Ombi.Store.Entities.Requests
         public string RequestStatus {
             get
             {
+                if (Downloading)
+                {
+                    return "Common.Downloading";
+                }
+
                 if (Available)
                 {
                     return "Common.Available";
