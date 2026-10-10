@@ -1,3 +1,12 @@
+# [4.64.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.63.0...v4.64.0) (2026-10-10)
+
+
+### Features
+
+* **requests:** show download progress and ETA ([2ee5c02](https://github.com/ExtremeFiretop/Reqestra/commit/2ee5c02567ad6288ab9a0c5537b25cbefcc17195))
+
+
+
 # [4.63.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.62.0...v4.63.0) (2026-10-10)
 
 
