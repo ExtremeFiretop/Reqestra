@@ -1,6 +1,6 @@
 
 <div id="result{{result.id}}" *ngIf="fullyLoaded" class="card-wrapper" [style.display]="hide ? 'none' : 'block'">
-    <div class="card-inner">
+    <div class="card-inner" [class.has-actions]="requestable && !result.available && !result.approved && !result.requested">
         <!-- Single link wrapping poster and overlay -->
         <a [routerLink]="generateDetailsLink()" class="card-poster-link" [attr.aria-label]="result.title">
             <ombi-image [src]="result.posterPath" [type]="result.type" class="card-poster" alt="{{result.title}}"></ombi-image>
