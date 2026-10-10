@@ -1,3 +1,12 @@
+## [4.65.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.0...v4.65.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **requests:** allow profile searches for available media ([78c41ba](https://github.com/ExtremeFiretop/Reqestra/commit/78c41baa07aeee97059b56bbf9faabd9df15e32b))
+
+
+
 # [4.65.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.64.0...v4.65.0) (2026-10-10)
 
 
