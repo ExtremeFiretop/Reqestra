@@ -904,11 +904,10 @@ namespace Ombi.Core.Engine
                 var canSelectQualityProfile = await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
                 var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
                 var approved = is4K ? request.Approved4K : request.Approved;
-                var available = is4K ? request.Available4K : request.Available;
                 var denied = is4K ? request.Denied4K : request.Denied;
 
                 if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
-                    qualityProfileId.Value <= 0 || !approved || available || denied == true)
+                    qualityProfileId.Value <= 0 || !approved || denied == true)
                 {
                     return new RequestEngineResult
                     {
@@ -926,7 +925,7 @@ namespace Ombi.Core.Engine
                     return new RequestEngineResult
                     {
                         Result = false,
-                        ErrorMessage = "A valid Radarr quality profile is required to change the profile and retry."
+                        ErrorMessage = "A valid Radarr quality profile is required to change the profile and search again."
                     };
                 }
 

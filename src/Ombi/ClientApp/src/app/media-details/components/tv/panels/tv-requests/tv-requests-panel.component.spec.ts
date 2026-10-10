@@ -36,18 +36,20 @@ function createComponent() {
 }
 
 describe("TvRequestsPanelComponent profile-aware retry", () => {
-    it("reprocesses an owned unavailable request with the selected profile", async () => {
+    it("reprocesses an owned available downloading request with the selected profile", async () => {
         const { component, requestService2 } = createComponent();
         const request = {
             id: 51,
             approved: true,
-            available: false,
+            available: true,
+            downloading: true,
             denied: false,
             qualityOverride: 3,
             requestedUser: { userName: "owner" },
             parentRequest: { qualityOverride: 3 },
         } as any;
 
+        expect(component.canRetryWithProfile(request)).toBe(true);
         await component.reProcessRequestWithProfile(request);
 
         expect(requestService2.reprocessRequest).toHaveBeenCalledWith(51, RequestType.tvShow, false, 9);
@@ -64,6 +66,22 @@ describe("TvRequestsPanelComponent profile-aware retry", () => {
             requestedUser: { userName: "other-user" },
         } as any;
 
+        expect(component.canRetryWithProfile(request)).toBe(false);
+    });
+
+    it("does not offer profile retry while pending or denied", () => {
+        const { component } = createComponent();
+        const request = {
+            approved: false,
+            available: false,
+            denied: false,
+            requestedUser: { userName: "owner" },
+        } as any;
+
+        expect(component.canRetryWithProfile(request)).toBe(false);
+
+        request.approved = true;
+        request.denied = true;
         expect(component.canRetryWithProfile(request)).toBe(false);
     });
 });

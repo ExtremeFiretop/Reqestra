@@ -96,7 +96,7 @@
 			</div>
 			<div class="request-actions" *ngIf="canRetryWithProfile(request)">
 				<button mat-stroked-button (click)="reProcessRequestWithProfile(request)">
-					<i class="fas fa-sync"></i> {{ 'MediaDetails.ChangeProfileAndRetry' | translate }}
+					<i class="fas fa-sync"></i> Change Profile &amp; Search Again
 				</button>
 			</div>
 			<div class="request-actions" *ngIf="isAdmin || manageOwnRequests">

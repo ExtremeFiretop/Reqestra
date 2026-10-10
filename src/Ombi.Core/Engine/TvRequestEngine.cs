@@ -1302,7 +1302,7 @@ namespace Ombi.Core.Engine
                 var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
 
                 if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
-                    qualityProfileId.Value <= 0 || !request.Approved || request.Available || request.Denied == true)
+                    qualityProfileId.Value <= 0 || !request.Approved || request.Denied == true)
                 {
                     return new RequestEngineResult
                     {
@@ -1320,7 +1320,7 @@ namespace Ombi.Core.Engine
                     return new RequestEngineResult
                     {
                         Result = false,
-                        ErrorMessage = "A valid Sonarr quality profile is required to change the profile and retry."
+                        ErrorMessage = "A valid Sonarr quality profile is required to change the profile and search again."
                     };
                 }
 

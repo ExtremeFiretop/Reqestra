@@ -516,11 +516,10 @@ export class MovieDetailsComponent implements OnInit {
 		const ownsRequest = !!currentUsername &&
 			this.movieRequest.requestedUser.userName?.toUpperCase() === currentUsername.toUpperCase();
 		const approved = is4K ? this.movieRequest.approved4K : this.movieRequest.approved;
-		const available = is4K ? this.movieRequest.available4K : this.movieRequest.available;
 		const denied = is4K ? this.movieRequest.denied4K : this.movieRequest.denied;
 		const requested = is4K ? this.movieRequest.has4KRequest : true;
 
-		return ownsRequest && requested && approved && !available && !denied && !this.movieRequest.downloading;
+		return ownsRequest && requested && approved && !denied;
 	}
 
 	public async reProcessRequestWithProfile(is4K: boolean): Promise<void> {
@@ -593,14 +592,14 @@ export class MovieDetailsComponent implements OnInit {
 			if (!this.movie.backdropPath) {
 				this.movie.background = this.sanitizer.bypassSecurityTrustStyle('url(' + x + ')');
 		} else if (this.movie.backdropPath && this.movie.backdropPath !== null && this.movie.backdropPath !== undefined) {
-			this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
-				'url(https://image.tmdb.org/t/p/original/' + this.movie.backdropPath + ')',
-			);
-		} else {
-			this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
-				'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5))',
-			);
-		}
+				this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
+					'url(https://image.tmdb.org/t/p/original/' + this.movie.backdropPath + ')',
+				);
+			} else {
+				this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
+					'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5))',
+				);
+			}
 		});
 	}
 	private checkPoster() {

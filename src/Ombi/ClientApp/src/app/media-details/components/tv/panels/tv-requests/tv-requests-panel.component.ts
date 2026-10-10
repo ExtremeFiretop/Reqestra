@@ -179,7 +179,7 @@ export class TvRequestsPanelComponent {
         const currentUsername = this.auth.claims()?.name;
         const ownsRequest = !!currentUsername &&
             request.requestedUser?.userName?.toUpperCase() === currentUsername.toUpperCase();
-        return this.canSelectQualityProfile && ownsRequest && request.approved && !request.available && !request.denied && !request.downloading;
+        return this.canSelectQualityProfile && ownsRequest && request.approved && !request.denied;
     }
 
     public async reProcessRequestWithProfile(request: IChildRequests): Promise<void> {
