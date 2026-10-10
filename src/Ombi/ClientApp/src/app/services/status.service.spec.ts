@@ -25,6 +25,11 @@ describe('StatusService', () => {
     mockHttp = mocks.mockHttp;
   });
 
+  it('should call GET for the lightweight application status probe', () => {
+    service.getStatus();
+    expect(mockHttp.get).toHaveBeenCalledWith('/api/v1/status/', expect.objectContaining({ responseType: 'text' }));
+  });
+
   it('should call GET for getWizardStatus', () => {
     service.getWizardStatus();
     expect(mockHttp.get).toHaveBeenCalledWith('/api/v1/status/Wizard/', expect.anything());

@@ -1,0 +1,79 @@
+:host {
+    flex-shrink: 0;
+}
+
+.system-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.75);
+    font-family: Inter, Roboto, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.system-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #90a4ae;
+    box-shadow: 0 0 6px rgba(144, 164, 174, 0.35);
+    flex-shrink: 0;
+}
+
+.system-status--online {
+    border-color: rgba(29, 233, 182, 0.24);
+    background: rgba(29, 233, 182, 0.07);
+
+    .system-status-dot {
+        background: #1de9b6;
+        box-shadow: 0 0 7px rgba(29, 233, 182, 0.5);
+    }
+}
+
+.system-status--degraded {
+    border-color: rgba(255, 215, 64, 0.28);
+    background: rgba(255, 215, 64, 0.08);
+
+    .system-status-dot {
+        background: #ffd740;
+        box-shadow: 0 0 7px rgba(255, 215, 64, 0.5);
+    }
+}
+
+.system-status--offline {
+    border-color: rgba(239, 83, 80, 0.3);
+    background: rgba(239, 83, 80, 0.08);
+
+    .system-status-dot {
+        background: #ef5350;
+        box-shadow: 0 0 7px rgba(239, 83, 80, 0.5);
+    }
+}
+
+@media (max-width: 600px) {
+    .system-status {
+        width: 14px;
+        min-width: 14px;
+        height: 30px;
+        padding: 0;
+        border: none;
+        background: transparent;
+    }
+
+    .system-status-label {
+        display: none;
+    }
+
+    .system-status-dot {
+        width: 8px;
+        height: 8px;
+    }
+}

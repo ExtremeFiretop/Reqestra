@@ -1,0 +1,10 @@
+<div class="system-status"
+    [ngClass]="'system-status--' + statusClass"
+    [matTooltip]="statusTooltip"
+    matTooltipPosition="below"
+    [attr.aria-label]="statusTooltip"
+    role="status"
+    aria-live="polite">
+    <span class="system-status-dot" aria-hidden="true"></span>
+    <span class="system-status-label">{{statusLabel}}</span>
+</div>

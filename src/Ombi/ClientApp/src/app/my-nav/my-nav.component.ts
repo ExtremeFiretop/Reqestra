@@ -22,6 +22,7 @@ import { StorageService } from '../shared/storage/storage-service';
 import { map, take } from 'rxjs/operators';
 import { RemainingRequestsComponent } from '../shared/remaining-requests/remaining-requests.component';
 import { NavSearchComponent } from './nav-search.component';
+import { SystemStatusComponent } from './system-status.component';
 
 export enum SearchFilterType {
   Movie = 1,
@@ -45,7 +46,8 @@ export enum SearchFilterType {
         RouterModule,
         TranslateModule,
         RemainingRequestsComponent,
-        NavSearchComponent
+        NavSearchComponent,
+        SystemStatusComponent
     ]
 })
 export class MyNavComponent implements OnInit {
