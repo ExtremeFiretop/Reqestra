@@ -1,3 +1,12 @@
+## [4.65.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.1...v4.65.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **notifications:** serialize mass email delivery ([349945b](https://github.com/ExtremeFiretop/Reqestra/commit/349945b98cd20ebb32d684f94226965f1e3867ef))
+
+
+
 ## [4.65.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.0...v4.65.1) (2026-10-10)
 
 
