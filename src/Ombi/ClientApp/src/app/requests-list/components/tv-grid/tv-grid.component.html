@@ -106,6 +106,8 @@
       <div class="status-row">
         <span class="status-badge" [id]="'requestedStatus' + item.parentRequest.externalProviderId" [ngClass]="getStatusClass(item)">
           {{ item.requestStatus | translate }}
+          <ng-container *ngIf="item.downloading && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+          <ng-container *ngIf="item.downloading && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
         </span>
       </div>
 
@@ -176,7 +178,11 @@
         <td>{{ item.requestedByAlias || item.requestedUser?.userAlias }}</td>
         <td>{{ item.requestedDate | ombiDate: 'PP' }}</td>
         <td>
-          <span class="status-badge" [ngClass]="getStatusClass(item)">{{ item.requestStatus | translate }}</span>
+          <span class="status-badge" [ngClass]="getStatusClass(item)">
+            {{ item.requestStatus | translate }}
+            <ng-container *ngIf="item.downloading && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+            <ng-container *ngIf="item.downloading && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
+          </span>
         </td>
         <td class="cell-actions">
           <button class="btn-options" type="button"

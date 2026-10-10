@@ -23,6 +23,10 @@ namespace Ombi.Store.Entities.Requests
         public bool Subscribed { get; set; }
         [NotMapped]
         public bool Downloading { get; set; }
+        [NotMapped]
+        public int? DownloadProgress { get; set; }
+        [NotMapped]
+        public int? DownloadEtaMinutes { get; set; }
 
         [NotMapped]
         public bool ShowSubscribe { get; set; }

@@ -17,6 +17,8 @@ export interface IMovieRequests extends IFullBaseRequest {
   showSubscribe: boolean;
   requestStatus: string;
   downloading: boolean;
+  downloadProgress?: number | null;
+  downloadEtaMinutes?: number | null;
   has4KRequest: boolean;
   approved4K: boolean;
   available4K: boolean;
@@ -158,6 +160,8 @@ export interface IChildRequests extends IBaseRequest {
   showSubscribe: boolean;
   requestStatus: string;
   downloading: boolean;
+  downloadProgress?: number | null;
+  downloadEtaMinutes?: number | null;
 }
 
 export interface ITvUpdateModel {

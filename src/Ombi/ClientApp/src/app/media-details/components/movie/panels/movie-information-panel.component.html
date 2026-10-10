@@ -52,7 +52,11 @@
 
 		<div class="info-item" *ngIf="(!movie.available && movie.requested) || (!movie.available4K && movie.has4KRequest)">
 			<div class="info-label">{{ 'MediaDetails.RequestStatus' | translate }}</div>
-			<div class="info-value">{{ getStatus(movie) | translate }}</div>
+			<div class="info-value">
+				{{ getStatus(movie) | translate }}
+				<ng-container *ngIf="request?.downloading && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
+				<ng-container *ngIf="request?.downloading && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
+			</div>
 		</div>
 
 		<div class="info-item" *ngIf="request">

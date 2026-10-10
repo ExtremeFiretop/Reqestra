@@ -52,7 +52,7 @@ namespace Ombi.Core.Tests.Services
         }
 
         [Test]
-        public async Task Movie_In_Radarr_Queue_Is_Marked_Downloading()
+        public async Task Movie_In_Radarr_Queue_Is_Marked_Downloading_With_Progress_And_Eta()
         {
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
             {
@@ -67,7 +67,13 @@ namespace Ombi.Core.Tests.Services
                     TotalRecords = 1,
                     Records = new List<RadarrQueueRecord>
                     {
-                        new RadarrQueueRecord { Movie = new MovieResponse { tmdbId = 123 } }
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 32,
+                            Timeleft = TimeSpan.FromMinutes(11)
+                        }
                     }
                 });
 
@@ -82,6 +88,8 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(68));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(11));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
         }
 
@@ -103,17 +111,21 @@ namespace Ombi.Core.Tests.Services
                 TheMovieDbId = 123,
                 RequestedDate = DateTime.UtcNow,
                 Approved = true,
-                Available = false
+                Available = false,
+                DownloadProgress = 50,
+                DownloadEtaMinutes = 5
             };
 
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
+            Assert.That(request.DownloadProgress, Is.Null);
+            Assert.That(request.DownloadEtaMinutes, Is.Null);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
         }
 
         [Test]
-        public async Task Requested_Tv_Episode_In_Sonarr_Queue_Is_Marked_Downloading()
+        public async Task Requested_Tv_Episode_In_Sonarr_Queue_Is_Marked_Downloading_With_Progress_And_Eta()
         {
             _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
             {
@@ -131,7 +143,11 @@ namespace Ombi.Core.Tests.Services
                         new SonarrQueueRecord
                         {
                             Series = new SonarrSeries { tmdbId = 456 },
-                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 }
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 25,
+                            Timeleft = TimeSpan.FromMinutes(7),
+                            DownloadId = "episode-3"
                         }
                     }
                 });
@@ -141,7 +157,62 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(75));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(7));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
+        }
+
+        [Test]
+        public async Task Tv_Progress_Is_Size_Weighted_And_Eta_Uses_Longest_Matching_Download()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 2,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 20,
+                            Timeleft = TimeSpan.FromMinutes(5),
+                            DownloadId = "episode-3"
+                        },
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 4 },
+                            Size = 200,
+                            Sizeleft = 100,
+                            Timeleft = TimeSpan.FromMinutes(12),
+                            DownloadId = "episode-4"
+                        }
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+            request.SeasonRequests[0].Episodes.Add(new EpisodeRequests
+            {
+                EpisodeNumber = 4,
+                Requested = true,
+                Approved = true,
+                Available = false
+            });
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(60));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(12));
         }
 
         [Test]
@@ -163,7 +234,10 @@ namespace Ombi.Core.Tests.Services
                         new SonarrQueueRecord
                         {
                             Series = new SonarrSeries { tmdbId = 456 },
-                            Episode = new Episode { seasonNumber = 2, episodeNumber = 4 }
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 4 },
+                            Size = 100,
+                            Sizeleft = 25,
+                            Timeleft = TimeSpan.FromMinutes(7)
                         }
                     }
                 });
@@ -173,6 +247,8 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
+            Assert.That(request.DownloadProgress, Is.Null);
+            Assert.That(request.DownloadEtaMinutes, Is.Null);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
         }
 

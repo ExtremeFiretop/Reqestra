@@ -17,7 +17,11 @@
 			<div class="request-header-left">
 				<span class="request-status-indicator {{ getRequestStatusClass(request) }}"></span>
 				<div class="request-meta">
-					<span class="request-status-text">{{ request.requestStatus | translate }}</span>
+					<span class="request-status-text">
+						{{ request.requestStatus | translate }}
+						<ng-container *ngIf="request.downloading && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
+						<ng-container *ngIf="request.downloading && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
+					</span>
 					<span class="request-by">
 						{{
 							'MediaDetails.RequestedByOn'

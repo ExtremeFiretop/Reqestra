@@ -124,6 +124,8 @@
       <div class="status-row">
         <span class="status-badge" [id]="'requestedStatus' + item.theMovieDbId" [ngClass]="getStatusClass(item)">
           {{ item.requestStatus | translate }}
+          <ng-container *ngIf="item.downloading && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+          <ng-container *ngIf="item.downloading && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
         </span>
         <span *ngIf="item.has4KRequest" class="badge-4k">4K</span>
       </div>
@@ -206,7 +208,11 @@
         <td>{{ item.requestedByAlias || item.requestedUser?.userAlias }}</td>
         <td>{{ getRequestDate(item) | ombiDate: 'PP' }}</td>
         <td>
-          <span class="status-badge" [ngClass]="getStatusClass(item)">{{ item.requestStatus | translate }}</span>
+          <span class="status-badge" [ngClass]="getStatusClass(item)">
+            {{ item.requestStatus | translate }}
+            <ng-container *ngIf="item.downloading && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+            <ng-container *ngIf="item.downloading && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
+          </span>
         </td>
         <td class="cell-actions">
           <button class="btn-options" type="button"

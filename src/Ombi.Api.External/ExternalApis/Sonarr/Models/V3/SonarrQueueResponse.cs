@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ombi.Api.External.ExternalApis.Sonarr.Models;
 
@@ -18,5 +19,10 @@ namespace Ombi.Api.External.ExternalApis.Sonarr.Models.V3
         public int? SeasonNumber { get; set; }
         public SonarrSeries Series { get; set; }
         public Episode Episode { get; set; }
+        public decimal Size { get; set; }
+        public decimal Sizeleft { get; set; }
+        public TimeSpan? Timeleft { get; set; }
+        public DateTime? EstimatedCompletionTime { get; set; }
+        public string DownloadId { get; set; }
     }
 }
