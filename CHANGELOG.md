@@ -1,3 +1,17 @@
+# [4.62.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.20...v4.62.0) (2026-10-10)
+
+
+### Bug Fixes
+
+* **discover:** keep card titles visible with request actions ([d4c9db8](https://github.com/ExtremeFiretop/Reqestra/commit/d4c9db848f23fb273b57909110bac36311a92c97))
+
+
+### Features
+
+* **status:** add signed-in system health indicator ([a870343](https://github.com/ExtremeFiretop/Reqestra/commit/a8703433600f5db643e2caaa375729f836bbe8c1))
+
+
+
 ## [4.61.20](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.19...v4.61.20) (2026-10-09)
 
 
