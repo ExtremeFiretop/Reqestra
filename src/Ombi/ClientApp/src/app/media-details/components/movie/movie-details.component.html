@@ -71,6 +71,9 @@
 							<span id="requestedBtn" *ngIf="!hasRequest || (hasRequest && movieRequest && !movieRequest.denied)" class="action-btn action-btn--warning">
 								<i class="fas fa-check"></i> {{ 'Common.Requested' | translate }}
 							</span>
+							<button *ngIf="canRetryWithProfile(false)" class="action-btn action-btn--secondary" (click)="reProcessRequestWithProfile(false)">
+								<i class="fas fa-sync"></i> {{ 'MediaDetails.ChangeProfileAndRetry' | translate }}
+							</button>
 						</ng-container>
 						<ng-template #notRequestedBtn>
 							<button id="requestBtn" *ngIf="!movie.requested" class="action-btn action-btn--primary" [disabled]="movie.requestProcessing" (click)="request(false)">
@@ -93,6 +96,9 @@
 									<span *ngIf="movieRequest && !movieRequest.denied4K" class="action-btn action-btn--warning">
 										<i class="fas fa-check"></i> {{ 'Common.Requested4K' | translate }}
 									</span>
+									<button *ngIf="canRetryWithProfile(true)" class="action-btn action-btn--secondary" (click)="reProcessRequestWithProfile(true)">
+										<i class="fas fa-sync"></i> {{ 'MediaDetails.ChangeProfileAndRetry' | translate }}
+									</button>
 								</ng-container>
 								<ng-template #notRequestedBtn4K>
 									<button *ngIf="!movie.has4KRequest" class="action-btn action-btn--primary" [disabled]="movie.requestProcessing" (click)="request(true)">

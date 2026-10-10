@@ -52,6 +52,7 @@ function createComponent() {
   };
   const mockAuth = {
     hasRole: vi.fn().mockReturnValue(false),
+    claims: vi.fn().mockReturnValue({ name: 'owner' }),
   };
   const mockSettingsState = {
     getIssue: vi.fn().mockReturnValue(false),
@@ -330,6 +331,27 @@ describe('MovieDetailsComponent', () => {
       comp.reProcessRequest(false);
 
       expect(mockMessageService.sendRequestEngineResultError).toHaveBeenCalled();
+    });
+
+
+    it('should let a profile-enabled owner choose a new profile and retry', async () => {
+      const { comp, mockRequestService2, mockDialog } = createComponent();
+      comp.canSelectQualityProfile = true;
+      comp.movieRequest = {
+        id: 1,
+        approved: true,
+        available: false,
+        denied: false,
+        qualityOverride: 3,
+        requestedUser: { userName: 'owner' },
+      } as any;
+      mockDialog.open.mockReturnValue({ afterClosed: () => of({ profileId: 7 }) });
+      mockRequestService2.reprocessRequest.mockReturnValue(of({ result: true, message: 'Reprocessed' }));
+
+      await comp.reProcessRequestWithProfile(false);
+
+      expect(mockRequestService2.reprocessRequest).toHaveBeenCalledWith(1, RequestType.movie, false, 7);
+      expect(comp.movieRequest.qualityOverride).toBe(7);
     });
   });
 

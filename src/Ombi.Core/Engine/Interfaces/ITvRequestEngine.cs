@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Ombi.Core.Models.Requests;
 using Ombi.Core.Models.UI;
@@ -14,6 +15,7 @@ namespace Ombi.Core.Engine.Interfaces
         Task<TvRequests> GetTvRequest(int requestId);
         Task<RequestEngineResult> RequestTvShow(TvRequestViewModel tv);
         Task<RequestEngineResult> RequestTvShow(TvRequestViewModelV2 tv);
+        Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId);
         Task<RequestEngineResult> DenyChildRequest(int requestId, string reason);
         Task<RequestsViewModel<TvRequests>> GetRequestsLite(int count, int position, OrderFilterModel type);
         Task<IEnumerable<TvRequests>> SearchTvRequest(string search);

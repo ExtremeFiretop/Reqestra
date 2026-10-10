@@ -424,6 +424,7 @@
         "DeniedReason": "Denied Reason:",
         "ReProcessRequest": "Re-Process Request",
         "ReProcessRequest4K": "Re-Process 4K Request",
+        "ChangeProfileAndRetry": "Change Profile & Retry",
         "Music": {
             "Type": "Type:",
             "Country": "Country:",

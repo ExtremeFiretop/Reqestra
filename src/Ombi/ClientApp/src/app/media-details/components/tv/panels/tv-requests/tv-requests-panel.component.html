@@ -94,6 +94,11 @@
 					<i class="fas fa-sync"></i> {{ 'MediaDetails.ReProcessRequest' | translate }}
 				</button>
 			</div>
+			<div class="request-actions" *ngIf="canRetryWithProfile(request)">
+				<button mat-stroked-button (click)="reProcessRequestWithProfile(request)">
+					<i class="fas fa-sync"></i> {{ 'MediaDetails.ChangeProfileAndRetry' | translate }}
+				</button>
+			</div>
 			<div class="request-actions" *ngIf="isAdmin || manageOwnRequests">
 				<button mat-stroked-button color="warn" (click)="delete(request)">
 					<i class="fas fa-trash"></i> {{ 'Requests.RequestPanel.Delete' | translate }}

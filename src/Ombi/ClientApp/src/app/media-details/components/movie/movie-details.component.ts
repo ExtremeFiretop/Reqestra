@@ -507,6 +507,65 @@ export class MovieDetailsComponent implements OnInit {
 		});
 	}
 
+	public canRetryWithProfile(is4K: boolean): boolean {
+		if (!this.canSelectQualityProfile || !this.movieRequest || !this.movieRequest.requestedUser) {
+			return false;
+		}
+
+		const currentUsername = this.auth.claims()?.name;
+		const ownsRequest = !!currentUsername &&
+			this.movieRequest.requestedUser.userName?.toUpperCase() === currentUsername.toUpperCase();
+		const approved = is4K ? this.movieRequest.approved4K : this.movieRequest.approved;
+		const available = is4K ? this.movieRequest.available4K : this.movieRequest.available;
+		const denied = is4K ? this.movieRequest.denied4K : this.movieRequest.denied;
+		const requested = is4K ? this.movieRequest.has4KRequest : true;
+
+		return ownsRequest && requested && approved && !available && !denied && !this.movieRequest.downloading;
+	}
+
+	public async reProcessRequestWithProfile(is4K: boolean): Promise<void> {
+		if (!this.canRetryWithProfile(is4K)) {
+			return;
+		}
+
+		const currentProfileId = is4K
+			? this.movieRequest.qualityOverride4K
+			: this.movieRequest.qualityOverride;
+		const profileDialog = this.dialog.open(QualityProfileRequestDialogComponent, {
+			width: '460px',
+			data: {
+				type: RequestType.movie,
+				is4K,
+				initialProfileId: currentProfileId,
+				requireExplicitSelection: true,
+			},
+			panelClass: 'modal-panel',
+		});
+		const profileSelection = await firstValueFrom(profileDialog.afterClosed());
+		if (!profileSelection?.profileId || profileSelection.profileId <= 0) {
+			return;
+		}
+
+		const result = await firstValueFrom(
+			this.requestService2.reprocessRequest(
+				this.movieRequest.id,
+				RequestType.movie,
+				is4K,
+				profileSelection.profileId,
+			),
+		);
+		if (result.result) {
+			if (is4K) {
+				this.movieRequest.qualityOverride4K = profileSelection.profileId;
+			} else {
+				this.movieRequest.qualityOverride = profileSelection.profileId;
+			}
+			this.messageService.send(result.message ? result.message : this.translate.instant('Requests.SuccessfullyReprocessed'), 'Ok');
+		} else {
+			this.messageService.sendRequestEngineResultError(result);
+		}
+	}
+
 	public notify() {
 		this.requestService.subscribeToMovie(this.movieRequest.id).subscribe((result) => {
 			if (result) {

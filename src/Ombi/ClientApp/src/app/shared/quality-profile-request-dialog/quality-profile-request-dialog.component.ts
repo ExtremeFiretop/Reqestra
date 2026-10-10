@@ -13,6 +13,8 @@ import { RadarrService, SonarrService } from "../../services";
 export interface QualityProfileRequestDialogData {
     type: RequestType;
     is4K?: boolean;
+    initialProfileId?: number;
+    requireExplicitSelection?: boolean;
 }
 
 @Component({
@@ -39,7 +41,7 @@ export interface QualityProfileRequestDialogData {
             <mat-form-field appearance="fill" class="quality-profile-field" *ngIf="!loading">
                 <mat-label>Profile</mat-label>
                 <mat-select [(ngModel)]="selectedProfileId">
-                    <mat-option [value]="0">Use existing / configured default</mat-option>
+                    <mat-option *ngIf="!data.requireExplicitSelection" [value]="0">Use existing / configured default</mat-option>
                     <mat-option *ngFor="let profile of profiles" [value]="profile.id">
                         {{ profile.name }}
                     </mat-option>
@@ -50,7 +52,9 @@ export interface QualityProfileRequestDialogData {
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="cancel()">Cancel</button>
-            <button mat-raised-button color="primary" [disabled]="loading" (click)="confirm()">Continue</button>
+            <button mat-raised-button color="primary" [disabled]="loading || (data.requireExplicitSelection && selectedProfileId <= 0)" (click)="confirm()">
+                {{ data.requireExplicitSelection ? "Retry Request" : "Continue" }}
+            </button>
         </mat-dialog-actions>
     `,
     styles: [`
@@ -74,12 +78,20 @@ export class QualityProfileRequestDialogComponent implements OnInit {
     ) {}
 
     public async ngOnInit(): Promise<void> {
+        this.selectedProfileId = this.data.initialProfileId && this.data.initialProfileId > 0
+            ? this.data.initialProfileId
+            : 0;
         try {
             this.profiles = this.data.type === RequestType.movie
                 ? await firstValueFrom(this.radarrService.getSelectableQualityProfiles(!!this.data.is4K))
                 : await firstValueFrom(this.sonarrService.getSelectableQualityProfiles());
+            if (this.selectedProfileId > 0 && !this.profiles.some(profile => profile.id === this.selectedProfileId)) {
+                this.selectedProfileId = 0;
+            }
         } catch {
-            this.errorMessage = "Quality profiles could not be loaded. You can continue without a request-level override.";
+            this.errorMessage = this.data.requireExplicitSelection
+                ? "Quality profiles could not be loaded. Retry is unavailable until the profile list can be loaded."
+                : "Quality profiles could not be loaded. You can continue without a request-level override.";
             this.profiles = [];
         } finally {
             this.loading = false;

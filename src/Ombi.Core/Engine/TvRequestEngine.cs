@@ -1278,6 +1278,85 @@ namespace Ombi.Core.Engine
             return await ProcessSendingShow(request, completeActiveFailuresOnSuccess: true);
         }
 
+        public async Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId)
+        {
+            var request = await TvRepository.GetChild().FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+            if (request == null)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.RequestDoesNotExist,
+                    ErrorMessage = "Request does not exist"
+                };
+            }
+
+            var isPrivileged = Username.Equals("API", StringComparison.CurrentCultureIgnoreCase) ||
+                               await IsInRole(OmbiRoles.PowerUser) ||
+                               await IsInRole(OmbiRoles.Admin);
+
+            if (!isPrivileged)
+            {
+                var user = await GetUser();
+                var canSelectQualityProfile = await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+                var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
+
+                if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
+                    qualityProfileId.Value <= 0 || !request.Approved || request.Available || request.Denied == true)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorCode = ErrorCode.NoPermissions,
+                        ErrorMessage = "You do not have permission to reprocess this request."
+                    };
+                }
+            }
+
+            if (qualityProfileId.HasValue)
+            {
+                if (qualityProfileId.Value <= 0)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "A valid Sonarr quality profile is required to change the profile and retry."
+                    };
+                }
+
+                try
+                {
+                    if (!await _qualityProfileSelectionService.IsValidSonarrProfile(qualityProfileId.Value))
+                    {
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId} while reprocessing request {RequestId}",
+                        qualityProfileId.Value, requestId);
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "Reqestra could not validate the selected Sonarr quality profile because Sonarr is unavailable."
+                    };
+                }
+
+                request.QualityOverride = qualityProfileId.Value;
+                if (request.ParentRequest != null)
+                {
+                    request.ParentRequest.QualityOverride = qualityProfileId.Value;
+                }
+                await TvRepository.UpdateChild(request);
+            }
+
+            return await ProcessSendingShow(request, completeActiveFailuresOnSuccess: true);
+        }
+
 
         private async Task<RequestEngineResult> AfterRequest(ChildRequests model, string requestOnBehalf)
         {

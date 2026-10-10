@@ -16,6 +16,7 @@ using Ombi.Helpers;
 using Ombi.Core.Rule;
 using Ombi.Core.Rule.Interfaces;
 using Ombi.Core.Senders;
+using Ombi.Core.Services;
 using Ombi.Store.Entities;
 using Ombi.Store.Entities.Requests;
 using Ombi.Store.Repository;
@@ -257,6 +258,172 @@ namespace Ombi.Core.Tests.Engine
             Assert.That(result.Result, Is.False);
             Assert.That(failedRequest.Completed, Is.Null);
             queueRepository.Verify(x => x.SaveChangesAsync(), Times.Never);
+        }
+
+        [Test]
+        public async Task ReProcessRequest_ProfileOwner_UpdatesChildAndSeriesProfileThenResends()
+        {
+            var mocker = new AutoMocker();
+            var user = new OmbiUser { Id = "owner-1", UserName = "owner" };
+            var userManager = MockHelper.MockUserManager(new List<OmbiUser> { user });
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.PowerUser)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.Admin)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile)).ReturnsAsync(true);
+
+            var currentUser = new Mock<ICurrentUser>();
+            currentUser.Setup(x => x.Username).Returns("owner");
+            currentUser.Setup(x => x.GetUser()).ReturnsAsync(user);
+
+            var parent = new TvRequests { Id = 50, QualityOverride = 3 };
+            var request = new ChildRequests
+            {
+                Id = 51,
+                RequestedUserId = user.Id,
+                Approved = true,
+                Available = false,
+                QualityOverride = 3,
+                ParentRequest = parent,
+                ParentRequestId = parent.Id,
+                SeasonRequests = new List<SeasonRequests>()
+            };
+            var tvRepository = new Mock<ITvRequestRepository>();
+            tvRepository.Setup(x => x.GetChild())
+                .Returns(new List<ChildRequests> { request }.AsQueryable().BuildMock());
+            tvRepository.Setup(x => x.UpdateChild(request)).Returns(Task.CompletedTask);
+
+            var requestService = new Mock<IRequestServiceMain>();
+            requestService.Setup(x => x.TvRequestService).Returns(tvRepository.Object);
+            requestService.Setup(x => x.MovieRequestService).Returns(new Mock<IMovieRequestRepository>().Object);
+            requestService.Setup(x => x.MusicRequestRepository).Returns(new Mock<IMusicRequestRepository>().Object);
+
+            mocker.Use(currentUser.Object);
+            mocker.Use(userManager.Object);
+            mocker.Use(requestService.Object);
+            mocker.GetMock<IQualityProfileSelectionService>()
+                .Setup(x => x.IsValidSonarrProfile(9))
+                .ReturnsAsync(true);
+            mocker.GetMock<IRuleEvaluator>()
+                .Setup(x => x.StartSpecificRules(request, SpecificRules.CanSendNotification, string.Empty))
+                .ReturnsAsync(new RuleResult { Success = false });
+            mocker.GetMock<ITvSender>()
+                .Setup(x => x.Send(request))
+                .ReturnsAsync(new SenderResult { Success = true, Sent = true });
+            mocker.GetMock<IRepository<RequestQueue>>()
+                .Setup(x => x.GetAll())
+                .Returns(new List<RequestQueue>().AsQueryable().BuildMock());
+
+            var subject = mocker.CreateInstance<TvRequestEngine>();
+            var result = await subject.ReProcessRequest(request.Id, false, CancellationToken.None, 9);
+
+            Assert.That(result.Result, Is.True);
+            Assert.That(request.QualityOverride, Is.EqualTo(9));
+            Assert.That(parent.QualityOverride, Is.EqualTo(9));
+            tvRepository.Verify(x => x.UpdateChild(request), Times.Once);
+            mocker.GetMock<ITvSender>().Verify(x => x.Send(request), Times.Once);
+        }
+
+        [Test]
+        public async Task ReProcessRequest_PrivilegedUserWithoutProfile_PreservesExistingBehavior()
+        {
+            var mocker = new AutoMocker();
+            var user = new OmbiUser { Id = "admin-1", UserName = "admin" };
+            var userManager = MockHelper.MockUserManager(new List<OmbiUser> { user });
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.PowerUser)).ReturnsAsync(true);
+
+            var currentUser = new Mock<ICurrentUser>();
+            currentUser.Setup(x => x.Username).Returns("admin");
+            currentUser.Setup(x => x.GetUser()).ReturnsAsync(user);
+
+            var request = new ChildRequests
+            {
+                Id = 54,
+                RequestedUserId = "someone-else",
+                Approved = true,
+                Available = false,
+                QualityOverride = 3,
+                ParentRequest = new TvRequests { Id = 55, QualityOverride = 3 },
+                ParentRequestId = 55,
+                SeasonRequests = new List<SeasonRequests>()
+            };
+            var tvRepository = new Mock<ITvRequestRepository>();
+            tvRepository.Setup(x => x.GetChild())
+                .Returns(new List<ChildRequests> { request }.AsQueryable().BuildMock());
+
+            var requestService = new Mock<IRequestServiceMain>();
+            requestService.Setup(x => x.TvRequestService).Returns(tvRepository.Object);
+            requestService.Setup(x => x.MovieRequestService).Returns(new Mock<IMovieRequestRepository>().Object);
+            requestService.Setup(x => x.MusicRequestRepository).Returns(new Mock<IMusicRequestRepository>().Object);
+
+            mocker.Use(currentUser.Object);
+            mocker.Use(userManager.Object);
+            mocker.Use(requestService.Object);
+            mocker.GetMock<IRuleEvaluator>()
+                .Setup(x => x.StartSpecificRules(request, SpecificRules.CanSendNotification, string.Empty))
+                .ReturnsAsync(new RuleResult { Success = false });
+            mocker.GetMock<ITvSender>()
+                .Setup(x => x.Send(request))
+                .ReturnsAsync(new SenderResult { Success = true, Sent = true });
+            mocker.GetMock<IRepository<RequestQueue>>()
+                .Setup(x => x.GetAll())
+                .Returns(new List<RequestQueue>().AsQueryable().BuildMock());
+
+            var subject = mocker.CreateInstance<TvRequestEngine>();
+            var result = await subject.ReProcessRequest(request.Id, false, CancellationToken.None, null);
+
+            Assert.That(result.Result, Is.True);
+            Assert.That(request.QualityOverride, Is.EqualTo(3));
+            tvRepository.Verify(x => x.UpdateChild(It.IsAny<ChildRequests>()), Times.Never);
+            mocker.GetMock<ITvSender>().Verify(x => x.Send(request), Times.Once);
+        }
+
+        [Test]
+        public async Task ReProcessRequest_ProfileUserCannotRetryAnotherUsersTvRequest()
+        {
+            var mocker = new AutoMocker();
+            var user = new OmbiUser { Id = "owner-1", UserName = "owner" };
+            var userManager = MockHelper.MockUserManager(new List<OmbiUser> { user });
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.PowerUser)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.Admin)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile)).ReturnsAsync(true);
+
+            var currentUser = new Mock<ICurrentUser>();
+            currentUser.Setup(x => x.Username).Returns("owner");
+            currentUser.Setup(x => x.GetUser()).ReturnsAsync(user);
+
+            var parent = new TvRequests { Id = 52, QualityOverride = 3 };
+            var request = new ChildRequests
+            {
+                Id = 53,
+                RequestedUserId = "someone-else",
+                Approved = true,
+                Available = false,
+                QualityOverride = 3,
+                ParentRequest = parent,
+                ParentRequestId = parent.Id,
+                SeasonRequests = new List<SeasonRequests>()
+            };
+            var tvRepository = new Mock<ITvRequestRepository>();
+            tvRepository.Setup(x => x.GetChild())
+                .Returns(new List<ChildRequests> { request }.AsQueryable().BuildMock());
+
+            var requestService = new Mock<IRequestServiceMain>();
+            requestService.Setup(x => x.TvRequestService).Returns(tvRepository.Object);
+            requestService.Setup(x => x.MovieRequestService).Returns(new Mock<IMovieRequestRepository>().Object);
+            requestService.Setup(x => x.MusicRequestRepository).Returns(new Mock<IMusicRequestRepository>().Object);
+
+            mocker.Use(currentUser.Object);
+            mocker.Use(userManager.Object);
+            mocker.Use(requestService.Object);
+
+            var subject = mocker.CreateInstance<TvRequestEngine>();
+            var result = await subject.ReProcessRequest(request.Id, false, CancellationToken.None, 9);
+
+            Assert.That(result.Result, Is.False);
+            Assert.That(result.ErrorCode, Is.EqualTo(ErrorCode.NoPermissions));
+            Assert.That(request.QualityOverride, Is.EqualTo(3));
+            Assert.That(parent.QualityOverride, Is.EqualTo(3));
+            tvRepository.Verify(x => x.UpdateChild(It.IsAny<ChildRequests>()), Times.Never);
+            mocker.GetMock<ITvSender>().Verify(x => x.Send(It.IsAny<ChildRequests>()), Times.Never);
         }
 
         [Test]

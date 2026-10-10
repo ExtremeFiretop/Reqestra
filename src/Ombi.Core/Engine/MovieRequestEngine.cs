@@ -881,6 +881,92 @@ namespace Ombi.Core.Engine
             return await ProcessSendingMovie(request, is4K);
         }
 
+        public async Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId)
+        {
+            var request = await MovieRepository.GetWithUser().FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+            if (request == null)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.RequestDoesNotExist,
+                    ErrorMessage = "Request does not exist"
+                };
+            }
+
+            var isPrivileged = Username.Equals("API", StringComparison.CurrentCultureIgnoreCase) ||
+                               await IsInRole(OmbiRoles.PowerUser) ||
+                               await IsInRole(OmbiRoles.Admin);
+
+            if (!isPrivileged)
+            {
+                var user = await GetUser();
+                var canSelectQualityProfile = await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+                var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
+                var approved = is4K ? request.Approved4K : request.Approved;
+                var available = is4K ? request.Available4K : request.Available;
+                var denied = is4K ? request.Denied4K : request.Denied;
+
+                if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
+                    qualityProfileId.Value <= 0 || !approved || available || denied == true)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorCode = ErrorCode.NoPermissions,
+                        ErrorMessage = "You do not have permission to reprocess this request."
+                    };
+                }
+            }
+
+            if (qualityProfileId.HasValue)
+            {
+                if (qualityProfileId.Value <= 0)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "A valid Radarr quality profile is required to change the profile and retry."
+                    };
+                }
+
+                try
+                {
+                    if (!await _qualityProfileSelectionService.IsValidRadarrProfile(qualityProfileId.Value, is4K))
+                    {
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorMessage = "The selected Radarr quality profile is no longer available."
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Could not validate selected {RadarrType} quality profile {ProfileId} while reprocessing request {RequestId}",
+                        is4K ? "Radarr 4K" : "Radarr", qualityProfileId.Value, requestId);
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "Reqestra could not validate the selected Radarr quality profile because Radarr is unavailable."
+                    };
+                }
+
+                if (is4K)
+                {
+                    request.QualityOverride4K = qualityProfileId.Value;
+                }
+                else
+                {
+                    request.QualityOverride = qualityProfileId.Value;
+                }
+
+                await MovieRepository.Update(request);
+            }
+
+            return await ProcessSendingMovie(request, is4K);
+        }
+
         public async Task<RequestEngineResult> MarkUnavailable(int modelId, bool is4K)
         {
             var request = await MovieRepository.GetWithUser().FirstOrDefaultAsync(x => x.Id == modelId);

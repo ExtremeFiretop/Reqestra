@@ -10,6 +10,9 @@ import { RequestServiceV2 } from "../../../../../services/requestV2.service";
 import { TranslateModule, TranslateService } from "@ngx-translate/core";
 import { OmbiDatePipe } from "../../../../../pipes/OmbiDatePipe";
 import { MatButtonModule } from "@angular/material/button";
+import { firstValueFrom } from "rxjs";
+import { AuthService } from "../../../../../auth/auth.service";
+import { QualityProfileRequestDialogComponent } from "../../../../../shared/quality-profile-request-dialog/quality-profile-request-dialog.component";
 
 @Component({
     templateUrl: "./tv-requests-panel.component.html",
@@ -26,6 +29,7 @@ export class TvRequestsPanelComponent {
     @Input() public tvRequest: IChildRequests[];
     @Input() public isAdmin: boolean;
     @Input() public manageOwnRequests: boolean;
+    @Input() public canSelectQualityProfile = false;
 
     public RequestSource = RequestSource;
     public expandedRequests = new Set<number>();
@@ -36,7 +40,8 @@ export class TvRequestsPanelComponent {
         private readonly requestService2: RequestServiceV2,
         private readonly messageService: MessageService,
         public dialog: MatDialog,
-        private readonly translateService: TranslateService
+        private readonly translateService: TranslateService,
+        private readonly auth: AuthService
     ) {}
 
     public isExpanded(request: IChildRequests): boolean {
@@ -168,5 +173,45 @@ export class TvRequestsPanelComponent {
                 this.messageService.sendRequestEngineResultError(x);
             }
         });
+    }
+
+    public canRetryWithProfile(request: IChildRequests): boolean {
+        const currentUsername = this.auth.claims()?.name;
+        const ownsRequest = !!currentUsername &&
+            request.requestedUser?.userName?.toUpperCase() === currentUsername.toUpperCase();
+        return this.canSelectQualityProfile && ownsRequest && request.approved && !request.available && !request.denied && !request.downloading;
+    }
+
+    public async reProcessRequestWithProfile(request: IChildRequests): Promise<void> {
+        if (!this.canRetryWithProfile(request)) {
+            return;
+        }
+
+        const profileDialog = this.dialog.open(QualityProfileRequestDialogComponent, {
+            width: "460px",
+            data: {
+                type: RequestType.tvShow,
+                initialProfileId: request.qualityOverride ?? request.parentRequest?.qualityOverride,
+                requireExplicitSelection: true,
+            },
+            panelClass: "modal-panel",
+        });
+        const profileSelection = await firstValueFrom(profileDialog.afterClosed());
+        if (!profileSelection?.profileId || profileSelection.profileId <= 0) {
+            return;
+        }
+
+        const result = await firstValueFrom(
+            this.requestService2.reprocessRequest(request.id, RequestType.tvShow, false, profileSelection.profileId),
+        );
+        if (result.result) {
+            request.qualityOverride = profileSelection.profileId;
+            if (request.parentRequest) {
+                request.parentRequest.qualityOverride = profileSelection.profileId;
+            }
+            this.messageService.send(this.translateService.instant("Requests.SuccessfullyReprocessed"));
+        } else {
+            this.messageService.sendRequestEngineResultError(result);
+        }
     }
 }

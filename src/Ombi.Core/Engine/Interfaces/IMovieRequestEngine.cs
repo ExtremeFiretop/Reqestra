@@ -10,6 +10,7 @@ namespace Ombi.Core.Engine.Interfaces
     public interface IMovieRequestEngine : IRequestEngine<MovieRequests>
     {
         Task<RequestEngineResult> RequestMovie(MovieRequestViewModel model);
+        Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId);
 
         Task<IEnumerable<MovieRequests>> SearchMovieRequest(string search);
         Task<RequestEngineResult> RequestCollection(int collectionId, CancellationToken cancellationToken);
