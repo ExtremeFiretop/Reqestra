@@ -1,3 +1,12 @@
+# [4.63.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.62.0...v4.63.0) (2026-10-10)
+
+
+### Features
+
+* **requests:** show active Sonarr and Radarr downloads ([822aa40](https://github.com/ExtremeFiretop/Reqestra/commit/822aa402bd5b0ffa51418e6d76e7f3ee49b1ffdd))
+
+
+
 # [4.62.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.20...v4.62.0) (2026-10-10)
 
 
