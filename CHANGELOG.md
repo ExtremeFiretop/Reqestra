@@ -1,3 +1,15 @@
+## [4.68.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.3...v4.68.4) (2026-10-11)
+
+
+### Bug Fixes
+
+* **discover:** normalize recently requested card size ([0fa3fde](https://github.com/ExtremeFiretop/Reqestra/commit/0fa3fdef53b9659f706c8c3394295a8d7a68a3a6))
+* **navigation:** make search action more discoverable ([bf2b655](https://github.com/ExtremeFiretop/Reqestra/commit/bf2b655808cfbe7d33de6ea5bd7a55a5298cac9b))
+* **requests:** contain mobile layout overflow ([5da8131](https://github.com/ExtremeFiretop/Reqestra/commit/5da81312defdaf4de2e6352538a84bc7d35e94ad))
+* **requests:** detect missed NZBGet unpacking transitions ([918b92f](https://github.com/ExtremeFiretop/Reqestra/commit/918b92f91b7c5a740a81cf73577f01e2f6c03477))
+
+
+
 ## [4.68.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.2...v4.68.3) (2026-10-11)
 
 
