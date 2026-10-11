@@ -591,12 +591,13 @@ namespace Ombi.Core.Engine
 
             allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
@@ -651,12 +652,13 @@ namespace Ombi.Core.Engine
                 return new RequestsViewModel<ChildRequests>();
             }
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
@@ -693,12 +695,13 @@ namespace Ombi.Core.Engine
 
             allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
