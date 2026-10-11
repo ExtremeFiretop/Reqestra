@@ -1,3 +1,12 @@
+## [4.67.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.0...v4.67.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** reset retry profile to configured default ([7874c18](https://github.com/ExtremeFiretop/Reqestra/commit/7874c18876e8ce76f1b8983fadca468ed16bbb86))
+
+
+
 # [4.67.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.66.0...v4.67.0) (2026-10-11)
 
 
