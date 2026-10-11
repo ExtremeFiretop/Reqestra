@@ -16,6 +16,13 @@ namespace Ombi.Store.Entities.Requests
         public SeriesType SeriesType { get; set; }
         public int? QualityOverride { get; set; }
 
+        // Set only for an explicit "use configured default" retry. A zero child override is
+        // persisted to mean no request-level override, while this transient flag tells the
+        // sender to actively reprofile an existing Sonarr series during this retry.
+        [NotMapped]
+        [JsonIgnore]
+        public bool ResetQualityProfileToDefault { get; set; }
+
         /// <summary>
         /// This is to see if the user is subscribed in the UI
         /// </summary>

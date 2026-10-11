@@ -1302,7 +1302,7 @@ namespace Ombi.Core.Engine
                 var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
 
                 if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
-                    qualityProfileId.Value <= 0 || !request.Approved || request.Denied == true)
+                    qualityProfileId.Value < 0 || !request.Approved || request.Denied == true)
                 {
                     return new RequestEngineResult
                     {
@@ -1315,41 +1315,51 @@ namespace Ombi.Core.Engine
 
             if (qualityProfileId.HasValue)
             {
-                if (qualityProfileId.Value <= 0)
+                if (qualityProfileId.Value < 0)
                 {
                     return new RequestEngineResult
                     {
                         Result = false,
-                        ErrorMessage = "A valid Sonarr quality profile is required to change the profile and search again."
+                        ErrorMessage = "The selected Sonarr quality profile is invalid."
                     };
                 }
 
-                try
+                var resetToConfiguredDefault = qualityProfileId.Value == 0;
+                if (!resetToConfiguredDefault)
                 {
-                    if (!await _qualityProfileSelectionService.IsValidSonarrProfile(qualityProfileId.Value))
+                    try
                     {
+                        if (!await _qualityProfileSelectionService.IsValidSonarrProfile(qualityProfileId.Value))
+                        {
+                            return new RequestEngineResult
+                            {
+                                Result = false,
+                                ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId} while reprocessing request {RequestId}",
+                            qualityProfileId.Value, requestId);
                         return new RequestEngineResult
                         {
                             Result = false,
-                            ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                            ErrorMessage = "Reqestra could not validate the selected Sonarr quality profile because Sonarr is unavailable."
                         };
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId} while reprocessing request {RequestId}",
-                        qualityProfileId.Value, requestId);
-                    return new RequestEngineResult
-                    {
-                        Result = false,
-                        ErrorMessage = "Reqestra could not validate the selected Sonarr quality profile because Sonarr is unavailable."
-                    };
-                }
 
+                // Persist zero on the child so this request explicitly has no request-level
+                // override. Clear the parent fallback too so later sends cannot resurrect the
+                // old series-wide selection.
                 request.QualityOverride = qualityProfileId.Value;
+                request.ResetQualityProfileToDefault = resetToConfiguredDefault;
                 if (request.ParentRequest != null)
                 {
-                    request.ParentRequest.QualityOverride = qualityProfileId.Value;
+                    request.ParentRequest.QualityOverride = resetToConfiguredDefault
+                        ? (int?)null
+                        : qualityProfileId.Value;
                 }
                 await TvRepository.UpdateChild(request);
             }

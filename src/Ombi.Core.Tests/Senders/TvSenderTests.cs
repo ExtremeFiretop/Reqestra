@@ -148,6 +148,95 @@ namespace Ombi.Core.Tests.Senders
 
 
         [Test]
+        public async Task ExistingSeries_DefaultProfileReset_AppliesConfiguredDefaultBeforeRequestedSearch()
+        {
+            var settings = new SonarrSettings
+            {
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989,
+                RootPath = "1",
+                QualityProfile = "1",
+                AddOnly = false
+            };
+
+            var request = new ChildRequests
+            {
+                RequestedUserId = "user",
+                SeriesType = SeriesType.Standard,
+                QualityOverride = 0,
+                ResetQualityProfileToDefault = true,
+                ParentRequest = new TvRequests
+                {
+                    Title = "Test Show",
+                    TvDbId = 123,
+                    TotalSeasons = 1
+                },
+                SeasonRequests = new List<SeasonRequests>
+                {
+                    new SeasonRequests
+                    {
+                        SeasonNumber = 1,
+                        Episodes = new List<EpisodeRequests>
+                        {
+                            new EpisodeRequests
+                            {
+                                EpisodeNumber = 1,
+                                Title = "Pilot"
+                            }
+                        }
+                    }
+                }
+            };
+
+            var series = new SonarrSeries
+            {
+                id = 10,
+                tvdbId = 123,
+                qualityProfileId = 2,
+                monitored = true,
+                seasons = new[]
+                {
+                    new Season { seasonNumber = 1, monitored = true }
+                }
+            };
+
+            _sonarr.Setup(x => x.GetRootFolders(settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(new[] { new SonarrRootFolder { id = 1, path = "/tv" } });
+            _sonarr.Setup(x => x.GetSeries(settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(new[] { series });
+            _sonarr.Setup(x => x.UpdateSeries(It.IsAny<SonarrSeries>(), settings.ApiKey, settings.FullUri))
+                .ReturnsAsync((SonarrSeries updated, string _, string __) => updated);
+            _sonarr.Setup(x => x.GetEpisodes(series.id, settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(new[]
+                {
+                    new Episode
+                    {
+                        id = 100,
+                        seriesId = series.id,
+                        seasonNumber = 1,
+                        episodeNumber = 1,
+                        title = "Pilot",
+                        monitored = true
+                    }
+                });
+            _sonarr.Setup(x => x.SeasonSearch(series.id, 1, settings.ApiKey, settings.FullUri))
+                .ReturnsAsync(true);
+
+            await _subject.SendToSonarr(request, settings);
+
+            _sonarr.Verify(
+                x => x.UpdateSeries(
+                    It.Is<SonarrSeries>(updated => updated.qualityProfileId == 1),
+                    settings.ApiKey,
+                    settings.FullUri),
+                Times.Once);
+            _sonarr.Verify(x => x.SeasonSearch(series.id, 1, settings.ApiKey, settings.FullUri), Times.Once);
+            _sonarr.Verify(x => x.SeriesSearch(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+
+
+        [Test]
         public async Task Send_UnsafeSeasonMapping_QueuesManualInterventionWithoutRetryNotification()
         {
             var settings = CreateSettings();

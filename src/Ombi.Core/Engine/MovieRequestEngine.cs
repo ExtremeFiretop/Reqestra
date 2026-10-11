@@ -907,7 +907,7 @@ namespace Ombi.Core.Engine
                 var denied = is4K ? request.Denied4K : request.Denied;
 
                 if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
-                    qualityProfileId.Value <= 0 || !approved || denied == true)
+                    qualityProfileId.Value < 0 || !approved || denied == true)
                 {
                     return new RequestEngineResult
                     {
@@ -920,35 +920,39 @@ namespace Ombi.Core.Engine
 
             if (qualityProfileId.HasValue)
             {
-                if (qualityProfileId.Value <= 0)
+                if (qualityProfileId.Value < 0)
                 {
                     return new RequestEngineResult
                     {
                         Result = false,
-                        ErrorMessage = "A valid Radarr quality profile is required to change the profile and search again."
+                        ErrorMessage = "The selected Radarr quality profile is invalid."
                     };
                 }
 
-                try
+                var resetToConfiguredDefault = qualityProfileId.Value == 0;
+                if (!resetToConfiguredDefault)
                 {
-                    if (!await _qualityProfileSelectionService.IsValidRadarrProfile(qualityProfileId.Value, is4K))
+                    try
                     {
+                        if (!await _qualityProfileSelectionService.IsValidRadarrProfile(qualityProfileId.Value, is4K))
+                        {
+                            return new RequestEngineResult
+                            {
+                                Result = false,
+                                ErrorMessage = "The selected Radarr quality profile is no longer available."
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Could not validate selected {RadarrType} quality profile {ProfileId} while reprocessing request {RequestId}",
+                            is4K ? "Radarr 4K" : "Radarr", qualityProfileId.Value, requestId);
                         return new RequestEngineResult
                         {
                             Result = false,
-                            ErrorMessage = "The selected Radarr quality profile is no longer available."
+                            ErrorMessage = "Reqestra could not validate the selected Radarr quality profile because Radarr is unavailable."
                         };
                     }
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(ex, "Could not validate selected {RadarrType} quality profile {ProfileId} while reprocessing request {RequestId}",
-                        is4K ? "Radarr 4K" : "Radarr", qualityProfileId.Value, requestId);
-                    return new RequestEngineResult
-                    {
-                        Result = false,
-                        ErrorMessage = "Reqestra could not validate the selected Radarr quality profile because Radarr is unavailable."
-                    };
                 }
 
                 if (is4K)
@@ -960,6 +964,10 @@ namespace Ombi.Core.Engine
                     request.QualityOverride = qualityProfileId.Value;
                 }
 
+                // Zero is an explicit retry instruction, not merely the absence of an override.
+                // Keep that distinction transient so ordinary requests stored with zero are not
+                // unexpectedly reprofiled when sent for unrelated reasons.
+                request.ResetQualityProfileToDefault = resetToConfiguredDefault;
                 await MovieRepository.Update(request);
             }
 

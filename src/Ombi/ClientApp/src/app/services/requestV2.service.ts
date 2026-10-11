@@ -101,7 +101,7 @@ export class RequestServiceV2 extends ServiceHelpers {
     }
 
     public reprocessRequest(requestId: number, type: RequestType, is4K: boolean, qualityProfileId?: number): Observable<IRequestEngineResult> {
-        const profileQuery = qualityProfileId && qualityProfileId > 0
+        const profileQuery = qualityProfileId !== undefined && qualityProfileId !== null
             ? `?qualityProfileId=${qualityProfileId}`
             : "";
         return this.http.post<IRequestEngineResult>(`${this.url}reprocess/${type}/${requestId}/${is4K}${profileQuery}`, undefined, { headers: this.headers });

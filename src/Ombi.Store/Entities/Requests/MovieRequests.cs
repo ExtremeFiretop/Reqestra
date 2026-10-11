@@ -42,6 +42,13 @@ namespace Ombi.Store.Entities.Requests
         [NotMapped]
         public bool Is4kRequest { get; set; }
 
+        // Set only for an explicit "use configured default" retry. QualityOverride == 0 is
+        // also the normal persisted no-override value, so it cannot by itself mean that an
+        // existing Radarr item should be actively reprofiled.
+        [NotMapped]
+        [JsonIgnore]
+        public bool ResetQualityProfileToDefault { get; set; }
+
         public int RootPathOverride { get; set; }
         public int QualityOverride { get; set; }
         public int QualityOverride4K { get; set; }

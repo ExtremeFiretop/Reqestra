@@ -353,6 +353,27 @@ describe('MovieDetailsComponent', () => {
       expect(mockRequestService2.reprocessRequest).toHaveBeenCalledWith(1, RequestType.movie, false, 7);
       expect(comp.movieRequest.qualityOverride).toBe(7);
     });
+
+
+    it('should allow configured-default zero when retrying with a profile', async () => {
+      const { comp, mockRequestService2, mockDialog } = createComponent();
+      comp.canSelectQualityProfile = true;
+      comp.movieRequest = {
+        id: 1,
+        approved: true,
+        available: false,
+        denied: false,
+        qualityOverride: 7,
+        requestedUser: { userName: 'owner' },
+      } as any;
+      mockDialog.open.mockReturnValue({ afterClosed: () => of({ profileId: 0 }) });
+      mockRequestService2.reprocessRequest.mockReturnValue(of({ result: true, message: 'Reprocessed' }));
+
+      await comp.reProcessRequestWithProfile(false);
+
+      expect(mockRequestService2.reprocessRequest).toHaveBeenCalledWith(1, RequestType.movie, false, 0);
+      expect(comp.movieRequest.qualityOverride).toBe(0);
+    });
   });
 
   describe('notify / unNotify', () => {

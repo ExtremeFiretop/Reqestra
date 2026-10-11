@@ -167,5 +167,14 @@ describe('RequestServiceV2', () => {
         expect.anything()
       );
     });
+
+    it('should append zero when resetting a reprocess to the configured profile', () => {
+      service.reprocessRequest(1, 1 as any, false, 0);
+      expect(mockHttp.post).toHaveBeenCalledWith(
+        '/api/v2/Requests/reprocess/1/1/false?qualityProfileId=0',
+        undefined,
+        expect.anything()
+      );
+    });
   });
 });

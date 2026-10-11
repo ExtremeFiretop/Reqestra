@@ -541,7 +541,7 @@ export class MovieDetailsComponent implements OnInit {
 			panelClass: 'modal-panel',
 		});
 		const profileSelection = await firstValueFrom(profileDialog.afterClosed());
-		if (!profileSelection?.profileId || profileSelection.profileId <= 0) {
+		if (!profileSelection || profileSelection.profileId == null || profileSelection.profileId < 0) {
 			return;
 		}
 

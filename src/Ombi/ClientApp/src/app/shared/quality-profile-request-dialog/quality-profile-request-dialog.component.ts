@@ -41,7 +41,7 @@ export interface QualityProfileRequestDialogData {
             <mat-form-field appearance="fill" class="quality-profile-field" *ngIf="!loading">
                 <mat-label>Profile</mat-label>
                 <mat-select [(ngModel)]="selectedProfileId">
-                    <mat-option *ngIf="!data.requireExplicitSelection" [value]="0">Use existing / configured default</mat-option>
+                    <mat-option [value]="0">Use configured default</mat-option>
                     <mat-option *ngFor="let profile of profiles" [value]="profile.id">
                         {{ profile.name }}
                     </mat-option>
@@ -52,7 +52,7 @@ export interface QualityProfileRequestDialogData {
         </mat-dialog-content>
         <mat-dialog-actions align="end">
             <button mat-button (click)="cancel()">Cancel</button>
-            <button mat-raised-button color="primary" [disabled]="loading || (data.requireExplicitSelection && selectedProfileId <= 0)" (click)="confirm()">
+            <button mat-raised-button color="primary" [disabled]="loading" (click)="confirm()">
                 {{ data.requireExplicitSelection ? "Retry Request" : "Continue" }}
             </button>
         </mat-dialog-actions>
@@ -89,8 +89,14 @@ export class QualityProfileRequestDialogComponent implements OnInit {
                 this.selectedProfileId = 0;
             }
         } catch {
+            if (this.data.requireExplicitSelection) {
+                // The configured-default option does not require the Arr profile list. If the
+                // list cannot be loaded, fall back to that safe explicit retry choice rather
+                // than accidentally submitting a stale initial profile id.
+                this.selectedProfileId = 0;
+            }
             this.errorMessage = this.data.requireExplicitSelection
-                ? "Quality profiles could not be loaded. Retry is unavailable until the profile list can be loaded."
+                ? "Quality profiles could not be loaded. You can still retry using the configured default."
                 : "Quality profiles could not be loaded. You can continue without a request-level override.";
             this.profiles = [];
         } finally {

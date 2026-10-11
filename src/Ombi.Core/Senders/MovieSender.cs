@@ -187,6 +187,7 @@ namespace Ombi.Core.Senders
             // independent profile storage because they can target different Radarr instances.
             var requestQualityOverride = is4k ? model.QualityOverride4K : model.QualityOverride;
             var profileOverrideRequested = requestQualityOverride > 0;
+            var profileChangeRequested = profileOverrideRequested || model.ResetQualityProfileToDefault;
             if (profileOverrideRequested)
             {
                 qualityToUse = requestQualityOverride;
@@ -225,7 +226,7 @@ namespace Ombi.Core.Senders
             // use that profile even when Radarr already contains the movie. Reprofile first,
             // then search so Radarr can upgrade/reacquire it under the newly selected cutoff.
             var movieNeedsUpdate = false;
-            if (profileOverrideRequested && existingMovie.qualityProfileId != qualityToUse)
+            if (profileChangeRequested && existingMovie.qualityProfileId != qualityToUse)
             {
                 existingMovie.qualityProfileId = qualityToUse;
                 movieNeedsUpdate = true;
@@ -242,12 +243,12 @@ namespace Ombi.Core.Senders
                 await _radarrV3Api.UpdateMovie(existingMovie, settings.ApiKey, settings.FullUri);
             }
 
-            if (!settings.AddOnly && (movieNeedsUpdate || profileOverrideRequested))
+            if (!settings.AddOnly && (movieNeedsUpdate || profileChangeRequested))
             {
                 await _radarrV3Api.MovieSearch(new[] { existingMovie.id }, settings.ApiKey, settings.FullUri);
             }
 
-            if (movieNeedsUpdate || profileOverrideRequested)
+            if (movieNeedsUpdate || profileChangeRequested)
             {
                 return new SenderResult { Success = true, Sent = true };
             }

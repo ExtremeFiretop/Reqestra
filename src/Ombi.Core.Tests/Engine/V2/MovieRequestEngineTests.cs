@@ -108,6 +108,59 @@ namespace Ombi.Core.Tests.Engine.V2
         }
 
         [Test]
+        public async Task ReProcessRequest_ProfileOwner_ZeroResetsToConfiguredDefaultAndResends()
+        {
+            var mocker = new AutoMocker();
+            var user = new OmbiUser { Id = "owner-1", UserName = "owner" };
+            var userManager = MockHelper.MockUserManager(new List<OmbiUser> { user });
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.PowerUser)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.Admin)).ReturnsAsync(false);
+            userManager.Setup(x => x.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile)).ReturnsAsync(true);
+
+            var currentUser = new Mock<ICurrentUser>();
+            currentUser.Setup(x => x.Username).Returns("owner");
+            currentUser.Setup(x => x.GetUser()).ReturnsAsync(user);
+
+            var request = new MovieRequests
+            {
+                Id = 47,
+                RequestedUserId = user.Id,
+                Approved = true,
+                Available = false,
+                QualityOverride = 7
+            };
+            var movieRepository = new Mock<IMovieRequestRepository>();
+            movieRepository.Setup(x => x.GetWithUser())
+                .Returns(new List<MovieRequests> { request }.AsQueryable().BuildMock());
+            movieRepository.Setup(x => x.Update(request)).Returns(Task.CompletedTask);
+
+            var requestService = new Mock<IRequestServiceMain>();
+            requestService.Setup(x => x.MovieRequestService).Returns(movieRepository.Object);
+            requestService.Setup(x => x.TvRequestService).Returns(new Mock<ITvRequestRepository>().Object);
+            requestService.Setup(x => x.MusicRequestRepository).Returns(new Mock<IMusicRequestRepository>().Object);
+
+            mocker.Use(currentUser.Object);
+            mocker.Use(userManager.Object);
+            mocker.Use(requestService.Object);
+            mocker.GetMock<IMovieSender>()
+                .Setup(x => x.Send(request, false))
+                .ReturnsAsync(new SenderResult { Success = true, Sent = true });
+
+            var subject = mocker.CreateInstance<MovieRequestEngine>();
+            var result = await subject.ReProcessRequest(request.Id, false, CancellationToken.None, 0);
+
+            Assert.That(result.Result, Is.True);
+            Assert.That(request.QualityOverride, Is.Zero);
+            Assert.That(request.ResetQualityProfileToDefault, Is.True);
+            movieRepository.Verify(x => x.Update(request), Times.Once);
+            mocker.GetMock<IQualityProfileSelectionService>()
+                .Verify(x => x.IsValidRadarrProfile(It.IsAny<int>(), It.IsAny<bool>()), Times.Never);
+            mocker.GetMock<IMovieSender>().Verify(
+                x => x.Send(It.Is<MovieRequests>(r => r.ResetQualityProfileToDefault && r.QualityOverride == 0), false),
+                Times.Once);
+        }
+
+        [Test]
         public async Task ReProcessRequest_PrivilegedUserWithoutProfile_PreservesExistingBehavior()
         {
             var mocker = new AutoMocker();

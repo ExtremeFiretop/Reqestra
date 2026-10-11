@@ -232,6 +232,7 @@ namespace Ombi.Core.Senders
             var currentRequestHasProfileChoice = model.QualityOverride.HasValue;
             var currentRequestQualityOverride = model.QualityOverride.GetValueOrDefault();
             var profileOverrideRequested = currentRequestHasProfileChoice && currentRequestQualityOverride > 0;
+            var profileChangeRequested = profileOverrideRequested || model.ResetQualityProfileToDefault;
 
             if (currentRequestHasProfileChoice)
             {
@@ -345,10 +346,11 @@ namespace Ombi.Core.Senders
                 else
                 {
                     var seriesNeedsUpdate = false;
-                    if (profileOverrideRequested && existingSeries.qualityProfileId != qualityToUse)
+                    if (profileChangeRequested && existingSeries.qualityProfileId != qualityToUse)
                     {
-                        // Sonarr quality profiles are series-wide. Selecting a new profile for
-                        // any season therefore reprofiles the whole existing series.
+                        // Sonarr quality profiles are series-wide. Selecting a profile, including
+                        // explicitly resetting to Reqestra's configured default, therefore
+                        // reprofiles the whole existing series.
                         existingSeries.qualityProfileId = qualityToUse;
                         seriesNeedsUpdate = true;
                     }

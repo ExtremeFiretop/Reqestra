@@ -68,6 +68,26 @@ describe("TvRequestsPanelComponent profile-aware retry", () => {
         expect(request.parentRequest.qualityOverride).toBe(9);
     });
 
+    it("allows configured-default zero for an owned profile retry", async () => {
+        const { component, requestService2, dialog } = createComponent();
+        dialog.open.mockReturnValue({ afterClosed: () => of({ profileId: 0 }) });
+        const request = {
+            id: 58,
+            approved: true,
+            available: false,
+            denied: false,
+            qualityOverride: 9,
+            requestedUser: { userName: "owner" },
+            parentRequest: { qualityOverride: 9 },
+        } as any;
+
+        await component.reProcessRequestWithProfile(request);
+
+        expect(requestService2.reprocessRequest).toHaveBeenCalledWith(58, RequestType.tvShow, false, 0);
+        expect(request.qualityOverride).toBe(0);
+        expect(request.parentRequest.qualityOverride).toBe(0);
+    });
+
     it("does not offer profile retry for another user's request", () => {
         const { component } = createComponent();
         const request = {
