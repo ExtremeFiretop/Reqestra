@@ -1,3 +1,12 @@
+## [4.67.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.1...v4.67.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** make TV episode statuses lifecycle-aware ([0011c78](https://github.com/ExtremeFiretop/Reqestra/commit/0011c78bf4ee04c7afd4b611ea6dcb80d5829eed))
+
+
+
 ## [4.67.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.0...v4.67.1) (2026-10-11)
 
 
