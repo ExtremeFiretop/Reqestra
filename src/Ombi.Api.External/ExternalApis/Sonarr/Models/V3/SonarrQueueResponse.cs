@@ -24,5 +24,6 @@ namespace Ombi.Api.External.ExternalApis.Sonarr.Models.V3
         public TimeSpan? Timeleft { get; set; }
         public DateTime? EstimatedCompletionTime { get; set; }
         public string DownloadId { get; set; }
+        public string Status { get; set; }
     }
 }

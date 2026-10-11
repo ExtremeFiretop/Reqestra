@@ -27,6 +27,7 @@ namespace Ombi.Core.Tests.Services
         private Mock<ISettingsService<SonarrSettings>> _sonarrSettings;
         private Mock<IRadarrV3Api> _radarrApi;
         private Mock<ISonarrV3Api> _sonarrApi;
+        private Mock<IActiveDownloadEtaEstimator> _activeDownloadEtaEstimator;
         private DownloadStatusService _service;
 
         [SetUp]
@@ -37,6 +38,7 @@ namespace Ombi.Core.Tests.Services
             _sonarrSettings = new Mock<ISettingsService<SonarrSettings>>();
             _radarrApi = new Mock<IRadarrV3Api>();
             _sonarrApi = new Mock<ISonarrV3Api>();
+            _activeDownloadEtaEstimator = new Mock<IActiveDownloadEtaEstimator>();
 
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings { Enabled = false });
             _radarr4KSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new Radarr4KSettings { Enabled = false });
@@ -48,6 +50,7 @@ namespace Ombi.Core.Tests.Services
                 _sonarrSettings.Object,
                 _radarrApi.Object,
                 _sonarrApi.Object,
+                _activeDownloadEtaEstimator.Object,
                 Mock.Of<ILogger<DownloadStatusService>>());
         }
 
@@ -91,6 +94,101 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.DownloadProgress, Is.EqualTo(68));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(11));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
+        }
+
+        [Test]
+        public async Task Active_Movie_Uses_Observed_Eta_Instead_Of_Arr_Queue_Position_Eta()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 5,
+                            Timeleft = TimeSpan.FromMinutes(126),
+                            DownloadId = "animals",
+                            Status = "downloading"
+                        }
+                    }
+                });
+            _activeDownloadEtaEstimator
+                .Setup(x => x.Observe("Radarr", "animals", 5, It.IsAny<DateTime>()))
+                .Returns(TimeSpan.FromMinutes(2));
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(95));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(2));
+            _activeDownloadEtaEstimator.Verify(
+                x => x.Observe("Radarr", "animals", 5, It.IsAny<DateTime>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task Active_Movie_Does_Not_Fall_Back_To_Inflated_Arr_Eta_Before_Rate_Sample_Exists()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 5,
+                            Timeleft = TimeSpan.FromMinutes(126),
+                            DownloadId = "animals",
+                            Status = "downloading"
+                        }
+                    }
+                });
+            _activeDownloadEtaEstimator
+                .Setup(x => x.Observe("Radarr", "animals", 5, It.IsAny<DateTime>()))
+                .Returns((TimeSpan?)null);
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(95));
+            Assert.That(request.DownloadEtaMinutes, Is.Null);
         }
 
         [Test]
@@ -213,6 +311,47 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Downloading, Is.True);
             Assert.That(request.DownloadProgress, Is.EqualTo(60));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(12));
+        }
+
+        [Test]
+        public async Task Active_Tv_Download_Uses_Observed_Eta_Instead_Of_Arr_Queue_Position_Eta()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 9,
+                            Timeleft = TimeSpan.FromMinutes(90),
+                            DownloadId = "episode-3",
+                            Status = "downloading"
+                        }
+                    }
+                });
+            _activeDownloadEtaEstimator
+                .Setup(x => x.Observe("Sonarr", "episode-3", 9, It.IsAny<DateTime>()))
+                .Returns(TimeSpan.FromMinutes(3));
+
+            var request = BuildTvRequest(456, 2, 3);
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(91));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(3));
         }
 
         [Test]

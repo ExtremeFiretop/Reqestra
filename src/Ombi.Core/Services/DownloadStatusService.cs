@@ -24,6 +24,7 @@ namespace Ombi.Core.Services
         private readonly ISettingsService<SonarrSettings> _sonarrSettings;
         private readonly IRadarrV3Api _radarrApi;
         private readonly ISonarrV3Api _sonarrApi;
+        private readonly IActiveDownloadEtaEstimator _activeDownloadEtaEstimator;
         private readonly ILogger<DownloadStatusService> _logger;
 
         public DownloadStatusService(
@@ -32,6 +33,7 @@ namespace Ombi.Core.Services
             ISettingsService<SonarrSettings> sonarrSettings,
             IRadarrV3Api radarrApi,
             ISonarrV3Api sonarrApi,
+            IActiveDownloadEtaEstimator activeDownloadEtaEstimator,
             ILogger<DownloadStatusService> logger)
         {
             _radarrSettings = radarrSettings;
@@ -39,6 +41,7 @@ namespace Ombi.Core.Services
             _sonarrSettings = sonarrSettings;
             _radarrApi = radarrApi;
             _sonarrApi = sonarrApi;
+            _activeDownloadEtaEstimator = activeDownloadEtaEstimator;
             _logger = logger;
         }
 
@@ -90,33 +93,27 @@ namespace Ombi.Core.Services
 
             foreach (var request in requestList)
             {
-                var matches = new List<RadarrQueueRecord>();
+                var metrics = new List<QueueMetrics>();
 
                 if (IsRegularMovieDownloadCandidate(request) &&
                     regularQueue.TryGetValue(request.TheMovieDbId, out var regularMatches))
                 {
-                    matches.AddRange(regularMatches);
+                    metrics.AddRange(regularMatches.Select(x => CreateQueueMetrics("Radarr", x)));
                 }
 
                 if (IsFourKMovieDownloadCandidate(request) &&
                     fourKQueue.TryGetValue(request.TheMovieDbId, out var fourKMatches))
                 {
-                    matches.AddRange(fourKMatches);
+                    metrics.AddRange(fourKMatches.Select(x => CreateQueueMetrics("Radarr 4K", x)));
                 }
 
-                if (matches.Count == 0)
+                if (metrics.Count == 0)
                 {
                     continue;
                 }
 
                 request.Downloading = true;
-                ApplyDownloadMetrics(
-                    matches.Select(x => new QueueMetrics(
-                        x.Size,
-                        x.Sizeleft,
-                        GetRemainingTime(x.Timeleft, x.EstimatedCompletionTime))),
-                    out var progress,
-                    out var etaMinutes);
+                ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
                 request.DownloadProgress = progress;
                 request.DownloadEtaMinutes = etaMinutes;
             }
@@ -209,16 +206,45 @@ namespace Ombi.Core.Services
                         continue;
                     }
 
-                    metrics.Add(new QueueMetrics(
-                        item.Size,
-                        item.Sizeleft,
-                        GetRemainingTime(item.Timeleft, item.EstimatedCompletionTime)));
+                    metrics.Add(CreateQueueMetrics("Sonarr", item));
                 }
 
                 ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
                 request.DownloadProgress = progress;
                 request.DownloadEtaMinutes = etaMinutes;
             }
+        }
+
+        private QueueMetrics CreateQueueMetrics(string source, RadarrQueueRecord item)
+        {
+            var usesObservedEta = IsActivelyDownloading(item.Status) && !string.IsNullOrWhiteSpace(item.DownloadId);
+            return new QueueMetrics(
+                item.Size,
+                item.Sizeleft,
+                GetRemainingTime(
+                    source,
+                    item.DownloadId,
+                    item.Status,
+                    item.Sizeleft,
+                    item.Timeleft,
+                    item.EstimatedCompletionTime),
+                usesObservedEta);
+        }
+
+        private QueueMetrics CreateQueueMetrics(string source, SonarrQueueRecord item)
+        {
+            var usesObservedEta = IsActivelyDownloading(item.Status) && !string.IsNullOrWhiteSpace(item.DownloadId);
+            return new QueueMetrics(
+                item.Size,
+                item.Sizeleft,
+                GetRemainingTime(
+                    source,
+                    item.DownloadId,
+                    item.Status,
+                    item.Sizeleft,
+                    item.Timeleft,
+                    item.EstimatedCompletionTime),
+                usesObservedEta);
         }
 
         private static bool IsMatchingTvQueueItem(
@@ -272,6 +298,12 @@ namespace Ombi.Core.Services
                     (int)Math.Round(rawProgress, MidpointRounding.AwayFromZero)));
             }
 
+            if (metricList.Any(x => x.UsesObservedEta && !x.TimeLeft.HasValue))
+            {
+                etaMinutes = null;
+                return;
+            }
+
             var longestRemaining = metricList
                 .Where(x => x.TimeLeft.HasValue && x.TimeLeft.Value > TimeSpan.Zero)
                 .Select(x => x.TimeLeft.Value)
@@ -283,7 +315,37 @@ namespace Ombi.Core.Services
                 : null;
         }
 
-        private static TimeSpan? GetRemainingTime(TimeSpan? timeLeft, DateTime? estimatedCompletionTime)
+        private TimeSpan? GetRemainingTime(
+            string source,
+            string downloadId,
+            string status,
+            decimal sizeLeft,
+            TimeSpan? timeLeft,
+            DateTime? estimatedCompletionTime)
+        {
+            if (IsActivelyDownloading(status) && !string.IsNullOrWhiteSpace(downloadId))
+            {
+                // Arr's NZBGet integration calculates TimeLeft from physical queue position.
+                // That can wildly overstate ETA when NZBGet priority lets a later item download
+                // ahead of earlier queued work. Derive the active item's ETA from observed
+                // SizeLeft progress instead and do not fall back to the queue-position ETA
+                // until a trustworthy sample exists.
+                return _activeDownloadEtaEstimator.Observe(
+                    source,
+                    downloadId,
+                    sizeLeft,
+                    DateTime.UtcNow);
+            }
+
+            if (!string.IsNullOrWhiteSpace(downloadId))
+            {
+                _activeDownloadEtaEstimator.Forget(source, downloadId);
+            }
+
+            return GetArrRemainingTime(timeLeft, estimatedCompletionTime);
+        }
+
+        private static TimeSpan? GetArrRemainingTime(TimeSpan? timeLeft, DateTime? estimatedCompletionTime)
         {
             if (timeLeft.HasValue && timeLeft.Value > TimeSpan.Zero)
             {
@@ -297,6 +359,11 @@ namespace Ombi.Core.Services
 
             var remaining = estimatedCompletionTime.Value.ToUniversalTime() - DateTime.UtcNow;
             return remaining > TimeSpan.Zero ? remaining : null;
+        }
+
+        private static bool IsActivelyDownloading(string status)
+        {
+            return string.Equals(status, "downloading", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsRegularMovieDownloadCandidate(MovieRequests request)
@@ -397,16 +464,18 @@ namespace Ombi.Core.Services
 
         private sealed class QueueMetrics
         {
-            public QueueMetrics(decimal size, decimal sizeLeft, TimeSpan? timeLeft)
+            public QueueMetrics(decimal size, decimal sizeLeft, TimeSpan? timeLeft, bool usesObservedEta = false)
             {
                 Size = size;
                 SizeLeft = sizeLeft;
                 TimeLeft = timeLeft;
+                UsesObservedEta = usesObservedEta;
             }
 
             public decimal Size { get; }
             public decimal SizeLeft { get; }
             public TimeSpan? TimeLeft { get; }
+            public bool UsesObservedEta { get; }
         }
     }
 }
