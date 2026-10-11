@@ -1,3 +1,12 @@
+# [4.66.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.4...v4.66.0) (2026-10-11)
+
+
+### Features
+
+* **requests:** distinguish queued and active downloads ([ce4eea5](https://github.com/ExtremeFiretop/Reqestra/commit/ce4eea5a8c80c0b2752b9c664ed9bffb7b365c3c))
+
+
+
 ## [4.65.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.3...v4.65.4) (2026-10-11)
 
 
