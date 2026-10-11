@@ -249,6 +249,22 @@
         background: rgba(29, 233, 182, 0.15);
         color: #1DE9B6;
     }
+    &.downloading {
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+    }
+    &.queued {
+        background: rgba(167, 139, 250, 0.15);
+        color: #a78bfa;
+    }
+    &.searching {
+        background: rgba(34, 211, 238, 0.15);
+        color: #22d3ee;
+    }
+    &.completed {
+        background: rgba(45, 212, 191, 0.15);
+        color: #2dd4bf;
+    }
     &.approved {
         background: rgba(255, 215, 64, 0.15);
         color: #ffd740;

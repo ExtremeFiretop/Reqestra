@@ -208,6 +208,10 @@ export interface IEpisodesRequests {
   requested: boolean;
   approved: boolean;
   requestStatus: string;
+  downloading?: boolean;
+  queued?: boolean;
+  searching?: boolean;
+  completed?: boolean;
   denied: boolean;
   selected: boolean; // This is for the UI only
 }

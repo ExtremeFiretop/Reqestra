@@ -202,6 +202,7 @@ namespace Ombi.Core.Services
                 if (matchingQueueItems.Count > 0)
                 {
                     ApplyQueueState(request, matchingQueueItems);
+                    ApplyTvEpisodeQueueStates(request, matchingQueueItems);
 
                     // Sonarr can expose one row per episode for a season pack while every row points
                     // to the same underlying download. Deduplicate by DownloadId before aggregating so
@@ -223,11 +224,6 @@ namespace Ombi.Core.Services
                     request.DownloadEtaMinutes = etaMinutes;
                 }
 
-                if (request.Downloading || request.Queued)
-                {
-                    continue;
-                }
-
                 var series = FindMatchingSonarrSeries(request, sonarrSeries);
                 if (series == null || series.id <= 0)
                 {
@@ -238,6 +234,15 @@ namespace Ombi.Core.Services
                 {
                     sonarrEpisodes = await GetSonarrEpisodes(series.id, settings);
                     episodesBySeriesId[series.id] = sonarrEpisodes;
+                }
+
+                // Episode rows need their own Arr state even while other episodes in this child
+                // request are queued or downloading. Keep the parent precedence unchanged below.
+                ApplyTvEpisodeArrState(request, series, sonarrEpisodes);
+
+                if (request.Downloading || request.Queued)
+                {
+                    continue;
                 }
 
                 ApplyTvArrState(request, series, sonarrEpisodes);
@@ -329,6 +334,66 @@ namespace Ombi.Core.Services
             }
         }
 
+        private static void ApplyTvEpisodeArrState(
+            ChildRequests request,
+            SonarrSeries series,
+            IReadOnlyCollection<Episode> sonarrEpisodes)
+        {
+            if (request?.SeasonRequests == null || series == null ||
+                sonarrEpisodes == null || sonarrEpisodes.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var requestedSeason in request.SeasonRequests.Where(x => x != null))
+            {
+                var requestedEpisodes = requestedSeason.Episodes?
+                    .Where(x => x != null && x.Requested && x.Approved && !x.Available)
+                    .ToList() ?? new List<Ombi.Store.Repository.Requests.EpisodeRequests>();
+                if (requestedEpisodes.Count == 0)
+                {
+                    continue;
+                }
+
+                var targetSeasonNumber = requestedSeason.SeasonNumber;
+                var fingerprintMatch = SonarrEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                    requestedSeason,
+                    sonarrEpisodes);
+                if (fingerprintMatch != null)
+                {
+                    targetSeasonNumber = fingerprintMatch.SonarrSeasonNumber;
+                }
+
+                var seasonEpisodes = sonarrEpisodes
+                    .Where(x => x != null &&
+                                x.seasonNumber == targetSeasonNumber &&
+                                x.episodeNumber > 0)
+                    .ToList();
+
+                foreach (var requestedEpisode in requestedEpisodes)
+                {
+                    var sonarrEpisode = seasonEpisodes.FirstOrDefault(
+                        x => x.episodeNumber == requestedEpisode.EpisodeNumber);
+                    if (sonarrEpisode == null)
+                    {
+                        continue;
+                    }
+
+                    // File presence is useful even when this episode is also in the queue (for
+                    // example an upgrade). Queue state has higher RequestStatus precedence.
+                    requestedEpisode.Completed = sonarrEpisode.hasFile;
+
+                    if (!sonarrEpisode.hasFile &&
+                        !requestedEpisode.Downloading &&
+                        !requestedEpisode.Queued &&
+                        series.monitored &&
+                        sonarrEpisode.monitored)
+                    {
+                        requestedEpisode.Searching = true;
+                    }
+                }
+            }
+        }
         private static void ApplyTvArrState(
             ChildRequests request,
             SonarrSeries series,
@@ -497,6 +562,41 @@ namespace Ombi.Core.Services
             request.Queued = queued;
         }
 
+        private static void ApplyTvEpisodeQueueStates(
+            ChildRequests request,
+            IReadOnlyCollection<SonarrQueueRecord> matches)
+        {
+            if (request?.SeasonRequests == null || matches == null || matches.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var season in request.SeasonRequests.Where(x => x != null))
+            {
+                foreach (var episode in season.Episodes?
+                             .Where(x => x != null && x.Requested && x.Approved && !x.Available)
+                         ?? Enumerable.Empty<Ombi.Store.Repository.Requests.EpisodeRequests>())
+                {
+                    var episodeMatches = matches
+                        .Where(item => IsMatchingTvQueueItem(
+                            item,
+                            season.SeasonNumber,
+                            episode.EpisodeNumber))
+                        .ToList();
+                    if (episodeMatches.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    ApplyQueueState(
+                        episodeMatches.Select(x => x.Status),
+                        out var downloading,
+                        out var queued);
+                    episode.Downloading = downloading;
+                    episode.Queued = queued;
+                }
+            }
+        }
         private static void ApplyQueueState(
             IEnumerable<string> statuses,
             out bool downloading,
@@ -529,6 +629,20 @@ namespace Ombi.Core.Services
                    requestedEpisodes.Any(x => x.SeasonNumber == item.SeasonNumber.Value);
         }
 
+        private static bool IsMatchingTvQueueItem(
+            SonarrQueueRecord item,
+            int seasonNumber,
+            int episodeNumber)
+        {
+            if (item?.Episode != null && item.Episode.episodeNumber > 0)
+            {
+                return item.Episode.seasonNumber == seasonNumber &&
+                       item.Episode.episodeNumber == episodeNumber;
+            }
+
+            return item?.SeasonNumber.HasValue == true &&
+                   item.SeasonNumber.Value == seasonNumber;
+        }
         private static void ResetDownloadStatus(MovieRequests request)
         {
             request.Downloading = false;
@@ -547,6 +661,18 @@ namespace Ombi.Core.Services
             request.Completed = false;
             request.DownloadProgress = null;
             request.DownloadEtaMinutes = null;
+
+            foreach (var episode in request.SeasonRequests?
+                         .Where(x => x?.Episodes != null)
+                         .SelectMany(x => x.Episodes)
+                         .Where(x => x != null)
+                     ?? Enumerable.Empty<Ombi.Store.Repository.Requests.EpisodeRequests>())
+            {
+                episode.Downloading = false;
+                episode.Queued = false;
+                episode.Searching = false;
+                episode.Completed = false;
+            }
         }
 
         private static void ApplyDownloadMetrics(

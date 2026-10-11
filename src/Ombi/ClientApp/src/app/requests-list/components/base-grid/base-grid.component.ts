@@ -33,7 +33,7 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
     public readonly filterOptions = [
         { type: RequestFilterType.All, label: 'Requests.AllRequests', id: 'filterAll' },
         { type: RequestFilterType.Pending, label: 'Requests.PendingRequests', id: 'filterPending' },
-        { type: RequestFilterType.Processing, label: 'Requests.ProcessingRequests', id: 'filterProcessing' },
+        { type: RequestFilterType.Processing, label: 'Requests.InProgress', id: 'filterProcessing' },
         { type: RequestFilterType.Available, label: 'Requests.AvailableRequests', id: 'filterAvailable' },
         { type: RequestFilterType.Denied, label: 'Requests.DeniedRequests', id: 'filterDenied' },
     ];

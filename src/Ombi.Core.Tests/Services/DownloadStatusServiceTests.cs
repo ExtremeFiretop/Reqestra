@@ -438,6 +438,9 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.DownloadProgress, Is.EqualTo(75));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(7));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
+            var episode = request.SeasonRequests[0].Episodes[0];
+            Assert.That(episode.Downloading, Is.True);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.Downloading"));
         }
 
         [Test]
@@ -498,6 +501,10 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(60));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(12));
+            Assert.That(request.SeasonRequests[0].Episodes[0].Downloading, Is.True);
+            Assert.That(request.SeasonRequests[0].Episodes[0].RequestStatus, Is.EqualTo("Common.Downloading"));
+            Assert.That(request.SeasonRequests[0].Episodes[1].Queued, Is.True);
+            Assert.That(request.SeasonRequests[0].Episodes[1].RequestStatus, Is.EqualTo("Common.Queued"));
         }
 
         [Test]
@@ -710,6 +717,9 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Completed, Is.False);
             Assert.That(request.Searching, Is.True);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
+            var episode = request.SeasonRequests[0].Episodes[0];
+            Assert.That(episode.Searching, Is.True);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.Searching"));
         }
 
         [Test]
@@ -758,6 +768,9 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Completed, Is.True);
             Assert.That(request.Searching, Is.False);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Completed"));
+            var episode = request.SeasonRequests[0].Episodes[0];
+            Assert.That(episode.Completed, Is.True);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.Completed"));
         }
 
         [Test]
@@ -866,6 +879,111 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Completed, Is.False);
             Assert.That(request.Searching, Is.False);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
+            var episode = request.SeasonRequests[0].Episodes[0];
+            Assert.That(episode.Searching, Is.False);
+            Assert.That(episode.Completed, Is.False);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
+        }
+
+        [Test]
+        public async Task Mixed_Tv_Request_Keeps_Imported_Episode_Completed_While_Another_Episode_Is_Queued()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 4 },
+                            Size = 100,
+                            Sizeleft = 100,
+                            Timeleft = TimeSpan.FromMinutes(20),
+                            DownloadId = "episode-4",
+                            Status = "queued"
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        monitored = true,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = false }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 73,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = false,
+                        hasFile = true
+                    },
+                    new Episode
+                    {
+                        id = 74,
+                        seasonNumber = 2,
+                        episodeNumber = 4,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+            request.SeasonRequests[0].Episodes.Add(new EpisodeRequests
+            {
+                EpisodeNumber = 4,
+                Requested = true,
+                Approved = true,
+                Available = false
+            });
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Queued, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Queued"));
+            Assert.That(request.SeasonRequests[0].Episodes[0].Completed, Is.True);
+            Assert.That(request.SeasonRequests[0].Episodes[0].RequestStatus, Is.EqualTo("Common.Completed"));
+            Assert.That(request.SeasonRequests[0].Episodes[1].Queued, Is.True);
+            Assert.That(request.SeasonRequests[0].Episodes[1].RequestStatus, Is.EqualTo("Common.Queued"));
+        }
+
+        [Test]
+        public async Task Tv_Status_Refresh_Clears_Stale_Episode_Lifecycle_State()
+        {
+            var request = BuildTvRequest(456, 2, 3);
+            var episode = request.SeasonRequests[0].Episodes[0];
+            episode.Downloading = true;
+            episode.Queued = true;
+            episode.Searching = true;
+            episode.Completed = true;
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(episode.Downloading, Is.False);
+            Assert.That(episode.Queued, Is.False);
+            Assert.That(episode.Searching, Is.False);
+            Assert.That(episode.Completed, Is.False);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
         }
 
         [Test]

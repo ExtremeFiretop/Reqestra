@@ -218,6 +218,7 @@
         "AllRequests": "All Requests",
         "PendingRequests": "Pending Requests",
         "ProcessingRequests": "Processing Requests",
+        "InProgress": "In Progress",
         "AvailableRequests": "Available Requests",
         "DeniedRequests": "Denied Requests",
         "RequestsToDisplay": "Requests to display",

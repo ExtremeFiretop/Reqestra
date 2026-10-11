@@ -47,6 +47,15 @@ describe("TvRequestsPanelComponent profile-aware retry", () => {
         expect(component.getRequestStatusClass({ completed: true } as any)).toBe("completed");
     });
 
+    it("uses lifecycle-aware status classes for episodes", () => {
+        const { component } = createComponent();
+        const request = { approved: true, denied: false } as any;
+
+        expect(component.getEpisodeStatusClass({ downloading: true } as any, request)).toBe("downloading");
+        expect(component.getEpisodeStatusClass({ queued: true } as any, request)).toBe("queued");
+        expect(component.getEpisodeStatusClass({ searching: true } as any, request)).toBe("searching");
+        expect(component.getEpisodeStatusClass({ completed: true } as any, request)).toBe("completed");
+    });
     it("reprocesses an owned available downloading request with the selected profile", async () => {
         const { component, requestService2 } = createComponent();
         const request = {
