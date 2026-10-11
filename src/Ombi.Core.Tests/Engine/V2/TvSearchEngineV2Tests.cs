@@ -216,7 +216,7 @@ namespace Ombi.Core.Tests.Engine.V2
             // The engine caches the results from TheMovieDb, so every call gets the same instances back
             _cachedApiResults = new List<MovieDbSearchResult>
             {
-                new MovieDbSearchResult { Id = TheMovieDbId, Title = "Game of Thrones" }
+                new MovieDbSearchResult { Id = TheMovieDbId, Title = "Game of Thrones", ReleaseDate = "2011-04-17" }
             };
 
             _movieApi = new Mock<IMovieDbApi>();
@@ -333,8 +333,8 @@ namespace Ombi.Core.Tests.Engine.V2
         {
             // Show 1 season 23 and show 12 season 3 both used to build the key "SeasonEpisodes123"
             _cachedApiResults.Clear();
-            _cachedApiResults.Add(new MovieDbSearchResult { Id = 1, Title = "First" });
-            _cachedApiResults.Add(new MovieDbSearchResult { Id = 12, Title = "Second" });
+            _cachedApiResults.Add(new MovieDbSearchResult { Id = 1, Title = "First", ReleaseDate = "2011-04-17" });
+            _cachedApiResults.Add(new MovieDbSearchResult { Id = 12, Title = "Second", ReleaseDate = "2011-04-17" });
             SetupShow(1, 23);
             SetupShow(12, 3);
 
@@ -360,6 +360,29 @@ namespace Ombi.Core.Tests.Engine.V2
             Assert.That(result.Single().SeasonRequests, Is.Empty);
             _movieApi.Verify(x => x.GetSeasonEpisodes(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>(),
                 It.IsAny<string>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Popular_Excludes_Shows_That_Have_Not_Premiered()
+        {
+            _customization.HideAvailableFromDiscover = false;
+            _cachedApiResults.Clear();
+            _cachedApiResults.Add(new MovieDbSearchResult
+            {
+                Id = 100,
+                Title = "Released Show",
+                ReleaseDate = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd")
+            });
+            _cachedApiResults.Add(new MovieDbSearchResult
+            {
+                Id = 200,
+                Title = "Future Show",
+                ReleaseDate = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")
+            });
+
+            var result = (await _engine.Popular(0, 10)).ToList();
+
+            Assert.That(result.Select(x => x.Id), Is.EqualTo(new[] { 100 }));
         }
 
         private void SetupShow(int theMovieDbId, int seasonCount)
