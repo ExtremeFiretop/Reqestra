@@ -1,3 +1,12 @@
+## [4.68.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.1...v4.68.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **discover:** separate released and upcoming media ([ca11ff7](https://github.com/ExtremeFiretop/Reqestra/commit/ca11ff7b34fa6b0ee15aca5086465dcfcba62aeb))
+
+
+
 ## [4.68.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.0...v4.68.1) (2026-10-11)
 
 
