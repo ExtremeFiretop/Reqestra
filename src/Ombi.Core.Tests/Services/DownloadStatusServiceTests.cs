@@ -375,6 +375,66 @@ namespace Ombi.Core.Tests.Services
         }
 
         [Test]
+        public async Task Mixed_Active_And_Queued_Tv_Download_Uses_Queued_Eta_While_Active_Sample_Warms_Up()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 2,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 93,
+                            Timeleft = TimeSpan.FromMinutes(90),
+                            DownloadId = "episode-3",
+                            Status = "downloading"
+                        },
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 4 },
+                            Size = 100,
+                            Sizeleft = 100,
+                            Timeleft = TimeSpan.FromMinutes(42),
+                            DownloadId = "episode-4",
+                            Status = "queued"
+                        }
+                    }
+                });
+            _activeDownloadEtaEstimator
+                .Setup(x => x.Observe("Sonarr", "episode-3", 93, It.IsAny<DateTime>()))
+                .Returns((TimeSpan?)null);
+
+            var request = BuildTvRequest(456, 2, 3);
+            request.SeasonRequests[0].Episodes.Add(new EpisodeRequests
+            {
+                EpisodeNumber = 4,
+                Requested = true,
+                Approved = true,
+                Available = false
+            });
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.DownloadProgress, Is.EqualTo(4));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(42));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
+        }
+
+        [Test]
         public async Task Active_Tv_Download_Uses_Observed_Eta_Instead_Of_Arr_Queue_Position_Eta()
         {
             _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings

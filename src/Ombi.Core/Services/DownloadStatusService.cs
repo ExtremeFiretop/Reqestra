@@ -219,7 +219,6 @@ namespace Ombi.Core.Services
 
         private QueueMetrics CreateQueueMetrics(string source, RadarrQueueRecord item)
         {
-            var usesObservedEta = IsActivelyDownloading(item.Status) && !string.IsNullOrWhiteSpace(item.DownloadId);
             return new QueueMetrics(
                 item.Size,
                 item.Sizeleft,
@@ -229,13 +228,11 @@ namespace Ombi.Core.Services
                     item.Status,
                     item.Sizeleft,
                     item.Timeleft,
-                    item.EstimatedCompletionTime),
-                usesObservedEta);
+                    item.EstimatedCompletionTime));
         }
 
         private QueueMetrics CreateQueueMetrics(string source, SonarrQueueRecord item)
         {
-            var usesObservedEta = IsActivelyDownloading(item.Status) && !string.IsNullOrWhiteSpace(item.DownloadId);
             return new QueueMetrics(
                 item.Size,
                 item.Sizeleft,
@@ -245,8 +242,7 @@ namespace Ombi.Core.Services
                     item.Status,
                     item.Sizeleft,
                     item.Timeleft,
-                    item.EstimatedCompletionTime),
-                usesObservedEta);
+                    item.EstimatedCompletionTime));
         }
 
         private static void ApplyQueueState(
@@ -353,12 +349,10 @@ namespace Ombi.Core.Services
                     (int)Math.Round(rawProgress, MidpointRounding.AwayFromZero)));
             }
 
-            if (metricList.Any(x => x.UsesObservedEta && !x.TimeLeft.HasValue))
-            {
-                etaMinutes = null;
-                return;
-            }
-
+            // An active download may not have an observed ETA until a second fresh sample is
+            // available. Do not let that missing sample suppress trustworthy cumulative ETAs from
+            // queued items in the same request. If no item has a usable ETA yet, the calculation
+            // below naturally leaves etaMinutes null.
             var longestRemaining = metricList
                 .Where(x => x.TimeLeft.HasValue && x.TimeLeft.Value > TimeSpan.Zero)
                 .Select(x => x.TimeLeft.Value)
@@ -524,18 +518,16 @@ namespace Ombi.Core.Services
 
         private sealed class QueueMetrics
         {
-            public QueueMetrics(decimal size, decimal sizeLeft, TimeSpan? timeLeft, bool usesObservedEta = false)
+            public QueueMetrics(decimal size, decimal sizeLeft, TimeSpan? timeLeft)
             {
                 Size = size;
                 SizeLeft = sizeLeft;
                 TimeLeft = timeLeft;
-                UsesObservedEta = usesObservedEta;
             }
 
             public decimal Size { get; }
             public decimal SizeLeft { get; }
             public TimeSpan? TimeLeft { get; }
-            public bool UsesObservedEta { get; }
         }
     }
 }
