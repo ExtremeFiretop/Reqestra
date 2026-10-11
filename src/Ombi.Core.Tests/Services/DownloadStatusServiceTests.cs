@@ -28,6 +28,7 @@ namespace Ombi.Core.Tests.Services
         private Mock<IRadarrV3Api> _radarrApi;
         private Mock<ISonarrV3Api> _sonarrApi;
         private Mock<IActiveDownloadEtaEstimator> _activeDownloadEtaEstimator;
+        private IPostDownloadTransitionTracker _postDownloadTransitionTracker;
         private DownloadStatusService _service;
 
         [SetUp]
@@ -39,6 +40,7 @@ namespace Ombi.Core.Tests.Services
             _radarrApi = new Mock<IRadarrV3Api>();
             _sonarrApi = new Mock<ISonarrV3Api>();
             _activeDownloadEtaEstimator = new Mock<IActiveDownloadEtaEstimator>();
+            _postDownloadTransitionTracker = new PostDownloadTransitionTracker();
 
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings { Enabled = false });
             _radarr4KSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new Radarr4KSettings { Enabled = false });
@@ -51,6 +53,7 @@ namespace Ombi.Core.Tests.Services
                 _radarrApi.Object,
                 _sonarrApi.Object,
                 _activeDownloadEtaEstimator.Object,
+                _postDownloadTransitionTracker,
                 Mock.Of<ILogger<DownloadStatusService>>());
         }
 
@@ -299,6 +302,129 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Completed, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(100));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
+        [Test]
+        public async Task Nzbget_PostProcessing_Paused_Row_After_Completed_Transfer_Is_Marked_Importing()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+
+            var queueCall = 0;
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() =>
+                {
+                    queueCall++;
+                    return new RadarrQueueResponse
+                    {
+                        TotalRecords = 1,
+                        Records = new List<RadarrQueueRecord>
+                        {
+                            new RadarrQueueRecord
+                            {
+                                Movie = new MovieResponse { tmdbId = 123 },
+                                Size = 100,
+                                Sizeleft = queueCall == 1 ? 0.4m : 5m,
+                                DownloadId = "nzbget-unpack",
+                                Status = queueCall == 1 ? "downloading" : "paused",
+                                TrackedDownloadState = "downloading",
+                                TrackedDownloadStatus = "ok"
+                            }
+                        }
+                    };
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(100));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Importing, Is.True);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
+        [Test]
+        public async Task Manually_Paused_Movie_Without_Completed_Transfer_Evidence_Is_Not_Importing()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 40,
+                            DownloadId = "manual-pause",
+                            Status = "paused",
+                            TrackedDownloadState = "downloading",
+                            TrackedDownloadStatus = "ok"
+                        }
+                    }
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Searching, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
         }
 
         [Test]

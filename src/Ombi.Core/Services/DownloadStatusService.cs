@@ -28,6 +28,7 @@ namespace Ombi.Core.Services
         private readonly IRadarrV3Api _radarrApi;
         private readonly ISonarrV3Api _sonarrApi;
         private readonly IActiveDownloadEtaEstimator _activeDownloadEtaEstimator;
+        private readonly IPostDownloadTransitionTracker _postDownloadTransitionTracker;
         private readonly ILogger<DownloadStatusService> _logger;
 
         public DownloadStatusService(
@@ -37,6 +38,7 @@ namespace Ombi.Core.Services
             IRadarrV3Api radarrApi,
             ISonarrV3Api sonarrApi,
             IActiveDownloadEtaEstimator activeDownloadEtaEstimator,
+            IPostDownloadTransitionTracker postDownloadTransitionTracker,
             ILogger<DownloadStatusService> logger)
         {
             _radarrSettings = radarrSettings;
@@ -45,6 +47,7 @@ namespace Ombi.Core.Services
             _radarrApi = radarrApi;
             _sonarrApi = sonarrApi;
             _activeDownloadEtaEstimator = activeDownloadEtaEstimator;
+            _postDownloadTransitionTracker = postDownloadTransitionTracker;
             _logger = logger;
         }
 
@@ -532,21 +535,21 @@ namespace Ombi.Core.Services
                     item.EstimatedCompletionTime));
         }
 
-        private static void ApplyQueueState(
+        private void ApplyQueueState(
             MovieRequests request,
             IEnumerable<RadarrQueueRecord> regularMatches,
             IEnumerable<RadarrQueueRecord> fourKMatches)
         {
-            var matches = (regularMatches ?? Enumerable.Empty<RadarrQueueRecord>())
-                .Concat(fourKMatches ?? Enumerable.Empty<RadarrQueueRecord>())
+            var states = (regularMatches ?? Enumerable.Empty<RadarrQueueRecord>())
                 .Where(x => x != null)
+                .Select(x => GetQueueState("Radarr", x))
+                .Concat((fourKMatches ?? Enumerable.Empty<RadarrQueueRecord>())
+                    .Where(x => x != null)
+                    .Select(x => GetQueueState("Radarr 4K", x)))
                 .ToList();
 
             ApplyQueueState(
-                matches.Select(x => (
-                    x.Status,
-                    x.TrackedDownloadState,
-                    x.TrackedDownloadStatus)),
+                states,
                 out var downloading,
                 out var importing,
                 out var queued);
@@ -555,17 +558,14 @@ namespace Ombi.Core.Services
             request.Queued = queued;
         }
 
-        private static void ApplyQueueState(
+        private void ApplyQueueState(
             ChildRequests request,
             IEnumerable<SonarrQueueRecord> matches)
         {
             ApplyQueueState(
                 (matches ?? Enumerable.Empty<SonarrQueueRecord>())
                     .Where(x => x != null)
-                    .Select(x => (
-                        x.Status,
-                        x.TrackedDownloadState,
-                        x.TrackedDownloadStatus)),
+                    .Select(x => GetQueueState("Sonarr", x)),
                 out var downloading,
                 out var importing,
                 out var queued);
@@ -574,7 +574,7 @@ namespace Ombi.Core.Services
             request.Queued = queued;
         }
 
-        private static void ApplyTvEpisodeQueueStates(
+        private void ApplyTvEpisodeQueueStates(
             ChildRequests request,
             IReadOnlyCollection<SonarrQueueRecord> matches)
         {
@@ -601,10 +601,7 @@ namespace Ombi.Core.Services
                     }
 
                     ApplyQueueState(
-                        episodeMatches.Select(x => (
-                            x.Status,
-                            x.TrackedDownloadState,
-                            x.TrackedDownloadStatus)),
+                        episodeMatches.Select(x => GetQueueState("Sonarr", x)),
                         out var downloading,
                         out var importing,
                         out var queued);
@@ -615,18 +612,57 @@ namespace Ombi.Core.Services
             }
         }
 
+        private (string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing) GetQueueState(
+            string source,
+            RadarrQueueRecord item)
+        {
+            return (
+                item.Status,
+                item.TrackedDownloadState,
+                item.TrackedDownloadStatus,
+                _postDownloadTransitionTracker.ObserveAndIsPostDownloadProcessing(
+                    source,
+                    item.DownloadId,
+                    item.Status,
+                    item.TrackedDownloadState,
+                    item.TrackedDownloadStatus,
+                    item.Size,
+                    item.Sizeleft,
+                    DateTime.UtcNow));
+        }
+
+        private (string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing) GetQueueState(
+            string source,
+            SonarrQueueRecord item)
+        {
+            return (
+                item.Status,
+                item.TrackedDownloadState,
+                item.TrackedDownloadStatus,
+                _postDownloadTransitionTracker.ObserveAndIsPostDownloadProcessing(
+                    source,
+                    item.DownloadId,
+                    item.Status,
+                    item.TrackedDownloadState,
+                    item.TrackedDownloadStatus,
+                    item.Size,
+                    item.Sizeleft,
+                    DateTime.UtcNow));
+        }
+
         private static void ApplyQueueState(
-            IEnumerable<(string Status, string TrackedDownloadState, string TrackedDownloadStatus)> states,
+            IEnumerable<(string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing)> states,
             out bool downloading,
             out bool importing,
             out bool queued)
         {
             var stateList = states?.ToList()
-                ?? new List<(string Status, string TrackedDownloadState, string TrackedDownloadStatus)>();
+                ?? new List<(string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing)>();
 
             downloading = stateList.Any(x => IsActivelyDownloading(x.Status));
             importing = !downloading && stateList.Any(x =>
-                IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus));
+                IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus) ||
+                x.PostDownloadProcessing);
             queued = !downloading && !importing && stateList.Any(x => IsQueued(x.Status));
 
             // Preserve the pre-status behavior when an older Arr response does not provide any

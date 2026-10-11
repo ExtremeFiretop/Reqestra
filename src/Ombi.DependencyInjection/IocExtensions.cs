@@ -259,6 +259,7 @@ namespace Ombi.DependencyInjection
             services.AddTransient<IRecentlyRequestedService, RecentlyRequestedService>();
             services.AddTransient<IQualityProfileSelectionService, QualityProfileSelectionService>();
             services.AddSingleton<IActiveDownloadEtaEstimator, ActiveDownloadEtaEstimator>();
+            services.AddSingleton<IPostDownloadTransitionTracker, PostDownloadTransitionTracker>();
             services.AddTransient<IDownloadStatusService, DownloadStatusService>();
             services.AddTransient<IPlexService, PlexService>();
             services.AddScoped<IPlexWatchlistStatusStore, PlexWatchlistStatusStore>();
