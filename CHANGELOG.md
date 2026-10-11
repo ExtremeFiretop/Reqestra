@@ -1,3 +1,12 @@
+## [4.68.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.4...v4.68.5) (2026-10-11)
+
+
+### Bug Fixes
+
+* **discover:** center carousel cards consistently ([a8593be](https://github.com/ExtremeFiretop/Reqestra/commit/a8593be82464613295348f326757eae4ebf366b6))
+
+
+
 ## [4.68.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.3...v4.68.4) (2026-10-11)
 
 
