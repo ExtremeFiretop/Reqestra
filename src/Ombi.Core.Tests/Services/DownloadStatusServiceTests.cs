@@ -305,7 +305,7 @@ namespace Ombi.Core.Tests.Services
         }
 
         [Test]
-        public async Task Nzbget_PostProcessing_Paused_Row_After_Completed_Transfer_Is_Marked_Importing()
+        public async Task Nzbget_PostProcessing_Paused_Row_After_Recent_Active_Transfer_Is_Marked_Importing()
         {
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
             {
@@ -329,7 +329,7 @@ namespace Ombi.Core.Tests.Services
                             {
                                 Movie = new MovieResponse { tmdbId = 123 },
                                 Size = 100,
-                                Sizeleft = queueCall == 1 ? 0.4m : 5m,
+                                Sizeleft = queueCall == 1 ? 28m : queueCall == 2 ? 5m : 12m,
                                 DownloadId = "nzbget-unpack",
                                 Status = queueCall == 1 ? "downloading" : "paused",
                                 TrackedDownloadState = "downloading",
@@ -360,7 +360,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
-            Assert.That(request.DownloadProgress, Is.EqualTo(100));
+            Assert.That(request.DownloadProgress, Is.EqualTo(72));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
 
             await _service.PopulateMovieDownloadStatus(new[] { request });
@@ -368,6 +368,14 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.Downloading, Is.False);
             Assert.That(request.Importing, Is.True);
             Assert.That(request.Queued, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+
+            // Once the active-to-paused handoff is recognized, keep treating the same download id
+            // as post-processing even if Arr's remaining-size value moves during NZBGet unpacking.
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Importing, Is.True);
             Assert.That(request.Searching, Is.False);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
         }
@@ -418,6 +426,71 @@ namespace Ombi.Core.Tests.Services
                 Approved = true,
                 Available = false
             };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Searching, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
+        }
+
+        [Test]
+        public async Task Manually_Paused_Movie_After_MidDownload_Transfer_Is_Not_Importing()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+
+            var queueCall = 0;
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() =>
+                {
+                    queueCall++;
+                    return new RadarrQueueResponse
+                    {
+                        TotalRecords = 1,
+                        Records = new List<RadarrQueueRecord>
+                        {
+                            new RadarrQueueRecord
+                            {
+                                Movie = new MovieResponse { tmdbId = 123 },
+                                Size = 100,
+                                Sizeleft = 40,
+                                DownloadId = "manual-pause-after-active",
+                                Status = queueCall == 1 ? "downloading" : "paused",
+                                TrackedDownloadState = "downloading",
+                                TrackedDownloadStatus = "ok"
+                            }
+                        }
+                    };
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+            Assert.That(request.Downloading, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(60));
 
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
