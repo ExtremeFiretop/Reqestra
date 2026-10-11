@@ -1,7 +1,9 @@
 <form [formGroup]='searchForm' class="search-wrapper" [class.expanded]="isExpanded"
     (submit)="$event.preventDefault()">
-    <button type="button" id="nav-search-btn" class="search-icon-btn" (click)="toggleSearch()" aria-label="Search">
-        <i class="fas fa-search"></i>
+    <button type="button" id="nav-search-btn" class="search-icon-btn" (click)="toggleSearch()"
+        [attr.aria-label]="'NavigationBar.Search' | translate">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <span class="search-label">{{ 'NavigationBar.Search' | translate }}</span>
     </button>
     <input
         #searchInput
