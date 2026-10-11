@@ -1,3 +1,12 @@
+## [4.68.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.2...v4.68.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** preserve active download ETA between samples ([71c0fa2](https://github.com/ExtremeFiretop/Reqestra/commit/71c0fa2740fb901b607c6b25a50466d583155430))
+
+
+
 ## [4.68.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.1...v4.68.2) (2026-10-11)
 
 
