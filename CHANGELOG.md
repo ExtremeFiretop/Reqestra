@@ -1,3 +1,12 @@
+# [4.68.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.3...v4.68.0) (2026-10-11)
+
+
+### Features
+
+* **requests:** add importing lifecycle state ([ff91076](https://github.com/ExtremeFiretop/Reqestra/commit/ff910767003f9566750dd82e187ec40699bb0820))
+
+
+
 ## [4.67.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.2...v4.67.3) (2026-10-11)
 
 
