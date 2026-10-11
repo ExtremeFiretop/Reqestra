@@ -131,8 +131,8 @@ namespace Ombi.Core.Services
                 {
                     ApplyQueueState(request, regularMatches, fourKMatches);
                     ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
-                    request.DownloadProgress = progress;
-                    request.DownloadEtaMinutes = etaMinutes;
+                    request.DownloadProgress = request.Importing ? 100 : progress;
+                    request.DownloadEtaMinutes = request.Importing ? null : etaMinutes;
                 }
 
                 if (request.Downloading || request.Importing || request.Queued)
@@ -223,8 +223,8 @@ namespace Ombi.Core.Services
                     }
 
                     ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
-                    request.DownloadProgress = progress;
-                    request.DownloadEtaMinutes = etaMinutes;
+                    request.DownloadProgress = request.Importing ? 100 : progress;
+                    request.DownloadEtaMinutes = request.Importing ? null : etaMinutes;
                 }
 
                 var series = FindMatchingSonarrSeries(request, sonarrSeries);
@@ -659,7 +659,10 @@ namespace Ombi.Core.Services
             var stateList = states?.ToList()
                 ?? new List<(string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing)>();
 
-            downloading = stateList.Any(x => IsActivelyDownloading(x.Status));
+            downloading = stateList.Any(x =>
+                IsActivelyDownloading(x.Status) &&
+                !IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus) &&
+                !x.PostDownloadProcessing);
             importing = !downloading && stateList.Any(x =>
                 IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus) ||
                 x.PostDownloadProcessing);
