@@ -1,3 +1,17 @@
+# [4.67.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.66.0...v4.67.0) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** preserve ETA for mixed download queues ([17d29e4](https://github.com/ExtremeFiretop/Reqestra/commit/17d29e4cdf5fa2041383c41f5d6d51880ec520ec))
+
+
+### Features
+
+* **requests:** add searching and completed states ([af4ea9a](https://github.com/ExtremeFiretop/Reqestra/commit/af4ea9aa3d5cc88f3e926b821f2b5b240758119e))
+
+
+
 # [4.66.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.4...v4.66.0) (2026-10-11)
 
 
