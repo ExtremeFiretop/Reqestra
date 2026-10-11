@@ -45,6 +45,12 @@ describe('MovieInformationPanelComponent', () => {
       expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Queued');
     });
 
+    it('should return Importing while Radarr is importing a completed download', () => {
+      const { comp } = createComponent();
+      comp.request = { importing: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Importing');
+    });
+
     it('should return Completed after Radarr imports the file but before media-server sync', () => {
       const { comp } = createComponent();
       comp.request = { completed: true } as any;

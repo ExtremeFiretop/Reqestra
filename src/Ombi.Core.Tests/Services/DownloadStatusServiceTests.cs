@@ -242,6 +242,173 @@ namespace Ombi.Core.Tests.Services
                 Times.Never);
         }
 
+        [TestCase("importPending")]
+        [TestCase("importing")]
+        public async Task Movie_PostDownload_Arr_State_Is_Marked_Importing(string trackedDownloadState)
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 0,
+                            DownloadId = "movie-import",
+                            Status = "completed",
+                            TrackedDownloadState = trackedDownloadState,
+                            TrackedDownloadStatus = "ok"
+                        }
+                    }
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Importing, Is.True);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.DownloadProgress, Is.EqualTo(100));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
+        [Test]
+        public async Task Arr_Import_Error_Does_Not_Falsely_Mark_Movie_Importing()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 0,
+                            DownloadId = "movie-import-error",
+                            Status = "completed",
+                            TrackedDownloadState = "importPending",
+                            TrackedDownloadStatus = "error"
+                        }
+                    }
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = false,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
+        }
+
+        [Test]
+        public async Task Arr_Imported_State_Falls_Through_To_Completed_Movie_State()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 0,
+                            DownloadId = "movie-imported",
+                            Status = "completed",
+                            TrackedDownloadState = "imported",
+                            TrackedDownloadStatus = "ok"
+                        }
+                    }
+                });
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = true
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Completed, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Completed"));
+        }
+
         [Test]
         public async Task Monitored_Movie_Without_File_Is_Marked_Searching()
         {
@@ -659,6 +826,82 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Queued"));
         }
 
+        [TestCase("importPending")]
+        [TestCase("importing")]
+        public async Task Tv_PostDownload_Arr_State_Is_Marked_Importing_For_Request_And_Episode(
+            string trackedDownloadState)
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 0,
+                            DownloadId = "episode-import",
+                            Status = "completed",
+                            TrackedDownloadState = trackedDownloadState,
+                            TrackedDownloadStatus = "ok"
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        monitored = true,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = false }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 73,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Importing, Is.True);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+
+            var episode = request.SeasonRequests[0].Episodes[0];
+            Assert.That(episode.Downloading, Is.False);
+            Assert.That(episode.Importing, Is.True);
+            Assert.That(episode.Queued, Is.False);
+            Assert.That(episode.Searching, Is.False);
+            Assert.That(episode.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
         [Test]
         public async Task Individually_Monitored_Tv_Episode_Without_File_Is_Marked_Searching()
         {
@@ -973,6 +1216,7 @@ namespace Ombi.Core.Tests.Services
             var request = BuildTvRequest(456, 2, 3);
             var episode = request.SeasonRequests[0].Episodes[0];
             episode.Downloading = true;
+            episode.Importing = true;
             episode.Queued = true;
             episode.Searching = true;
             episode.Completed = true;
@@ -980,6 +1224,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(episode.Downloading, Is.False);
+            Assert.That(episode.Importing, Is.False);
             Assert.That(episode.Queued, Is.False);
             Assert.That(episode.Searching, Is.False);
             Assert.That(episode.Completed, Is.False);

@@ -146,6 +146,11 @@ describe('MoviesGridComponent', () => {
       expect(comp.getStatusClass({ requestStatus: 'Common.Queued' })).toBe('status-queued');
     });
 
+    it('should return status-importing for Arr imports', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Importing' })).toBe('status-importing');
+    });
+
     it('should return lifecycle classes for searching and completed requests', () => {
       const { comp } = createComponent();
       expect(comp.getStatusClass({ requestStatus: 'Common.Searching' })).toBe('status-searching');

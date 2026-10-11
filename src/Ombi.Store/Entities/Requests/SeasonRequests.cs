@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Globalization;
@@ -39,6 +39,8 @@ namespace Ombi.Store.Repository.Requests
         [NotMapped]
         public bool Queued { get; set; }
         [NotMapped]
+        public bool Importing { get; set; }
+        [NotMapped]
         public bool Searching { get; set; }
         [NotMapped]
         public bool Completed { get; set; }
@@ -57,6 +59,11 @@ namespace Ombi.Store.Repository.Requests
                 if (Downloading)
                 {
                     return "Common.Downloading";
+                }
+
+                if (Importing)
+                {
+                    return "Common.Importing";
                 }
 
                 if (Queued)

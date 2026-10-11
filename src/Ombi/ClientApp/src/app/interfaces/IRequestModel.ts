@@ -19,6 +19,7 @@ export interface IMovieRequests extends IFullBaseRequest {
   requestStatus: string;
   downloading: boolean;
   queued?: boolean;
+  importing?: boolean;
   searching?: boolean;
   completed?: boolean;
   downloadProgress?: number | null;
@@ -166,6 +167,7 @@ export interface IChildRequests extends IBaseRequest {
   requestStatus: string;
   downloading: boolean;
   queued?: boolean;
+  importing?: boolean;
   searching?: boolean;
   completed?: boolean;
   downloadProgress?: number | null;
@@ -210,6 +212,7 @@ export interface IEpisodesRequests {
   requestStatus: string;
   downloading?: boolean;
   queued?: boolean;
+  importing?: boolean;
   searching?: boolean;
   completed?: boolean;
   denied: boolean;

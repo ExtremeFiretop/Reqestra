@@ -59,6 +59,9 @@
     &.downloading {
         background: #38bdf8;
     }
+    &.importing {
+        background: #fbbf24;
+    }
     &.queued {
         background: #a78bfa;
     }
@@ -252,6 +255,10 @@
     &.downloading {
         background: rgba(56, 189, 248, 0.15);
         color: #38bdf8;
+    }
+    &.importing {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
     }
     &.queued {
         background: rgba(167, 139, 250, 0.15);

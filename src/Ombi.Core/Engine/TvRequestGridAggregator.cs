@@ -44,6 +44,11 @@ namespace Ombi.Core.Engine
                 return 900;
             }
 
+            if (request.Importing)
+            {
+                return 850;
+            }
+
             if (request.Queued)
             {
                 return 800;
@@ -55,7 +60,7 @@ namespace Ombi.Core.Engine
             }
 
             if (request.Approved && !request.Available && !(request.Denied ?? false) &&
-                !request.Searching && !request.Completed)
+                !request.Importing && !request.Searching && !request.Completed)
             {
                 return 600;
             }

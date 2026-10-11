@@ -132,7 +132,7 @@ namespace Ombi.Core.Services
                     request.DownloadEtaMinutes = etaMinutes;
                 }
 
-                if (request.Downloading || request.Queued)
+                if (request.Downloading || request.Importing || request.Queued)
                 {
                     continue;
                 }
@@ -237,10 +237,11 @@ namespace Ombi.Core.Services
                 }
 
                 // Episode rows need their own Arr state even while other episodes in this child
-                // request are queued or downloading. Keep the parent precedence unchanged below.
+                // request are queued, downloading, or importing. Keep the parent precedence
+                // unchanged below.
                 ApplyTvEpisodeArrState(request, series, sonarrEpisodes);
 
-                if (request.Downloading || request.Queued)
+                if (request.Downloading || request.Importing || request.Queued)
                 {
                     continue;
                 }
@@ -385,6 +386,7 @@ namespace Ombi.Core.Services
 
                     if (!sonarrEpisode.hasFile &&
                         !requestedEpisode.Downloading &&
+                        !requestedEpisode.Importing &&
                         !requestedEpisode.Queued &&
                         series.monitored &&
                         sonarrEpisode.monitored)
@@ -541,10 +543,15 @@ namespace Ombi.Core.Services
                 .ToList();
 
             ApplyQueueState(
-                matches.Select(x => x.Status),
+                matches.Select(x => (
+                    x.Status,
+                    x.TrackedDownloadState,
+                    x.TrackedDownloadStatus)),
                 out var downloading,
+                out var importing,
                 out var queued);
             request.Downloading = downloading;
+            request.Importing = importing;
             request.Queued = queued;
         }
 
@@ -555,10 +562,15 @@ namespace Ombi.Core.Services
             ApplyQueueState(
                 (matches ?? Enumerable.Empty<SonarrQueueRecord>())
                     .Where(x => x != null)
-                    .Select(x => x.Status),
+                    .Select(x => (
+                        x.Status,
+                        x.TrackedDownloadState,
+                        x.TrackedDownloadStatus)),
                 out var downloading,
+                out var importing,
                 out var queued);
             request.Downloading = downloading;
+            request.Importing = importing;
             request.Queued = queued;
         }
 
@@ -589,28 +601,41 @@ namespace Ombi.Core.Services
                     }
 
                     ApplyQueueState(
-                        episodeMatches.Select(x => x.Status),
+                        episodeMatches.Select(x => (
+                            x.Status,
+                            x.TrackedDownloadState,
+                            x.TrackedDownloadStatus)),
                         out var downloading,
+                        out var importing,
                         out var queued);
                     episode.Downloading = downloading;
+                    episode.Importing = importing;
                     episode.Queued = queued;
                 }
             }
         }
+
         private static void ApplyQueueState(
-            IEnumerable<string> statuses,
+            IEnumerable<(string Status, string TrackedDownloadState, string TrackedDownloadStatus)> states,
             out bool downloading,
+            out bool importing,
             out bool queued)
         {
-            var statusList = statuses?.ToList() ?? new List<string>();
-            downloading = statusList.Any(IsActivelyDownloading);
-            queued = !downloading && statusList.Any(IsQueued);
+            var stateList = states?.ToList()
+                ?? new List<(string Status, string TrackedDownloadState, string TrackedDownloadStatus)>();
 
-            // Preserve the pre-status behavior when an older Arr response does not provide a
-            // queue status at all. Once Arr provides explicit state, only a real downloading
-            // item should be shown as Downloading and only a real queued item as Queued.
-            if (!downloading && !queued && statusList.Count > 0 &&
-                statusList.All(string.IsNullOrWhiteSpace))
+            downloading = stateList.Any(x => IsActivelyDownloading(x.Status));
+            importing = !downloading && stateList.Any(x =>
+                IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus));
+            queued = !downloading && !importing && stateList.Any(x => IsQueued(x.Status));
+
+            // Preserve the pre-status behavior when an older Arr response does not provide any
+            // queue or tracked-download state. Once Arr provides explicit state, only a real
+            // downloading, importing, or queued item should receive one of those lifecycle states.
+            if (!downloading && !importing && !queued && stateList.Count > 0 &&
+                stateList.All(x =>
+                    string.IsNullOrWhiteSpace(x.Status) &&
+                    string.IsNullOrWhiteSpace(x.TrackedDownloadState)))
             {
                 downloading = true;
             }
@@ -646,6 +671,7 @@ namespace Ombi.Core.Services
         private static void ResetDownloadStatus(MovieRequests request)
         {
             request.Downloading = false;
+            request.Importing = false;
             request.Queued = false;
             request.Searching = false;
             request.Completed = false;
@@ -656,6 +682,7 @@ namespace Ombi.Core.Services
         private static void ResetDownloadStatus(ChildRequests request)
         {
             request.Downloading = false;
+            request.Importing = false;
             request.Queued = false;
             request.Searching = false;
             request.Completed = false;
@@ -669,6 +696,7 @@ namespace Ombi.Core.Services
                      ?? Enumerable.Empty<Ombi.Store.Repository.Requests.EpisodeRequests>())
             {
                 episode.Downloading = false;
+                episode.Importing = false;
                 episode.Queued = false;
                 episode.Searching = false;
                 episode.Completed = false;
@@ -763,6 +791,17 @@ namespace Ombi.Core.Services
         private static bool IsActivelyDownloading(string status)
         {
             return string.Equals(status, "downloading", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsImporting(string trackedDownloadState, string trackedDownloadStatus)
+        {
+            if (string.Equals(trackedDownloadStatus, "error", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return string.Equals(trackedDownloadState, "importPending", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(trackedDownloadState, "importing", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsQueued(string status)

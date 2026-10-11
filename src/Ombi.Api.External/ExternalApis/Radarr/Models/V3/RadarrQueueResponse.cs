@@ -22,5 +22,7 @@ namespace Ombi.Api.External.ExternalApis.Radarr.Models.V3
         public DateTime? EstimatedCompletionTime { get; set; }
         public string DownloadId { get; set; }
         public string Status { get; set; }
+        public string TrackedDownloadStatus { get; set; }
+        public string TrackedDownloadState { get; set; }
     }
 }

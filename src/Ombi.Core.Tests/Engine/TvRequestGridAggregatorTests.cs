@@ -42,6 +42,23 @@ namespace Ombi.Core.Tests.Engine
         }
 
         [Test]
+        public void Importing_Request_Wins_Over_Queued_And_Searching_States()
+        {
+            var parent = new TvRequests { Id = 100, Title = "Example" };
+            var queued = BuildChild(1, parent, new DateTime(2026, 1, 1), approved: true);
+            queued.Queued = true;
+            var importing = BuildChild(2, parent, new DateTime(2026, 1, 2), approved: true);
+            importing.Importing = true;
+            var searching = BuildChild(3, parent, new DateTime(2026, 1, 3), approved: true);
+            searching.Searching = true;
+
+            var result = TvRequestGridAggregator.CollapseToSeriesCards(new[] { queued, searching, importing }).Single();
+
+            Assert.That(result.Id, Is.EqualTo(importing.Id));
+            Assert.That(result.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
+        [Test]
         public void Same_Title_Different_Parents_Are_Not_Collapsed_Together()
         {
             var firstParent = new TvRequests { Id = 101, Title = "The Office" };

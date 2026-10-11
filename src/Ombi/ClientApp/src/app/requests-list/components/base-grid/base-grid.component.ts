@@ -132,6 +132,7 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
         const status = (item.requestStatus || '').toLowerCase();
         if (status.includes('available')) return 'status-available';
         if (status.includes('downloading')) return 'status-downloading';
+        if (status.includes('importing')) return 'status-importing';
         if (status.includes('queued')) return 'status-queued';
         if (status.includes('completed')) return 'status-completed';
         if (status.includes('searching')) return 'status-searching';
