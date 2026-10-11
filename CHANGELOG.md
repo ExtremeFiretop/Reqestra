@@ -1,3 +1,12 @@
+## [4.65.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.2...v4.65.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **notifications:** persist and honor mobile enabled setting ([2f4a81d](https://github.com/ExtremeFiretop/Reqestra/commit/2f4a81dbef0fe81cf5ebc22dcd226f97593b95fe))
+
+
+
 ## [4.65.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.1...v4.65.2) (2026-10-10)
 
 
