@@ -1,3 +1,12 @@
+## [4.68.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.0...v4.68.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** detect NZBGet post-processing imports ([6100ff2](https://github.com/ExtremeFiretop/Reqestra/commit/6100ff2628cbf07eca5f367c4e02ce42ec53f58f))
+
+
+
 # [4.68.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.3...v4.68.0) (2026-10-11)
 
 
