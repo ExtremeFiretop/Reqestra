@@ -94,15 +94,17 @@ namespace Ombi.Core.Services
             foreach (var request in requestList)
             {
                 var metrics = new List<QueueMetrics>();
+                List<RadarrQueueRecord> regularMatches = null;
+                List<RadarrQueueRecord> fourKMatches = null;
 
                 if (IsRegularMovieDownloadCandidate(request) &&
-                    regularQueue.TryGetValue(request.TheMovieDbId, out var regularMatches))
+                    regularQueue.TryGetValue(request.TheMovieDbId, out regularMatches))
                 {
                     metrics.AddRange(regularMatches.Select(x => CreateQueueMetrics("Radarr", x)));
                 }
 
                 if (IsFourKMovieDownloadCandidate(request) &&
-                    fourKQueue.TryGetValue(request.TheMovieDbId, out var fourKMatches))
+                    fourKQueue.TryGetValue(request.TheMovieDbId, out fourKMatches))
                 {
                     metrics.AddRange(fourKMatches.Select(x => CreateQueueMetrics("Radarr 4K", x)));
                 }
@@ -112,7 +114,7 @@ namespace Ombi.Core.Services
                     continue;
                 }
 
-                request.Downloading = true;
+                ApplyQueueState(request, regularMatches, fourKMatches);
                 ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
                 request.DownloadProgress = progress;
                 request.DownloadEtaMinutes = etaMinutes;
@@ -192,7 +194,7 @@ namespace Ombi.Core.Services
                     continue;
                 }
 
-                request.Downloading = true;
+                ApplyQueueState(request, matchingQueueItems);
 
                 // Sonarr can expose one row per episode for a season pack while every row points
                 // to the same underlying download. Deduplicate by DownloadId before aggregating so
@@ -247,6 +249,57 @@ namespace Ombi.Core.Services
                 usesObservedEta);
         }
 
+        private static void ApplyQueueState(
+            MovieRequests request,
+            IEnumerable<RadarrQueueRecord> regularMatches,
+            IEnumerable<RadarrQueueRecord> fourKMatches)
+        {
+            var matches = (regularMatches ?? Enumerable.Empty<RadarrQueueRecord>())
+                .Concat(fourKMatches ?? Enumerable.Empty<RadarrQueueRecord>())
+                .Where(x => x != null)
+                .ToList();
+
+            ApplyQueueState(
+                matches.Select(x => x.Status),
+                out var downloading,
+                out var queued);
+            request.Downloading = downloading;
+            request.Queued = queued;
+        }
+
+        private static void ApplyQueueState(
+            ChildRequests request,
+            IEnumerable<SonarrQueueRecord> matches)
+        {
+            ApplyQueueState(
+                (matches ?? Enumerable.Empty<SonarrQueueRecord>())
+                    .Where(x => x != null)
+                    .Select(x => x.Status),
+                out var downloading,
+                out var queued);
+            request.Downloading = downloading;
+            request.Queued = queued;
+        }
+
+        private static void ApplyQueueState(
+            IEnumerable<string> statuses,
+            out bool downloading,
+            out bool queued)
+        {
+            var statusList = statuses?.ToList() ?? new List<string>();
+            downloading = statusList.Any(IsActivelyDownloading);
+            queued = !downloading && statusList.Any(IsQueued);
+
+            // Preserve the pre-status behavior when an older Arr response does not provide a
+            // queue status at all. Once Arr provides explicit state, only a real downloading
+            // item should be shown as Downloading and only a real queued item as Queued.
+            if (!downloading && !queued && statusList.Count > 0 &&
+                statusList.All(string.IsNullOrWhiteSpace))
+            {
+                downloading = true;
+            }
+        }
+
         private static bool IsMatchingTvQueueItem(
             SonarrQueueRecord item,
             HashSet<(int SeasonNumber, int EpisodeNumber)> requestedEpisodes)
@@ -263,6 +316,7 @@ namespace Ombi.Core.Services
         private static void ResetDownloadStatus(MovieRequests request)
         {
             request.Downloading = false;
+            request.Queued = false;
             request.DownloadProgress = null;
             request.DownloadEtaMinutes = null;
         }
@@ -270,6 +324,7 @@ namespace Ombi.Core.Services
         private static void ResetDownloadStatus(ChildRequests request)
         {
             request.Downloading = false;
+            request.Queued = false;
             request.DownloadProgress = null;
             request.DownloadEtaMinutes = null;
         }
@@ -364,6 +419,11 @@ namespace Ombi.Core.Services
         private static bool IsActivelyDownloading(string status)
         {
             return string.Equals(status, "downloading", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsQueued(string status)
+        {
+            return string.Equals(status, "queued", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsRegularMovieDownloadCandidate(MovieRequests request)

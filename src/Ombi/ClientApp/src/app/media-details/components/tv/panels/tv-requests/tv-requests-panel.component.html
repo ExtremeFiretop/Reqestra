@@ -19,8 +19,8 @@
 				<div class="request-meta">
 					<span class="request-status-text">
 						{{ request.requestStatus | translate }}
-						<ng-container *ngIf="request.downloading && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
-						<ng-container *ngIf="request.downloading && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
+						<ng-container *ngIf="(request.downloading || request.queued) && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
+						<ng-container *ngIf="(request.downloading || request.queued) && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
 					</span>
 					<span class="request-by">
 						{{

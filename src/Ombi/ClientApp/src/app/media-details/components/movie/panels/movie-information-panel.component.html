@@ -54,8 +54,8 @@
 			<div class="info-label">{{ 'MediaDetails.RequestStatus' | translate }}</div>
 			<div class="info-value">
 				{{ getStatus(movie) | translate }}
-				<ng-container *ngIf="request?.downloading && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
-				<ng-container *ngIf="request?.downloading && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
+				<ng-container *ngIf="(request?.downloading || request?.queued) && request.downloadProgress != null"> · {{ request.downloadProgress }}%</ng-container>
+				<ng-container *ngIf="(request?.downloading || request?.queued) && request.downloadEtaMinutes > 0"> · ~{{ request.downloadEtaMinutes }} min</ng-container>
 			</div>
 		</div>
 

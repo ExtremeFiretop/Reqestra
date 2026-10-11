@@ -23,6 +23,8 @@ namespace Ombi.Store.Entities.Requests
         [NotMapped]
         public bool Downloading { get; set; }
         [NotMapped]
+        public bool Queued { get; set; }
+        [NotMapped]
         public int? DownloadProgress { get; set; }
         [NotMapped]
         public int? DownloadEtaMinutes { get; set; }
@@ -83,6 +85,11 @@ namespace Ombi.Store.Entities.Requests
                 if (Downloading)
                 {
                     return "Common.Downloading";
+                }
+
+                if (Queued)
+                {
+                    return "Common.Queued";
                 }
 
                 if (Available)

@@ -59,6 +59,9 @@
     &.downloading {
         background: #38bdf8;
     }
+    &.queued {
+        background: #a78bfa;
+    }
     &.approved {
         background: #ffd740;
     }

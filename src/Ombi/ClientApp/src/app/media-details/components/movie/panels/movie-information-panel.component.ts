@@ -64,6 +64,10 @@ export class MovieInformationPanelComponent implements OnInit {
         return "Common.Downloading";
       }
 
+      if (this.request?.queued) {
+        return "Common.Queued";
+      }
+
       if (!movie.available && movie.requested) {
         if (movie.denied) {
           return "Common.RequestDenied";

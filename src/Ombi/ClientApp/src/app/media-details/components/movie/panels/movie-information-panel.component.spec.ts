@@ -39,6 +39,12 @@ describe('MovieInformationPanelComponent', () => {
       expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Downloading');
     });
 
+    it('should return Queued when the request is waiting in the Radarr queue', () => {
+      const { comp } = createComponent();
+      comp.request = { queued: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Queued');
+    });
+
     it('should return RequestDenied for denied movie', () => {
       const { comp } = createComponent();
       expect(comp.getStatus({ available: false, requested: true, denied: true } as any)).toBe('Common.RequestDenied');

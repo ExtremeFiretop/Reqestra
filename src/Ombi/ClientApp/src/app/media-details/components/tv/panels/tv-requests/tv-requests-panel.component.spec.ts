@@ -36,6 +36,11 @@ function createComponent() {
 }
 
 describe("TvRequestsPanelComponent profile-aware retry", () => {
+    it("uses a queued status class for queued requests", () => {
+        const { component } = createComponent();
+        expect(component.getRequestStatusClass({ queued: true } as any)).toBe("queued");
+    });
+
     it("reprocesses an owned available downloading request with the selected profile", async () => {
         const { component, requestService2 } = createComponent();
         const request = {

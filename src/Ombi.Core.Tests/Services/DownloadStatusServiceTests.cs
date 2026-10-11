@@ -91,6 +91,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(68));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(11));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
@@ -138,6 +139,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(95));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(2));
             _activeDownloadEtaEstimator.Verify(
@@ -187,8 +189,57 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(95));
             Assert.That(request.DownloadEtaMinutes, Is.Null);
+        }
+
+        [Test]
+        public async Task Queued_Movie_Is_Marked_Queued_And_Keeps_Cumulative_Arr_Eta()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse
+                {
+                    TotalRecords = 1,
+                    Records = new List<RadarrQueueRecord>
+                    {
+                        new RadarrQueueRecord
+                        {
+                            Movie = new MovieResponse { tmdbId = 123 },
+                            Size = 100,
+                            Sizeleft = 88,
+                            Timeleft = TimeSpan.FromMinutes(126),
+                            DownloadId = "queued-movie",
+                            Status = "queued"
+                        }
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(12));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(126));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Queued"));
+            _activeDownloadEtaEstimator.Verify(
+                x => x.Observe(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<DateTime>()),
+                Times.Never);
         }
 
         [Test]
@@ -210,6 +261,7 @@ namespace Ombi.Core.Tests.Services
                 RequestedDate = DateTime.UtcNow,
                 Approved = true,
                 Available = false,
+                Queued = true,
                 DownloadProgress = 50,
                 DownloadEtaMinutes = 5
             };
@@ -217,6 +269,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.Null);
             Assert.That(request.DownloadEtaMinutes, Is.Null);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
@@ -255,6 +308,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(75));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(7));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
@@ -283,7 +337,8 @@ namespace Ombi.Core.Tests.Services
                             Size = 100,
                             Sizeleft = 20,
                             Timeleft = TimeSpan.FromMinutes(5),
-                            DownloadId = "episode-3"
+                            DownloadId = "episode-3",
+                            Status = "downloading"
                         },
                         new SonarrQueueRecord
                         {
@@ -292,10 +347,15 @@ namespace Ombi.Core.Tests.Services
                             Size = 200,
                             Sizeleft = 100,
                             Timeleft = TimeSpan.FromMinutes(12),
-                            DownloadId = "episode-4"
+                            DownloadId = "episode-4",
+                            Status = "queued"
                         }
                     }
                 });
+
+            _activeDownloadEtaEstimator
+                .Setup(x => x.Observe("Sonarr", "episode-3", 20, It.IsAny<DateTime>()))
+                .Returns(TimeSpan.FromMinutes(5));
 
             var request = BuildTvRequest(456, 2, 3);
             request.SeasonRequests[0].Episodes.Add(new EpisodeRequests
@@ -309,6 +369,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(60));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(12));
         }
@@ -350,8 +411,59 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.True);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(91));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task Queued_Tv_Download_Is_Marked_Queued_And_Keeps_Cumulative_Arr_Eta()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse
+                {
+                    TotalRecords = 2,
+                    Records = new List<SonarrQueueRecord>
+                    {
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 111 },
+                            Episode = new Episode { seasonNumber = 1, episodeNumber = 1 },
+                            Size = 100,
+                            Sizeleft = 25,
+                            Timeleft = TimeSpan.FromMinutes(5),
+                            DownloadId = "other-active-series",
+                            Status = "downloading"
+                        },
+                        new SonarrQueueRecord
+                        {
+                            Series = new SonarrSeries { tmdbId = 456 },
+                            Episode = new Episode { seasonNumber = 2, episodeNumber = 3 },
+                            Size = 100,
+                            Sizeleft = 88,
+                            Timeleft = TimeSpan.FromMinutes(42),
+                            DownloadId = "queued-episode",
+                            Status = "queued"
+                        }
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.True);
+            Assert.That(request.DownloadProgress, Is.EqualTo(12));
+            Assert.That(request.DownloadEtaMinutes, Is.EqualTo(42));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Queued"));
         }
 
         [Test]
@@ -386,6 +498,7 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateTvDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.False);
             Assert.That(request.DownloadProgress, Is.Null);
             Assert.That(request.DownloadEtaMinutes, Is.Null);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));

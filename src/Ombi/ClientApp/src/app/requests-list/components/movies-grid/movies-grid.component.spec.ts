@@ -141,6 +141,11 @@ describe('MoviesGridComponent', () => {
       expect(comp.getStatusClass({ requestStatus: 'Common.Downloading' })).toBe('status-downloading');
     });
 
+    it('should return status-queued for queued downloads', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Queued' })).toBe('status-queued');
+    });
+
     it('should return status-denied for denied requests', () => {
       const { comp } = createComponent();
       expect(comp.getStatusClass({ requestStatus: 'Common.Denied' })).toBe('status-denied');

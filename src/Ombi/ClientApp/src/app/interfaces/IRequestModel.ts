@@ -18,6 +18,7 @@ export interface IMovieRequests extends IFullBaseRequest {
   showSubscribe: boolean;
   requestStatus: string;
   downloading: boolean;
+  queued?: boolean;
   downloadProgress?: number | null;
   downloadEtaMinutes?: number | null;
   has4KRequest: boolean;
@@ -162,6 +163,7 @@ export interface IChildRequests extends IBaseRequest {
   showSubscribe: boolean;
   requestStatus: string;
   downloading: boolean;
+  queued?: boolean;
   downloadProgress?: number | null;
   downloadEtaMinutes?: number | null;
 }
