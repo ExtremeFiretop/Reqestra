@@ -1,5 +1,12 @@
 @use "./styles/variables.scss" as *;
 
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 // Filter Bar
 .filter-bar {
   display: flex;
@@ -8,12 +15,16 @@
   gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .filter-chips {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chip {
@@ -47,6 +58,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 // Toolbar control pills (select all / user filter / sort / page size)
@@ -64,7 +77,15 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  max-width: 100%;
+  box-sizing: border-box;
   transition: all 0.2s ease;
+
+  .pill-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .pill-icon {
     font-size: 0.72rem;
@@ -104,6 +125,8 @@
 // Joined pill pair (sort field + direction)
 .pill-group {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
 
   .control-pill.grouped {
     &:first-child {
@@ -196,6 +219,8 @@
 // Card Grid
 .card-grid {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   animation: fade-up 0.3s ease;
@@ -424,6 +449,9 @@
 // Compact Table View
 .compact-table-wrapper {
   overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   background: #111;
   border: 1px solid #1a1a1a;
   border-radius: 12px;
@@ -555,16 +583,34 @@
   .filter-bar {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .filter-chips {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
     flex-wrap: nowrap;
     scrollbar-width: none;
   }
 
+  .filter-actions {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .compact-table-wrapper {
+    width: 100%;
   }
 }

@@ -1,9 +1,12 @@
 @use "./styles/variables.scss" as *;
 
 .requests-page {
+  width: 100%;
   max-width: 1400px;
+  min-width: 0;
   margin: 0 auto;
   padding: 0 24px 48px;
+  box-sizing: border-box;
 }
 
 // Page Header
@@ -40,6 +43,8 @@
   border-radius: 12px;
   margin-bottom: 24px;
   width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .tab-item {
@@ -84,6 +89,8 @@
 
 // Tab Content
 .tab-content {
+  min-width: 0;
+  max-width: 100%;
   animation: fade-in 0.25s ease;
 }
 
@@ -108,6 +115,7 @@
 @media (max-width: 768px) {
   .requests-page {
     padding: 0 16px 32px;
+    min-width: 0;
   }
 
   .page-header {
@@ -120,6 +128,9 @@
 
   .tab-bar {
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .tab-item {
