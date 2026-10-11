@@ -37,30 +37,32 @@ namespace Ombi.Core.Services
                     return null;
                 }
 
-                // Preserve the older sample while no progress is observed. This avoids replacing
-                // a useful baseline when the same queue item is evaluated more than once in one
-                // request and prevents a paused/stalled item from manufacturing a transfer rate.
+                // Preserve the older progress sample while no progress is observed. This avoids
+                // manufacturing a new transfer rate from a duplicate queue observation while still
+                // allowing the UI to retain the last ETA that was derived from real byte progress.
                 if (sizeLeft == previous.SizeLeft)
                 {
-                    return null;
+                    return previous.EstimatedTimeRemaining;
                 }
-
-                _samples[key] = current;
 
                 var downloaded = previous.SizeLeft - sizeLeft;
                 var unitsPerSecond = downloaded / (decimal)elapsed.TotalSeconds;
                 if (unitsPerSecond <= 0)
                 {
+                    _samples[key] = current;
                     return null;
                 }
 
                 var secondsRemaining = sizeLeft / unitsPerSecond;
                 if (secondsRemaining <= 0 || secondsRemaining > (decimal)TimeSpan.MaxValue.TotalSeconds)
                 {
+                    _samples[key] = current;
                     return null;
                 }
 
-                return TimeSpan.FromSeconds((double)secondsRemaining);
+                var estimatedTimeRemaining = TimeSpan.FromSeconds((double)secondsRemaining);
+                _samples[key] = new DownloadSample(sizeLeft, observedAtUtc, estimatedTimeRemaining);
+                return estimatedTimeRemaining;
             }
         }
 
@@ -101,14 +103,19 @@ namespace Ombi.Core.Services
 
         private sealed class DownloadSample
         {
-            public DownloadSample(decimal sizeLeft, DateTime observedAtUtc)
+            public DownloadSample(
+                decimal sizeLeft,
+                DateTime observedAtUtc,
+                TimeSpan? estimatedTimeRemaining = null)
             {
                 SizeLeft = sizeLeft;
                 ObservedAtUtc = observedAtUtc;
+                EstimatedTimeRemaining = estimatedTimeRemaining;
             }
 
             public decimal SizeLeft { get; }
             public DateTime ObservedAtUtc { get; }
+            public TimeSpan? EstimatedTimeRemaining { get; }
         }
     }
 }
