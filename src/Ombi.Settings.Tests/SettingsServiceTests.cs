@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
@@ -5,6 +6,7 @@ using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
 using Ombi.Helpers;
 using Ombi.Settings.Settings;
+using Ombi.Settings.Settings.Models.Notifications;
 using Ombi.Store.Entities;
 using Ombi.Store.Repository;
 
@@ -103,6 +105,47 @@ namespace Ombi.Settings.Tests
             // Assert
             Assert.That(result, Is.Not.Null, "Should return default instance when no record exists");
             Assert.That(result, Is.InstanceOf<TheMovieDbSettings>());
+        }
+
+        [Test]
+        public async Task MobileNotificationSettings_Enabled_RoundTripsThroughSettingsService()
+        {
+            // Arrange
+            GlobalSettings storedSettings = null;
+            var repo = new Mock<ISettingsRepository>();
+            var cache = new Mock<ICacheService>();
+
+            cache.Setup(x => x.GetOrAddAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Func<Task<MobileNotificationSettings>>>(),
+                    It.IsAny<DateTimeOffset>()))
+                .Returns<string, Func<Task<MobileNotificationSettings>>, DateTimeOffset>(
+                    async (key, factory, expiration) => await factory());
+
+            repo.Setup(x => x.GetAsync("MobileNotificationSettings"))
+                .Returns(() => Task.FromResult(storedSettings));
+
+            repo.Setup(x => x.InsertAsync(It.IsAny<GlobalSettings>()))
+                .ReturnsAsync((GlobalSettings settings) =>
+                {
+                    storedSettings = settings;
+                    return settings;
+                });
+
+            var service = new SettingsService<MobileNotificationSettings>(repo.Object, cache.Object);
+
+            // Act
+            var saved = await service.SaveSettingsAsync(new MobileNotificationSettings { Enabled = true });
+            var reloaded = await service.GetSettingsAsync();
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(saved, Is.True);
+                Assert.That(storedSettings, Is.Not.Null);
+                Assert.That(storedSettings.Content, Does.Contain("\"Enabled\":true"));
+                Assert.That(reloaded.Enabled, Is.True);
+            });
         }
     }
 }

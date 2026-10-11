@@ -2,6 +2,6 @@
 {
     public class MobileNotificationSettings : Settings
     {
-        
+        public bool Enabled { get; set; }
     }
 }
