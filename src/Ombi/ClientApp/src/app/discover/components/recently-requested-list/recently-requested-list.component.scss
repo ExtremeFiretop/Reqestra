@@ -31,6 +31,12 @@
     justify-content: center;
 }
 
+// Match the 200px Discover card footprint at every viewport size without
+// changing the shared DetailedCardComponent for other consumers.
+:host ::ng-deep ombi-detailed-card .detailed-card {
+    width: 200px;
+}
+
 .loading-container {
     display: flex;
     gap: 12px;
@@ -39,17 +45,5 @@
 
 .loading-container .col-2 {
     flex: 0 0 auto;
-    width: 180px;
-}
-
-@media (max-width: 768px) {
-    .loading-container .col-2 {
-        width: 140px;
-    }
-}
-
-@media (max-width: 480px) {
-    .loading-container .col-2 {
-        width: 120px;
-    }
+    width: 200px;
 }
