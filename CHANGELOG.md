@@ -1,3 +1,12 @@
+## [4.67.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.2...v4.67.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **requests:** aggregate TV grid status by series ([3e2c63b](https://github.com/ExtremeFiretop/Reqestra/commit/3e2c63b00adcf1241bdcf59f558a43868cdf112b))
+
+
+
 ## [4.67.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.1...v4.67.2) (2026-10-11)
 
 
