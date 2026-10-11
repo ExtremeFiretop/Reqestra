@@ -45,6 +45,18 @@ describe('MovieInformationPanelComponent', () => {
       expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Queued');
     });
 
+    it('should return Completed after Radarr imports the file but before media-server sync', () => {
+      const { comp } = createComponent();
+      comp.request = { completed: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Completed');
+    });
+
+    it('should return Searching when Radarr has a monitored request without a download', () => {
+      const { comp } = createComponent();
+      comp.request = { searching: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Searching');
+    });
+
     it('should return RequestDenied for denied movie', () => {
       const { comp } = createComponent();
       expect(comp.getStatus({ available: false, requested: true, denied: true } as any)).toBe('Common.RequestDenied');

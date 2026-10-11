@@ -29,6 +29,8 @@
       "ProcessingRequest": "Processing Request",
       "Downloading": "Downloading",
       "Queued": "Queued",
+      "Searching": "Searching",
+      "Completed": "Completed",
       "ProcessingRequest4K": "Processing Request 4K",
       "PendingApproval": "Pending Approval",
       "PendingApproval4K": "Pending Approval 4K",

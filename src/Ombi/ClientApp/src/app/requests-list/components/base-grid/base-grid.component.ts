@@ -133,6 +133,8 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
         if (status.includes('available')) return 'status-available';
         if (status.includes('downloading')) return 'status-downloading';
         if (status.includes('queued')) return 'status-queued';
+        if (status.includes('completed')) return 'status-completed';
+        if (status.includes('searching')) return 'status-searching';
         if (status.includes('pending') || status.includes('notyetrequest')) return 'status-pending';
         if (status.includes('processing') || status.includes('approved')) return 'status-processing';
         if (status.includes('denied')) return 'status-denied';

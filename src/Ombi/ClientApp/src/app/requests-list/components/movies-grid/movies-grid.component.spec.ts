@@ -146,6 +146,12 @@ describe('MoviesGridComponent', () => {
       expect(comp.getStatusClass({ requestStatus: 'Common.Queued' })).toBe('status-queued');
     });
 
+    it('should return lifecycle classes for searching and completed requests', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Searching' })).toBe('status-searching');
+      expect(comp.getStatusClass({ requestStatus: 'Common.Completed' })).toBe('status-completed');
+    });
+
     it('should return status-denied for denied requests', () => {
       const { comp } = createComponent();
       expect(comp.getStatusClass({ requestStatus: 'Common.Denied' })).toBe('status-denied');

@@ -25,6 +25,10 @@ namespace Ombi.Store.Entities.Requests
         [NotMapped]
         public bool Queued { get; set; }
         [NotMapped]
+        public bool Searching { get; set; }
+        [NotMapped]
+        public bool Completed { get; set; }
+        [NotMapped]
         public int? DownloadProgress { get; set; }
         [NotMapped]
         public int? DownloadEtaMinutes { get; set; }
@@ -100,6 +104,16 @@ namespace Ombi.Store.Entities.Requests
                 if (Denied ?? false)
                 {
                     return "Common.Denied";
+                }
+
+                if (Completed)
+                {
+                    return "Common.Completed";
+                }
+
+                if (Searching)
+                {
+                    return "Common.Searching";
                 }
 
                 if (Approved & !Available)

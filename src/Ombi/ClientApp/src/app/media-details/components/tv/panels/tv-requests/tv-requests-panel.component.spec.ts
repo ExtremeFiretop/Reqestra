@@ -41,6 +41,12 @@ describe("TvRequestsPanelComponent profile-aware retry", () => {
         expect(component.getRequestStatusClass({ queued: true } as any)).toBe("queued");
     });
 
+    it("uses searching and completed status classes for Arr lifecycle states", () => {
+        const { component } = createComponent();
+        expect(component.getRequestStatusClass({ searching: true } as any)).toBe("searching");
+        expect(component.getRequestStatusClass({ completed: true } as any)).toBe("completed");
+    });
+
     it("reprocesses an owned available downloading request with the selected profile", async () => {
         const { component, requestService2 } = createComponent();
         const request = {

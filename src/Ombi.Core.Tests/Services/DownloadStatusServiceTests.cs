@@ -243,6 +243,128 @@ namespace Ombi.Core.Tests.Services
         }
 
         [Test]
+        public async Task Monitored_Movie_Without_File_Is_Marked_Searching()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse());
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = true,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.Searching, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
+        }
+
+        [Test]
+        public async Task Imported_Movie_Waits_As_Completed_Until_Media_Server_Availability()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse());
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = false,
+                        hasFile = true
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.True);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Completed"));
+
+            request.Available = true;
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Available"));
+        }
+
+        [Test]
+        public async Task Unmonitored_Movie_Without_File_Remains_Processing()
+        {
+            _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 7878
+            });
+            _radarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RadarrQueueResponse());
+            _radarrApi.Setup(x => x.GetMovies("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<MovieResponse>
+                {
+                    new MovieResponse
+                    {
+                        tmdbId = 123,
+                        monitored = false,
+                        hasFile = false
+                    }
+                });
+
+            var request = new MovieRequests
+            {
+                TheMovieDbId = 123,
+                RequestedDate = DateTime.UtcNow,
+                Approved = true,
+                Available = false
+            };
+
+            await _service.PopulateMovieDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
+        }
+
+        [Test]
         public async Task Movie_Queue_Failure_Falls_Back_To_Processing_Status()
         {
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
@@ -262,6 +384,8 @@ namespace Ombi.Core.Tests.Services
                 Approved = true,
                 Available = false,
                 Queued = true,
+                Searching = true,
+                Completed = true,
                 DownloadProgress = 50,
                 DownloadEtaMinutes = 5
             };
@@ -270,6 +394,8 @@ namespace Ombi.Core.Tests.Services
 
             Assert.That(request.Downloading, Is.False);
             Assert.That(request.Queued, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.Completed, Is.False);
             Assert.That(request.DownloadProgress, Is.Null);
             Assert.That(request.DownloadEtaMinutes, Is.Null);
             Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
@@ -524,6 +650,222 @@ namespace Ombi.Core.Tests.Services
             Assert.That(request.DownloadProgress, Is.EqualTo(12));
             Assert.That(request.DownloadEtaMinutes, Is.EqualTo(42));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Queued"));
+        }
+
+        [Test]
+        public async Task Individually_Monitored_Tv_Episode_Without_File_Is_Marked_Searching()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse());
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        tvdbId = 654,
+                        monitored = true,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = false }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 73,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = true,
+                        hasFile = false
+                    },
+                    new Episode
+                    {
+                        id = 74,
+                        seasonNumber = 2,
+                        episodeNumber = 4,
+                        monitored = false,
+                        hasFile = false
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+            request.ParentRequest.TvDbId = 654;
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Downloading, Is.False);
+            Assert.That(request.Queued, Is.False);
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.Searching, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
+        }
+
+        [Test]
+        public async Task Imported_Tv_Episode_Waits_As_Completed_Until_Media_Server_Availability()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse());
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        monitored = false,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = false }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 73,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = false,
+                        hasFile = true
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.True);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Completed"));
+        }
+
+        [Test]
+        public async Task Monitored_Season_Keeps_Future_Releases_In_Searching_Scope()
+        {
+            var requestedAt = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse());
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        monitored = true,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = true }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 71,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = true,
+                        hasFile = true,
+                        airDateUtc = requestedAt.AddDays(-7)
+                    },
+                    new Episode
+                    {
+                        id = 72,
+                        seasonNumber = 2,
+                        episodeNumber = 4,
+                        monitored = true,
+                        hasFile = false,
+                        airDateUtc = requestedAt.AddDays(7)
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+            request.RequestedDate = requestedAt;
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.Searching, Is.True);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Searching"));
+        }
+
+        [Test]
+        public async Task Unmonitored_Missing_Tv_Episode_Remains_Processing()
+        {
+            _sonarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new SonarrSettings
+            {
+                Enabled = true,
+                ApiKey = "key",
+                Ip = "localhost",
+                Port = 8989
+            });
+            _sonarrApi.Setup(x => x.GetQueue("key", It.IsAny<string>(), 1, 1000, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SonarrQueueResponse());
+            _sonarrApi.Setup(x => x.GetSeries("key", It.IsAny<string>()))
+                .ReturnsAsync(new List<SonarrSeries>
+                {
+                    new SonarrSeries
+                    {
+                        id = 7,
+                        tmdbId = 456,
+                        monitored = true,
+                        seasons = new[]
+                        {
+                            new Season { seasonNumber = 2, monitored = false }
+                        }
+                    }
+                });
+            _sonarrApi.Setup(x => x.GetEpisodes(7, "key", It.IsAny<string>()))
+                .ReturnsAsync(new List<Episode>
+                {
+                    new Episode
+                    {
+                        id = 73,
+                        seasonNumber = 2,
+                        episodeNumber = 3,
+                        monitored = false,
+                        hasFile = false
+                    }
+                });
+
+            var request = BuildTvRequest(456, 2, 3);
+
+            await _service.PopulateTvDownloadStatus(new[] { request });
+
+            Assert.That(request.Completed, Is.False);
+            Assert.That(request.Searching, Is.False);
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.ProcessingRequest"));
         }
 
         [Test]

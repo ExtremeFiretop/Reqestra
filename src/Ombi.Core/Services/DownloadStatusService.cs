@@ -5,9 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Ombi.Api.External.ExternalApis.Radarr;
+using Ombi.Api.External.ExternalApis.Radarr.Models;
 using Ombi.Api.External.ExternalApis.Radarr.Models.V3;
 using Ombi.Api.External.ExternalApis.Sonarr;
+using Ombi.Api.External.ExternalApis.Sonarr.Models;
 using Ombi.Api.External.ExternalApis.Sonarr.Models.V3;
+using Ombi.Core.Senders;
 using Ombi.Core.Settings;
 using Ombi.Settings.Settings.Models.External;
 using Ombi.Store.Entities.Requests;
@@ -66,11 +69,17 @@ namespace Ombi.Core.Services
             }
 
             var regularQueue = new Dictionary<int, List<RadarrQueueRecord>>();
+            var regularMovies = new Dictionary<int, MovieResponse>();
             if (regularCandidates.Count > 0)
             {
                 try
                 {
-                    regularQueue = await GetRadarrQueueByTmdbId(await _radarrSettings.GetSettingsAsync(), "Radarr");
+                    var settings = await _radarrSettings.GetSettingsAsync();
+                    var queueTask = GetRadarrQueueByTmdbId(settings, "Radarr");
+                    var moviesTask = GetRadarrMoviesByTmdbId(settings, "Radarr");
+                    await Task.WhenAll(queueTask, moviesTask);
+                    regularQueue = await queueTask;
+                    regularMovies = await moviesTask;
                 }
                 catch (Exception ex)
                 {
@@ -79,11 +88,17 @@ namespace Ombi.Core.Services
             }
 
             var fourKQueue = new Dictionary<int, List<RadarrQueueRecord>>();
+            var fourKMovies = new Dictionary<int, MovieResponse>();
             if (fourKCandidates.Count > 0)
             {
                 try
                 {
-                    fourKQueue = await GetRadarrQueueByTmdbId(await _radarr4KSettings.GetSettingsAsync(), "Radarr 4K");
+                    var settings = await _radarr4KSettings.GetSettingsAsync();
+                    var queueTask = GetRadarrQueueByTmdbId(settings, "Radarr 4K");
+                    var moviesTask = GetRadarrMoviesByTmdbId(settings, "Radarr 4K");
+                    await Task.WhenAll(queueTask, moviesTask);
+                    fourKQueue = await queueTask;
+                    fourKMovies = await moviesTask;
                 }
                 catch (Exception ex)
                 {
@@ -109,15 +124,20 @@ namespace Ombi.Core.Services
                     metrics.AddRange(fourKMatches.Select(x => CreateQueueMetrics("Radarr 4K", x)));
                 }
 
-                if (metrics.Count == 0)
+                if (metrics.Count > 0)
+                {
+                    ApplyQueueState(request, regularMatches, fourKMatches);
+                    ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
+                    request.DownloadProgress = progress;
+                    request.DownloadEtaMinutes = etaMinutes;
+                }
+
+                if (request.Downloading || request.Queued)
                 {
                     continue;
                 }
 
-                ApplyQueueState(request, regularMatches, fourKMatches);
-                ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
-                request.DownloadProgress = progress;
-                request.DownloadEtaMinutes = etaMinutes;
+                ApplyMovieArrState(request, regularMovies, fourKMovies);
             }
         }
 
@@ -153,67 +173,267 @@ namespace Ombi.Core.Services
                 return;
             }
 
-            var queue = await GetSonarrQueue(settings);
-            if (queue.Count == 0)
-            {
-                return;
-            }
+            var queueTask = GetSonarrQueue(settings);
+            var seriesTask = GetSonarrSeries(settings);
+            await Task.WhenAll(queueTask, seriesTask);
+
+            var queue = await queueTask;
+            var sonarrSeries = await seriesTask;
 
             var queueByTmdbId = queue
                 .Where(x => (x.Series?.tmdbId ?? 0) > 0)
                 .GroupBy(x => x.Series.tmdbId)
                 .ToDictionary(x => x.Key, x => x.ToList());
 
+            var episodesBySeriesId = new Dictionary<int, List<Episode>>();
             foreach (var request in candidates)
             {
-                var tmdbId = request.ParentRequest.ExternalProviderId;
-                if (!queueByTmdbId.TryGetValue(tmdbId, out var seriesQueue))
-                {
-                    continue;
-                }
-
-                var requestedEpisodes = request.SeasonRequests?
-                    .Where(x => x != null)
-                    .SelectMany(season => season.Episodes?
-                        .Where(episode => episode != null && episode.Requested && episode.Approved && !episode.Available)
-                        .Select(episode => (SeasonNumber: season.SeasonNumber, EpisodeNumber: episode.EpisodeNumber))
-                        ?? Enumerable.Empty<(int SeasonNumber, int EpisodeNumber)>())
-                    .ToHashSet() ?? new HashSet<(int SeasonNumber, int EpisodeNumber)>();
-
+                var requestedEpisodes = GetRequestedTvEpisodes(request);
                 if (requestedEpisodes.Count == 0)
                 {
                     continue;
                 }
 
-                var matchingQueueItems = seriesQueue
-                    .Where(item => IsMatchingTvQueueItem(item, requestedEpisodes))
-                    .ToList();
+                var tmdbId = request.ParentRequest.ExternalProviderId;
+                var matchingQueueItems = queueByTmdbId.TryGetValue(tmdbId, out var seriesQueue)
+                    ? seriesQueue.Where(item => IsMatchingTvQueueItem(item, requestedEpisodes)).ToList()
+                    : new List<SonarrQueueRecord>();
 
-                if (matchingQueueItems.Count == 0)
+                if (matchingQueueItems.Count > 0)
+                {
+                    ApplyQueueState(request, matchingQueueItems);
+
+                    // Sonarr can expose one row per episode for a season pack while every row points
+                    // to the same underlying download. Deduplicate by DownloadId before aggregating so
+                    // a single pack is not counted repeatedly in the size-weighted progress value.
+                    var seenDownloadIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var metrics = new List<QueueMetrics>();
+                    foreach (var item in matchingQueueItems)
+                    {
+                        if (!string.IsNullOrWhiteSpace(item.DownloadId) && !seenDownloadIds.Add(item.DownloadId))
+                        {
+                            continue;
+                        }
+
+                        metrics.Add(CreateQueueMetrics("Sonarr", item));
+                    }
+
+                    ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
+                    request.DownloadProgress = progress;
+                    request.DownloadEtaMinutes = etaMinutes;
+                }
+
+                if (request.Downloading || request.Queued)
                 {
                     continue;
                 }
 
-                ApplyQueueState(request, matchingQueueItems);
-
-                // Sonarr can expose one row per episode for a season pack while every row points
-                // to the same underlying download. Deduplicate by DownloadId before aggregating so
-                // a single pack is not counted repeatedly in the size-weighted progress value.
-                var seenDownloadIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var metrics = new List<QueueMetrics>();
-                foreach (var item in matchingQueueItems)
+                var series = FindMatchingSonarrSeries(request, sonarrSeries);
+                if (series == null || series.id <= 0)
                 {
-                    if (!string.IsNullOrWhiteSpace(item.DownloadId) && !seenDownloadIds.Add(item.DownloadId))
-                    {
-                        continue;
-                    }
-
-                    metrics.Add(CreateQueueMetrics("Sonarr", item));
+                    continue;
                 }
 
-                ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
-                request.DownloadProgress = progress;
-                request.DownloadEtaMinutes = etaMinutes;
+                if (!episodesBySeriesId.TryGetValue(series.id, out var sonarrEpisodes))
+                {
+                    sonarrEpisodes = await GetSonarrEpisodes(series.id, settings);
+                    episodesBySeriesId[series.id] = sonarrEpisodes;
+                }
+
+                ApplyTvArrState(request, series, sonarrEpisodes);
+            }
+        }
+
+        private static HashSet<(int SeasonNumber, int EpisodeNumber)> GetRequestedTvEpisodes(ChildRequests request)
+        {
+            return request.SeasonRequests?
+                .Where(x => x != null)
+                .SelectMany(season => season.Episodes?
+                    .Where(episode => episode != null && episode.Requested && episode.Approved && !episode.Available)
+                    .Select(episode => (SeasonNumber: season.SeasonNumber, EpisodeNumber: episode.EpisodeNumber))
+                    ?? Enumerable.Empty<(int SeasonNumber, int EpisodeNumber)>())
+                .ToHashSet() ?? new HashSet<(int SeasonNumber, int EpisodeNumber)>();
+        }
+
+        private static SonarrSeries FindMatchingSonarrSeries(
+            ChildRequests request,
+            IEnumerable<SonarrSeries> series)
+        {
+            var seriesList = series?.Where(x => x != null).ToList() ?? new List<SonarrSeries>();
+            var tvdbId = request.ParentRequest?.TvDbId ?? 0;
+            if (tvdbId > 0)
+            {
+                var tvdbMatch = seriesList.FirstOrDefault(x => x.tvdbId == tvdbId);
+                if (tvdbMatch != null)
+                {
+                    return tvdbMatch;
+                }
+            }
+
+            var tmdbId = request.ParentRequest?.ExternalProviderId ?? 0;
+            return tmdbId > 0
+                ? seriesList.FirstOrDefault(x => x.tmdbId == tmdbId)
+                : null;
+        }
+
+        private static void ApplyMovieArrState(
+            MovieRequests request,
+            IReadOnlyDictionary<int, MovieResponse> regularMovies,
+            IReadOnlyDictionary<int, MovieResponse> fourKMovies)
+        {
+            var expected = new List<MovieResponse>();
+            var allTargetsResolved = true;
+
+            if (IsRegularMovieDownloadCandidate(request))
+            {
+                if (regularMovies != null &&
+                    regularMovies.TryGetValue(request.TheMovieDbId, out var regularMovie))
+                {
+                    expected.Add(regularMovie);
+                }
+                else
+                {
+                    allTargetsResolved = false;
+                }
+            }
+
+            if (IsFourKMovieDownloadCandidate(request))
+            {
+                if (fourKMovies != null &&
+                    fourKMovies.TryGetValue(request.TheMovieDbId, out var fourKMovie))
+                {
+                    expected.Add(fourKMovie);
+                }
+                else
+                {
+                    allTargetsResolved = false;
+                }
+            }
+
+            if (!allTargetsResolved || expected.Count == 0)
+            {
+                return;
+            }
+
+            if (expected.All(x => x.hasFile))
+            {
+                request.Completed = true;
+                return;
+            }
+
+            // A file that already exists is complete even if the user later changes monitoring.
+            // Every still-missing target must be monitored before Reqestra can say Arr is searching.
+            if (expected.Where(x => !x.hasFile).All(x => x.monitored))
+            {
+                request.Searching = true;
+            }
+        }
+
+        private static void ApplyTvArrState(
+            ChildRequests request,
+            SonarrSeries series,
+            IReadOnlyCollection<Episode> sonarrEpisodes)
+        {
+            if (series == null || sonarrEpisodes == null || sonarrEpisodes.Count == 0)
+            {
+                return;
+            }
+
+            var scopedEpisodes = new List<Episode>();
+            foreach (var requestedSeason in request.SeasonRequests ?? new List<Ombi.Store.Repository.Requests.SeasonRequests>())
+            {
+                if (requestedSeason == null)
+                {
+                    continue;
+                }
+
+                var requested = requestedSeason.Episodes?
+                    .Where(x => x != null && x.Requested && x.Approved && !x.Available)
+                    .ToList() ?? new List<Ombi.Store.Repository.Requests.EpisodeRequests>();
+                if (requested.Count == 0)
+                {
+                    continue;
+                }
+
+                var targetSeasonNumber = requestedSeason.SeasonNumber;
+                var fingerprintMatch = SonarrEpisodeFingerprintMatcher.FindSingleSeasonMatch(
+                    requestedSeason,
+                    sonarrEpisodes);
+                if (fingerprintMatch != null)
+                {
+                    targetSeasonNumber = fingerprintMatch.SonarrSeasonNumber;
+                }
+
+                var seasonEpisodes = sonarrEpisodes
+                    .Where(x => x != null &&
+                                x.seasonNumber == targetSeasonNumber &&
+                                x.episodeNumber > 0)
+                    .ToList();
+                if (seasonEpisodes.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var requestedEpisode in requested)
+                {
+                    var sonarrEpisode = seasonEpisodes.FirstOrDefault(
+                        x => x.episodeNumber == requestedEpisode.EpisodeNumber);
+                    if (sonarrEpisode == null)
+                    {
+                        return;
+                    }
+
+                    // Missing media is only "Searching" when Sonarr is actually monitoring it.
+                    // Existing files remain complete even if monitoring is later changed manually.
+                    if (!sonarrEpisode.hasFile && !sonarrEpisode.monitored)
+                    {
+                        return;
+                    }
+
+                    scopedEpisodes.Add(sonarrEpisode);
+                }
+
+                var sonarrSeason = series.seasons?
+                    .FirstOrDefault(x => x.seasonNumber == targetSeasonNumber);
+
+                // A monitored season represents the whole-season/future-release workflow. Preserve
+                // that behavior by extending the status scope to episodes that air after the
+                // original request. Individual-episode requests leave the season unmonitored and
+                // therefore remain scoped only to the explicitly requested episodes above.
+                if (sonarrSeason?.monitored == true)
+                {
+                    var futureEpisodes = seasonEpisodes
+                        .Where(x => x.airDateUtc != default &&
+                                    x.airDateUtc > request.RequestedDate)
+                        .ToList();
+
+                    // If the season is meant to catch future releases, any future missing episode
+                    // that Sonarr is not monitoring means the request has not reached a healthy
+                    // downstream state and should remain Processing Request.
+                    if (futureEpisodes.Any(x => !x.hasFile && !x.monitored))
+                    {
+                        return;
+                    }
+
+                    scopedEpisodes.AddRange(futureEpisodes.Where(x =>
+                        scopedEpisodes.All(existing => existing.id != x.id)));
+                }
+            }
+
+            if (scopedEpisodes.Count == 0)
+            {
+                return;
+            }
+
+            if (scopedEpisodes.All(x => x.hasFile))
+            {
+                request.Completed = true;
+                return;
+            }
+
+            if (series.monitored && scopedEpisodes.Where(x => !x.hasFile).All(x => x.monitored))
+            {
+                request.Searching = true;
             }
         }
 
@@ -313,6 +533,8 @@ namespace Ombi.Core.Services
         {
             request.Downloading = false;
             request.Queued = false;
+            request.Searching = false;
+            request.Completed = false;
             request.DownloadProgress = null;
             request.DownloadEtaMinutes = null;
         }
@@ -321,6 +543,8 @@ namespace Ombi.Core.Services
         {
             request.Downloading = false;
             request.Queued = false;
+            request.Searching = false;
+            request.Completed = false;
             request.DownloadProgress = null;
             request.DownloadEtaMinutes = null;
         }
@@ -436,6 +660,71 @@ namespace Ombi.Core.Services
                    request.Approved4K &&
                    !request.Available4K &&
                    !(request.Denied4K ?? false);
+        }
+
+        private async Task<Dictionary<int, MovieResponse>> GetRadarrMoviesByTmdbId(
+            RadarrSettings settings,
+            string sourceName)
+        {
+            var moviesByTmdbId = new Dictionary<int, MovieResponse>();
+            if (settings == null || !settings.Enabled)
+            {
+                return moviesByTmdbId;
+            }
+
+            try
+            {
+                var movies = await _radarrApi.GetMovies(settings.ApiKey, settings.FullUri)
+                    ?? new List<MovieResponse>();
+                foreach (var movie in movies.Where(x => x != null && x.tmdbId > 0))
+                {
+                    moviesByTmdbId[movie.tmdbId] = movie;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(
+                    ex,
+                    "Could not read {DownloadSource} movies while calculating request lifecycle status",
+                    sourceName);
+            }
+
+            return moviesByTmdbId;
+        }
+
+        private async Task<List<SonarrSeries>> GetSonarrSeries(SonarrSettings settings)
+        {
+            try
+            {
+                return (await _sonarrApi.GetSeries(settings.ApiKey, settings.FullUri))?
+                    .Where(x => x != null)
+                    .ToList() ?? new List<SonarrSeries>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(
+                    ex,
+                    "Could not read Sonarr series while calculating request lifecycle status");
+                return new List<SonarrSeries>();
+            }
+        }
+
+        private async Task<List<Episode>> GetSonarrEpisodes(int seriesId, SonarrSettings settings)
+        {
+            try
+            {
+                return (await _sonarrApi.GetEpisodes(seriesId, settings.ApiKey, settings.FullUri))?
+                    .Where(x => x != null)
+                    .ToList() ?? new List<Episode>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(
+                    ex,
+                    "Could not read Sonarr episodes for series {SeriesId} while calculating request lifecycle status",
+                    seriesId);
+                return new List<Episode>();
+            }
         }
 
         private async Task<Dictionary<int, List<RadarrQueueRecord>>> GetRadarrQueueByTmdbId(RadarrSettings settings, string sourceName)
