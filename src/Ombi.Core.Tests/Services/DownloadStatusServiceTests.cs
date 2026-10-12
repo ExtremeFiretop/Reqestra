@@ -297,6 +297,7 @@ namespace Ombi.Core.Tests.Services
 
             Assert.That(request.Downloading, Is.False);
             Assert.That(request.Importing, Is.True);
+            Assert.That(request.Standby, Is.False);
             Assert.That(request.Queued, Is.False);
             Assert.That(request.Searching, Is.False);
             Assert.That(request.Completed, Is.False);
@@ -305,7 +306,7 @@ namespace Ombi.Core.Tests.Services
         }
 
         [Test]
-        public async Task Nzbget_PostProcessing_Paused_Row_Is_Marked_Importing_Without_Prior_Observation()
+        public async Task Nzbget_PostProcessing_Paused_Row_Is_Marked_Standby_Without_Prior_Observation()
         {
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
             {
@@ -355,16 +356,17 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
-            Assert.That(request.Importing, Is.True);
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Standby, Is.True);
             Assert.That(request.Queued, Is.False);
             Assert.That(request.Searching, Is.False);
-            Assert.That(request.DownloadProgress, Is.EqualTo(100));
+            Assert.That(request.DownloadProgress, Is.EqualTo(60));
             Assert.That(request.DownloadEtaMinutes, Is.Null);
-            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Standby"));
         }
 
         [Test]
-        public async Task Nzbget_PostProcessing_Downloading_Row_At_100Percent_Is_Marked_Importing()
+        public async Task Nzbget_PostProcessing_Downloading_Row_At_100Percent_Is_Marked_Standby()
         {
             _radarrSettings.Setup(x => x.GetSettingsAsync()).ReturnsAsync(new RadarrSettings
             {
@@ -413,10 +415,11 @@ namespace Ombi.Core.Tests.Services
             await _service.PopulateMovieDownloadStatus(new[] { request });
 
             Assert.That(request.Downloading, Is.False);
-            Assert.That(request.Importing, Is.True);
+            Assert.That(request.Importing, Is.False);
+            Assert.That(request.Standby, Is.True);
             Assert.That(request.DownloadProgress, Is.EqualTo(100));
             Assert.That(request.DownloadEtaMinutes, Is.Null);
-            Assert.That(request.RequestStatus, Is.EqualTo("Common.Importing"));
+            Assert.That(request.RequestStatus, Is.EqualTo("Common.Standby"));
         }
 
         [Test]
@@ -470,6 +473,7 @@ namespace Ombi.Core.Tests.Services
 
             Assert.That(request.Downloading, Is.True);
             Assert.That(request.Importing, Is.False);
+            Assert.That(request.Standby, Is.False);
             Assert.That(request.DownloadProgress, Is.EqualTo(99));
             Assert.That(request.RequestStatus, Is.EqualTo("Common.Downloading"));
         }
@@ -1390,6 +1394,7 @@ namespace Ombi.Core.Tests.Services
             var episode = request.SeasonRequests[0].Episodes[0];
             episode.Downloading = true;
             episode.Importing = true;
+            episode.Standby = true;
             episode.Queued = true;
             episode.Searching = true;
             episode.Completed = true;
@@ -1398,6 +1403,7 @@ namespace Ombi.Core.Tests.Services
 
             Assert.That(episode.Downloading, Is.False);
             Assert.That(episode.Importing, Is.False);
+            Assert.That(episode.Standby, Is.False);
             Assert.That(episode.Queued, Is.False);
             Assert.That(episode.Searching, Is.False);
             Assert.That(episode.Completed, Is.False);

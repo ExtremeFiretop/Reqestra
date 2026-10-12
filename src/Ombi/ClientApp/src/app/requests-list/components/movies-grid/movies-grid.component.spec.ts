@@ -151,6 +151,11 @@ describe('MoviesGridComponent', () => {
       expect(comp.getStatusClass({ requestStatus: 'Common.Importing' })).toBe('status-importing');
     });
 
+    it('should return status-standby for ambiguous post-download state', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Standby' })).toBe('status-standby');
+    });
+
     it('should return lifecycle classes for searching and completed requests', () => {
       const { comp } = createComponent();
       expect(comp.getStatusClass({ requestStatus: 'Common.Searching' })).toBe('status-searching');

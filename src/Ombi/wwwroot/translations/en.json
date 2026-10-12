@@ -30,6 +30,7 @@
       "Downloading": "Downloading",
       "Queued": "Queued",
       "Importing": "Importing",
+      "Standby": "Standby",
       "Searching": "Searching",
       "Completed": "Completed",
       "ProcessingRequest4K": "Processing Request 4K",

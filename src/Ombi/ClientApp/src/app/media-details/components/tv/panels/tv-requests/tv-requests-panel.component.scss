@@ -62,6 +62,9 @@
     &.importing {
         background: #fbbf24;
     }
+    &.standby {
+        background: #94a3b8;
+    }
     &.queued {
         background: #a78bfa;
     }
@@ -259,6 +262,10 @@
     &.importing {
         background: rgba(251, 191, 36, 0.15);
         color: #fbbf24;
+    }
+    &.standby {
+        background: rgba(148, 163, 184, 0.15);
+        color: #cbd5e1;
     }
     &.queued {
         background: rgba(167, 139, 250, 0.15);

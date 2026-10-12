@@ -51,11 +51,30 @@ namespace Ombi.Core.Tests.Engine
             importing.Importing = true;
             var searching = BuildChild(3, parent, new DateTime(2026, 1, 3), approved: true);
             searching.Searching = true;
+            var standby = BuildChild(4, parent, new DateTime(2026, 1, 4), approved: true);
+            standby.Standby = true;
 
-            var result = TvRequestGridAggregator.CollapseToSeriesCards(new[] { queued, searching, importing }).Single();
+            var result = TvRequestGridAggregator.CollapseToSeriesCards(new[] { queued, searching, standby, importing }).Single();
 
             Assert.That(result.Id, Is.EqualTo(importing.Id));
             Assert.That(result.RequestStatus, Is.EqualTo("Common.Importing"));
+        }
+
+        [Test]
+        public void Standby_Request_Wins_Over_Queued_And_Searching_States()
+        {
+            var parent = new TvRequests { Id = 101, Title = "Example" };
+            var queued = BuildChild(1, parent, new DateTime(2026, 1, 1), approved: true);
+            queued.Queued = true;
+            var standby = BuildChild(2, parent, new DateTime(2026, 1, 2), approved: true);
+            standby.Standby = true;
+            var searching = BuildChild(3, parent, new DateTime(2026, 1, 3), approved: true);
+            searching.Searching = true;
+
+            var result = TvRequestGridAggregator.CollapseToSeriesCards(new[] { queued, searching, standby }).Single();
+
+            Assert.That(result.Id, Is.EqualTo(standby.Id));
+            Assert.That(result.RequestStatus, Is.EqualTo("Common.Standby"));
         }
 
         [Test]

@@ -68,6 +68,10 @@ export class MovieInformationPanelComponent implements OnInit {
         return "Common.Importing";
       }
 
+      if (this.request?.standby) {
+        return "Common.Standby";
+      }
+
       if (this.request?.queued) {
         return "Common.Queued";
       }

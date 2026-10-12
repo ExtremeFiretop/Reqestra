@@ -106,8 +106,8 @@
       <div class="status-row">
         <span class="status-badge" [id]="'requestedStatus' + item.parentRequest.externalProviderId" [ngClass]="getStatusClass(item)">
           {{ item.requestStatus | translate }}
-          <ng-container *ngIf="(item.downloading || item.queued) && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
-          <ng-container *ngIf="(item.downloading || item.queued) && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
+          <ng-container *ngIf="(item.downloading || item.standby || item.queued) && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+          <ng-container *ngIf="(item.downloading || item.standby || item.queued) && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
         </span>
       </div>
 
@@ -180,8 +180,8 @@
         <td>
           <span class="status-badge" [ngClass]="getStatusClass(item)">
             {{ item.requestStatus | translate }}
-            <ng-container *ngIf="(item.downloading || item.queued) && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
-            <ng-container *ngIf="(item.downloading || item.queued) && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
+            <ng-container *ngIf="(item.downloading || item.standby || item.queued) && item.downloadProgress != null"> · {{ item.downloadProgress }}%</ng-container>
+            <ng-container *ngIf="(item.downloading || item.standby || item.queued) && item.downloadEtaMinutes > 0"> · ~{{ item.downloadEtaMinutes }} min</ng-container>
           </span>
         </td>
         <td class="cell-actions">

@@ -36,10 +36,11 @@ function createComponent() {
 }
 
 describe("TvRequestsPanelComponent profile-aware retry", () => {
-    it("uses queued and importing status classes for Arr queue states", () => {
+    it("uses queued importing and standby status classes for Arr queue states", () => {
         const { component } = createComponent();
         expect(component.getRequestStatusClass({ queued: true } as any)).toBe("queued");
         expect(component.getRequestStatusClass({ importing: true } as any)).toBe("importing");
+        expect(component.getRequestStatusClass({ standby: true } as any)).toBe("standby");
     });
 
     it("uses searching and completed status classes for Arr lifecycle states", () => {
@@ -54,6 +55,7 @@ describe("TvRequestsPanelComponent profile-aware retry", () => {
 
         expect(component.getEpisodeStatusClass({ downloading: true } as any, request)).toBe("downloading");
         expect(component.getEpisodeStatusClass({ importing: true } as any, request)).toBe("importing");
+        expect(component.getEpisodeStatusClass({ standby: true } as any, request)).toBe("standby");
         expect(component.getEpisodeStatusClass({ queued: true } as any, request)).toBe("queued");
         expect(component.getEpisodeStatusClass({ searching: true } as any, request)).toBe("searching");
         expect(component.getEpisodeStatusClass({ completed: true } as any, request)).toBe("completed");

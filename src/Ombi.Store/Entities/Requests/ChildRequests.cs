@@ -35,6 +35,8 @@ namespace Ombi.Store.Entities.Requests
         [NotMapped]
         public bool Importing { get; set; }
         [NotMapped]
+        public bool Standby { get; set; }
+        [NotMapped]
         public bool Searching { get; set; }
         [NotMapped]
         public bool Completed { get; set; }
@@ -94,6 +96,11 @@ namespace Ombi.Store.Entities.Requests
                 if (Importing)
                 {
                     return "Common.Importing";
+                }
+
+                if (Standby)
+                {
+                    return "Common.Standby";
                 }
 
                 if (Queued)

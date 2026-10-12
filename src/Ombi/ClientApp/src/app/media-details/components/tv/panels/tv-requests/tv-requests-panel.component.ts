@@ -72,6 +72,7 @@ export class TvRequestsPanelComponent {
     public getRequestStatusClass(request: IChildRequests): string {
         if (request.downloading) return "downloading";
         if (request.importing) return "importing";
+        if (request.standby) return "standby";
         if (request.queued) return "queued";
         if (request.completed) return "completed";
         if (request.searching) return "searching";
@@ -84,6 +85,7 @@ export class TvRequestsPanelComponent {
     public getEpisodeStatusClass(ep: IEpisodesRequests, request: IChildRequests): string {
         if (ep.downloading) return "downloading";
         if (ep.importing) return "importing";
+        if (ep.standby) return "standby";
         if (ep.queued) return "queued";
         if (ep.available) return "available";
         if (ep.denied || request.denied) return "denied";

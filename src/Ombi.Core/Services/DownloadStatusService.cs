@@ -132,10 +132,10 @@ namespace Ombi.Core.Services
                     ApplyQueueState(request, regularMatches, fourKMatches);
                     ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
                     request.DownloadProgress = request.Importing ? 100 : progress;
-                    request.DownloadEtaMinutes = request.Importing ? null : etaMinutes;
+                    request.DownloadEtaMinutes = request.Importing || request.Standby ? null : etaMinutes;
                 }
 
-                if (request.Downloading || request.Importing || request.Queued)
+                if (request.Downloading || request.Importing || request.Standby || request.Queued)
                 {
                     continue;
                 }
@@ -224,7 +224,7 @@ namespace Ombi.Core.Services
 
                     ApplyDownloadMetrics(metrics, out var progress, out var etaMinutes);
                     request.DownloadProgress = request.Importing ? 100 : progress;
-                    request.DownloadEtaMinutes = request.Importing ? null : etaMinutes;
+                    request.DownloadEtaMinutes = request.Importing || request.Standby ? null : etaMinutes;
                 }
 
                 var series = FindMatchingSonarrSeries(request, sonarrSeries);
@@ -240,11 +240,11 @@ namespace Ombi.Core.Services
                 }
 
                 // Episode rows need their own Arr state even while other episodes in this child
-                // request are queued, downloading, or importing. Keep the parent precedence
+                // request are queued, downloading, on standby, or importing. Keep the parent precedence
                 // unchanged below.
                 ApplyTvEpisodeArrState(request, series, sonarrEpisodes);
 
-                if (request.Downloading || request.Importing || request.Queued)
+                if (request.Downloading || request.Importing || request.Standby || request.Queued)
                 {
                     continue;
                 }
@@ -390,6 +390,7 @@ namespace Ombi.Core.Services
                     if (!sonarrEpisode.hasFile &&
                         !requestedEpisode.Downloading &&
                         !requestedEpisode.Importing &&
+                        !requestedEpisode.Standby &&
                         !requestedEpisode.Queued &&
                         series.monitored &&
                         sonarrEpisode.monitored)
@@ -552,9 +553,11 @@ namespace Ombi.Core.Services
                 states,
                 out var downloading,
                 out var importing,
+                out var standby,
                 out var queued);
             request.Downloading = downloading;
             request.Importing = importing;
+            request.Standby = standby;
             request.Queued = queued;
         }
 
@@ -568,9 +571,11 @@ namespace Ombi.Core.Services
                     .Select(x => GetQueueState("Sonarr", x)),
                 out var downloading,
                 out var importing,
+                out var standby,
                 out var queued);
             request.Downloading = downloading;
             request.Importing = importing;
+            request.Standby = standby;
             request.Queued = queued;
         }
 
@@ -604,9 +609,11 @@ namespace Ombi.Core.Services
                         episodeMatches.Select(x => GetQueueState("Sonarr", x)),
                         out var downloading,
                         out var importing,
+                        out var standby,
                         out var queued);
                     episode.Downloading = downloading;
                     episode.Importing = importing;
+                    episode.Standby = standby;
                     episode.Queued = queued;
                 }
             }
@@ -654,6 +661,7 @@ namespace Ombi.Core.Services
             IEnumerable<(string Status, string TrackedDownloadState, string TrackedDownloadStatus, bool PostDownloadProcessing)> states,
             out bool downloading,
             out bool importing,
+            out bool standby,
             out bool queued)
         {
             var stateList = states?.ToList()
@@ -664,14 +672,14 @@ namespace Ombi.Core.Services
                 !IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus) &&
                 !x.PostDownloadProcessing);
             importing = !downloading && stateList.Any(x =>
-                IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus) ||
-                x.PostDownloadProcessing);
-            queued = !downloading && !importing && stateList.Any(x => IsQueued(x.Status));
+                IsImporting(x.TrackedDownloadState, x.TrackedDownloadStatus));
+            standby = !downloading && !importing && stateList.Any(x => x.PostDownloadProcessing);
+            queued = !downloading && !importing && !standby && stateList.Any(x => IsQueued(x.Status));
 
             // Preserve the pre-status behavior when an older Arr response does not provide any
             // queue or tracked-download state. Once Arr provides explicit state, only a real
-            // downloading, importing, or queued item should receive one of those lifecycle states.
-            if (!downloading && !importing && !queued && stateList.Count > 0 &&
+            // downloading, standby, importing, or queued item should receive one of those lifecycle states.
+            if (!downloading && !importing && !standby && !queued && stateList.Count > 0 &&
                 stateList.All(x =>
                     string.IsNullOrWhiteSpace(x.Status) &&
                     string.IsNullOrWhiteSpace(x.TrackedDownloadState)))
@@ -711,6 +719,7 @@ namespace Ombi.Core.Services
         {
             request.Downloading = false;
             request.Importing = false;
+            request.Standby = false;
             request.Queued = false;
             request.Searching = false;
             request.Completed = false;
@@ -722,6 +731,7 @@ namespace Ombi.Core.Services
         {
             request.Downloading = false;
             request.Importing = false;
+            request.Standby = false;
             request.Queued = false;
             request.Searching = false;
             request.Completed = false;
@@ -736,6 +746,7 @@ namespace Ombi.Core.Services
             {
                 episode.Downloading = false;
                 episode.Importing = false;
+                episode.Standby = false;
                 episode.Queued = false;
                 episode.Searching = false;
                 episode.Completed = false;
