@@ -1,3 +1,12 @@
+## [4.68.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.6...v4.68.7) (2026-10-12)
+
+
+### Bug Fixes
+
+* **requests:** separate standby from importing ([2420b6d](https://github.com/ExtremeFiretop/Reqestra/commit/2420b6d8bf51968f0b5fb54461413453ee64fe04))
+
+
+
 ## [4.68.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.5...v4.68.6) (2026-10-11)
 
 
@@ -359,16 +368,6 @@
 
 * **media-cleanup:** harden legacy deletion-plan migration ([83c08db](https://github.com/ExtremeFiretop/Reqestra/commit/83c08db82504fdf719f01d5450f8bdc6ef15509d))
 * **metadata:** repair legacy invalid TVDB identifiers ([ea099f5](https://github.com/ExtremeFiretop/Reqestra/commit/ea099f59b55f560c57d5c07c05587d805cdf988c))
-
-
-
-## [4.61.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.0...v4.61.1) (2026-10-02)
-
-
-### Bug Fixes
-
-* **api:** skip Plex Community error-body deserialization ([8ef59cc](https://github.com/ExtremeFiretop/Reqestra/commit/8ef59cc7a803bf06d4859c8969894707e516759a))
-* **media-cleanup:** backfill legacy scheduled deletion plans ([411edcf](https://github.com/ExtremeFiretop/Reqestra/commit/411edcffba33e01d3a913fbaa241337f22e61dc6))
 
 
 
