@@ -1,3 +1,12 @@
+## [4.68.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.7...v4.68.8) (2026-10-14)
+
+
+### Bug Fixes
+
+* **navigation:** close mobile menu after selection ([5226d68](https://github.com/ExtremeFiretop/Reqestra/commit/5226d68f75b67a4ffd71d0c4ac66a128ee763b5b))
+
+
+
 ## [4.68.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.6...v4.68.7) (2026-10-12)
 
 
@@ -358,16 +367,6 @@
 ### Reverts
 
 * Revert "test(e2e): stabilize discover card state tests" ([d235b4e](https://github.com/ExtremeFiretop/Reqestra/commit/d235b4e048ac7757d81d13a44818554c09bdd35e))
-
-
-
-## [4.61.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.1...v4.61.2) (2026-10-02)
-
-
-### Bug Fixes
-
-* **media-cleanup:** harden legacy deletion-plan migration ([83c08db](https://github.com/ExtremeFiretop/Reqestra/commit/83c08db82504fdf719f01d5450f8bdc6ef15509d))
-* **metadata:** repair legacy invalid TVDB identifiers ([ea099f5](https://github.com/ExtremeFiretop/Reqestra/commit/ea099f59b55f560c57d5c07c05587d805cdf988c))
 
 
 
