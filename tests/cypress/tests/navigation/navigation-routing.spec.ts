@@ -33,6 +33,18 @@ describe("Navigation Routing Tests", () => {
     cy.location("pathname").should("contain", "/discover");
   });
 
+  it("Closes the mobile navigation drawer after selecting an internal route", () => {
+    cy.viewport(390, 844);
+
+    cy.get(".hamburger-btn").should("be.visible").click();
+    cy.get("mat-sidenav.sidenav").should("have.class", "mat-drawer-opened");
+
+    Page.navbar.requests.click();
+
+    cy.location("pathname").should("contain", "/requests-list");
+    cy.get("mat-sidenav.sidenav").should("not.have.class", "mat-drawer-opened");
+  });
+
   it("Logging out returns to the login page", () => {
     Page.navbar.logout.click();
     cy.location("pathname").should("contain", "/login");
