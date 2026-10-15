@@ -1,3 +1,7 @@
+## [4.68.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.9...v4.68.10) (2026-10-15)
+
+
+
 ## [4.68.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.8...v4.68.9) (2026-10-15)
 
 
@@ -352,15 +356,6 @@
 * **updater:** resolve Octokit FileMode ambiguity ([18e2fd7](https://github.com/ExtremeFiretop/Reqestra/commit/18e2fd757136bd0002d416b33d38f8c60eace115))
 * **updater:** restore built-in release installation ([a66a615](https://github.com/ExtremeFiretop/Reqestra/commit/a66a615a3a691376685e70de430a9b3d9619dde4))
 * **updater:** tolerate transient GitHub update-check failures ([30cfe00](https://github.com/ExtremeFiretop/Reqestra/commit/30cfe00e709f7e19b58c44129f735418c4cf17aa))
-
-
-
-## [4.61.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.3...v4.61.4) (2026-10-02)
-
-
-### Bug Fixes
-
-* **ci:** harden multi-arch frontend Docker build ([3824f35](https://github.com/ExtremeFiretop/Reqestra/commit/3824f35d0c2a5bf5dbf61b85560bc3a0752783d4))
 
 
 
