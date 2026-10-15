@@ -1,3 +1,12 @@
+## [4.68.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.10...v4.68.11) (2026-10-15)
+
+
+### Bug Fixes
+
+* **notifications:** retry transient standard email failures ([19d48f8](https://github.com/ExtremeFiretop/Reqestra/commit/19d48f85931fcc16cadc6b90d8d2934be3dc0000))
+
+
+
 ## [4.68.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.9...v4.68.10) (2026-10-15)
 
 
@@ -344,18 +353,6 @@
 ### Bug Fixes
 
 * **updater:** align Microsoft.Extensions dependencies with .NET 8 ([3f99665](https://github.com/ExtremeFiretop/Reqestra/commit/3f9966597ccb4066f3af348dd8c8a07fe5fe5bb8))
-
-
-
-## [4.61.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.4...v4.61.5) (2026-10-03)
-
-
-### Bug Fixes
-
-* **updater:** harden process and Windows service handoff ([5672d79](https://github.com/ExtremeFiretop/Reqestra/commit/5672d79834f342faf429e7ef251062fef61e4bd9))
-* **updater:** resolve Octokit FileMode ambiguity ([18e2fd7](https://github.com/ExtremeFiretop/Reqestra/commit/18e2fd757136bd0002d416b33d38f8c60eace115))
-* **updater:** restore built-in release installation ([a66a615](https://github.com/ExtremeFiretop/Reqestra/commit/a66a615a3a691376685e70de430a9b3d9619dde4))
-* **updater:** tolerate transient GitHub update-check failures ([30cfe00](https://github.com/ExtremeFiretop/Reqestra/commit/30cfe00e709f7e19b58c44129f735418c4cf17aa))
 
 
 
