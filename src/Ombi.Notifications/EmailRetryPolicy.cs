@@ -7,7 +7,7 @@ using MailKit.Net.Smtp;
 namespace Ombi.Notifications
 {
     /// <summary>
-    /// Identifies failures that are reasonable to retry for queued email notifications.
+    /// Identifies email delivery failures that are reasonable to retry.
     /// Permanent SMTP responses (5xx), authentication/configuration failures and invalid
     /// message data are intentionally not retried.
     /// </summary>

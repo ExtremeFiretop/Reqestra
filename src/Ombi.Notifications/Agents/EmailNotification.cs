@@ -29,6 +29,12 @@ namespace Ombi.Notifications.Agents
             Logger = log;
             _userManager = um;
         }
+        private static readonly TimeSpan[] RetryDelays =
+        {
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(10)
+        };
+
         private IEmailProvider EmailProvider { get; }
         private ILogger<EmailNotification> Logger { get; }
         public override string NotificationName => nameof(EmailNotification);
@@ -277,7 +283,26 @@ namespace Ombi.Notifications.Agents
 
         protected override async Task Send(NotificationMessage model, EmailNotificationSettings settings)
         {
-            await EmailProvider.Send(model, settings);
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await EmailProvider.Send(model, settings);
+                    return;
+                }
+                catch (Exception ex) when (EmailRetryPolicy.IsTransient(ex) && attempt <= RetryDelays.Length)
+                {
+                    var delay = RetryDelays[attempt - 1];
+                    Logger.LogWarning(
+                        ex,
+                        "Transient email failure while sending notification to {Recipient}. Retrying in {DelaySeconds} seconds (attempt {NextAttempt}/{MaxAttempts})",
+                        model.To,
+                        delay.TotalSeconds,
+                        attempt + 1,
+                        RetryDelays.Length + 1);
+                    await Task.Delay(delay);
+                }
+            }
         }
         
         protected async Task SendToAdmins(NotificationMessage message, EmailNotificationSettings settings)
