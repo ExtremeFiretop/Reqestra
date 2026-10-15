@@ -1,3 +1,12 @@
+## [4.68.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.8...v4.68.9) (2026-10-15)
+
+
+### Reverts
+
+* Revert "Add files via upload" ([da1b034](https://github.com/ExtremeFiretop/Reqestra/commit/da1b034f08e82b4b39b2b4d6e06fb0f6304e2c4f))
+
+
+
 ## [4.68.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.7...v4.68.8) (2026-10-14)
 
 
@@ -352,21 +361,6 @@
 ### Bug Fixes
 
 * **ci:** harden multi-arch frontend Docker build ([3824f35](https://github.com/ExtremeFiretop/Reqestra/commit/3824f35d0c2a5bf5dbf61b85560bc3a0752783d4))
-
-
-
-## [4.61.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.2...v4.61.3) (2026-10-02)
-
-
-### Bug Fixes
-
-* **ci:** provide version metadata to Docker build ([513f557](https://github.com/ExtremeFiretop/Reqestra/commit/513f55781d8abafbd9650cc3f196e3e7d4af56a5))
-* **metadata:** repair legacy invalid TMDB identifiers ([3340005](https://github.com/ExtremeFiretop/Reqestra/commit/33400053090c017959c6f3d489eee49d44503faa))
-
-
-### Reverts
-
-* Revert "test(e2e): stabilize discover card state tests" ([d235b4e](https://github.com/ExtremeFiretop/Reqestra/commit/d235b4e048ac7757d81d13a44818554c09bdd35e))
 
 
 
