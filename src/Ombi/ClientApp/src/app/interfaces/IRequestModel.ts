@@ -1,4 +1,4 @@
-﻿import { IUser } from "./IUser";
+import { IUser } from "./IUser";
 
 export enum RequestType {
   tvShow = 0,
@@ -12,10 +12,19 @@ export interface IMovieRequests extends IFullBaseRequest {
   theMovieDbId: number;
   rootPathOverride: number;
   qualityOverride: number;
+  qualityOverride4K: number;
   digitalReleaseDate: Date;
   subscribed: boolean;
   showSubscribe: boolean;
   requestStatus: string;
+  downloading: boolean;
+  queued?: boolean;
+  importing?: boolean;
+  standby?: boolean;
+  searching?: boolean;
+  completed?: boolean;
+  downloadProgress?: number | null;
+  downloadEtaMinutes?: number | null;
   has4KRequest: boolean;
   approved4K: boolean;
   available4K: boolean;
@@ -153,9 +162,18 @@ export interface IChildRequests extends IBaseRequest {
   seasonRequests: INewSeasonRequests[];
   parentRequestId: number;
   parentRequest: ITvRequests;
+  qualityOverride?: number | null;
   subscribed: boolean;
   showSubscribe: boolean;
   requestStatus: string;
+  downloading: boolean;
+  queued?: boolean;
+  importing?: boolean;
+  standby?: boolean;
+  searching?: boolean;
+  completed?: boolean;
+  downloadProgress?: number | null;
+  downloadEtaMinutes?: number | null;
 }
 
 export interface ITvUpdateModel {
@@ -194,6 +212,12 @@ export interface IEpisodesRequests {
   requested: boolean;
   approved: boolean;
   requestStatus: string;
+  downloading?: boolean;
+  queued?: boolean;
+  importing?: boolean;
+  standby?: boolean;
+  searching?: boolean;
+  completed?: boolean;
   denied: boolean;
   selected: boolean; // This is for the UI only
 }

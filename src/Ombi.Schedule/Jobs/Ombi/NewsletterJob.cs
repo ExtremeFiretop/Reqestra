@@ -292,7 +292,7 @@ namespace Ombi.Schedule.Jobs.Ombi
                 _log.LogInformation("Movies to send: {0}", moviesToSend.Count());
 
                 // Find the movies that do not yet have MovieDbIds
-                var needsMovieDb = content.Where(x => x.Type == MediaType.Movie && !string.IsNullOrEmpty(x.TheMovieDbId)).ToHashSet();
+                var needsMovieDb = content.Where(x => x.Type == MediaType.Movie && string.IsNullOrEmpty(x.TheMovieDbId)).ToHashSet();
                 var newMovies = await GetMoviesWithoutId(addedMovieLogIds, needsMovieDb, repository);
                 moviesToSend = moviesToSend.Union(newMovies).ToHashSet();
             }
@@ -407,13 +407,33 @@ namespace Ombi.Schedule.Jobs.Ombi
 
         private HashSet<IMediaServerEpisode> FilterEpisodes(IEnumerable<IMediaServerEpisode> source, IEnumerable<RecentlyAddedLog> recentlyAdded)
         {
+            // Materialize sent episode identities once. The caller can supply an IQueryable, and
+            // evaluating Any() against it for every cached episode causes an N+1 database query.
+            var recentlyAddedKeys = recentlyAdded
+                .Select(x => (x.ContentId, x.SeasonNumber, x.EpisodeNumber))
+                .ToHashSet();
+
             var itemsToReturn = new HashSet<IMediaServerEpisode>();
-            foreach (var ep in source.Where(x => x.Series.HasTvDb // needed for recentlyAddedLog
-                                         && x.Series.HasTheMovieDb // needed to fetch info to publish, this is just in case...
-                                         ))
+            foreach (var ep in source)
             {
+                if (ep?.Series == null)
+                {
+                    _log.LogWarning(
+                        "Skipping media-server episode S{SeasonNumber}E{EpisodeNumber} ({EpisodeTitle}) while building newsletter because its parent series is missing",
+                        ep?.SeasonNumber,
+                        ep?.EpisodeNumber,
+                        ep?.Title);
+                    continue;
+                }
+
+                // These IDs are required for the recently-added log and TMDB metadata lookup.
+                if (!ep.Series.HasTvDb || !ep.Series.HasTheMovieDb)
+                {
+                    continue;
+                }
+
                 var tvDbId = StringHelper.IntParseLinq(ep.Series.TvDbId);
-                if (recentlyAdded.Any(x => x.ContentId == tvDbId && x.EpisodeNumber == ep.EpisodeNumber && x.SeasonNumber == ep.SeasonNumber))
+                if (recentlyAddedKeys.Contains((tvDbId, ep.SeasonNumber, ep.EpisodeNumber)))
                 {
                     continue;
                 }

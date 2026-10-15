@@ -7,6 +7,7 @@ using Ombi.Api;
 using Ombi.Api.External.MediaServers.Plex;
 using Ombi.Api.External.MediaServers.Plex.Models;
 using Ombi.Api.External.MediaServers.Plex.Models.Community;
+using Ombi.Api.External.MediaServers.Plex.Models.Friends;
 using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
 using Ombi.Settings.Settings.Models;
@@ -16,6 +17,42 @@ namespace Ombi.Core.Tests.Api
     [TestFixture]
     public class PlexApiHistoryTests
     {
+
+        [Test]
+        public async Task GetAccount_DoesNotDeserializeHttpErrorBodiesAsPlexAccount()
+        {
+            var api = new Mock<IApi>();
+            Request captured = null;
+            api.Setup(x => x.Request<PlexAccount>(It.IsAny<Request>(), It.IsAny<CancellationToken>()))
+                .Callback<Request, CancellationToken>((request, _) => captured = request)
+                .ReturnsAsync(new PlexAccount());
+
+            var subject = CreateSubject(api.Object);
+
+            await subject.GetAccount("plex-token");
+
+            Assert.That(captured, Is.Not.Null);
+            Assert.That(captured.DeserializeErrorResponse, Is.False,
+                "plex.tv account HTTP failures should not be parsed as successful PlexAccount responses.");
+        }
+
+        [Test]
+        public async Task GetUsers_DoesNotDeserializeHttpErrorBodiesAsPlexUsers()
+        {
+            var api = new Mock<IApi>();
+            Request captured = null;
+            api.Setup(x => x.Request<PlexUsers>(It.IsAny<Request>(), It.IsAny<CancellationToken>()))
+                .Callback<Request, CancellationToken>((request, _) => captured = request)
+                .ReturnsAsync(new PlexUsers());
+
+            var subject = CreateSubject(api.Object);
+
+            await subject.GetUsers("plex-token");
+
+            Assert.That(captured, Is.Not.Null);
+            Assert.That(captured.DeserializeErrorResponse, Is.False,
+                "plex.tv user-list HTTP failures should not be parsed as successful PlexUsers responses.");
+        }
 
         [Test]
         public async Task GetAllFriends_DoesNotDeserializeHttpErrorBodiesAsCommunityResponse()

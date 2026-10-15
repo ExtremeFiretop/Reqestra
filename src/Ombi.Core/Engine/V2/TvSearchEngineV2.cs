@@ -139,14 +139,17 @@ namespace Ombi.Core.Engine.V2
         {
             var langCode = await DefaultLanguageCode(langCustomCode);
 
-            var pages = PaginationHelper.GetNextPages(currentlyLoaded, amountToLoad, ResultLimit);
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(Popular) + langCode + pagesToLoad.Page,
-                 async () => await _movieApi.PopularTv(langCode, pagesToLoad.Page), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
+            var today = DateTime.Today;
+            var todayKey = today.ToString("yyyyMMdd");
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentlyLoaded,
+                amountToLoad,
+                ResultLimit,
+                page => Cache.GetOrAddAsync(
+                    nameof(Popular) + langCode + page + todayKey,
+                    () => _movieApi.PopularTv(langCode, page),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsReleased(item.ReleaseDate, today));
 
             var processed = ProcessResults(results);
             return await processed;
@@ -156,14 +159,18 @@ namespace Ombi.Core.Engine.V2
         {
             var langCode = await DefaultLanguageCode(null);
 
-            var pages = PaginationHelper.GetNextPages(currentlyLoaded, amountToLoad, ResultLimit);
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(Anticipated) + langCode + pagesToLoad.Page,
-                    async () => await _movieApi.UpcomingTv(langCode, pagesToLoad.Page), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
+            var today = DateTime.Today;
+            var todayKey = today.ToString("yyyyMMdd");
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentlyLoaded,
+                amountToLoad,
+                ResultLimit,
+                page => Cache.GetOrAddAsync(
+                    nameof(Anticipated) + langCode + page + todayKey,
+                    () => _movieApi.UpcomingTv(langCode, page),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsUpcoming(item.ReleaseDate, today));
+
             var processed = ProcessResults(results);
             return await processed;
         }
@@ -172,14 +179,16 @@ namespace Ombi.Core.Engine.V2
         {           
             var langCode = await DefaultLanguageCode(null);
 
-            var pages = PaginationHelper.GetNextPages(currentlyLoaded, amountToLoad, ResultLimit);
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(Trending) + langCode + pagesToLoad.Page,
-                    () => _movieApi.TrendingTv(langCode, pagesToLoad.Page), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
+            var today = DateTime.Today;
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentlyLoaded,
+                amountToLoad,
+                ResultLimit,
+                page => Cache.GetOrAddAsync(
+                    nameof(Trending) + langCode + page,
+                    () => _movieApi.TrendingTv(langCode, page),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsReleased(item.ReleaseDate, today));
 
             var processed = ProcessResults(results);
             return await processed;

@@ -136,6 +136,32 @@ describe('MoviesGridComponent', () => {
       expect(comp.getStatusClass({ requestStatus: 'Common.ProcessingRequest' })).toBe('status-processing');
     });
 
+    it('should return status-downloading for active downloads', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Downloading' })).toBe('status-downloading');
+    });
+
+    it('should return status-queued for queued downloads', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Queued' })).toBe('status-queued');
+    });
+
+    it('should return status-importing for Arr imports', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Importing' })).toBe('status-importing');
+    });
+
+    it('should return status-standby for ambiguous post-download state', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Standby' })).toBe('status-standby');
+    });
+
+    it('should return lifecycle classes for searching and completed requests', () => {
+      const { comp } = createComponent();
+      expect(comp.getStatusClass({ requestStatus: 'Common.Searching' })).toBe('status-searching');
+      expect(comp.getStatusClass({ requestStatus: 'Common.Completed' })).toBe('status-completed');
+    });
+
     it('should return status-denied for denied requests', () => {
       const { comp } = createComponent();
       expect(comp.getStatusClass({ requestStatus: 'Common.Denied' })).toBe('status-denied');

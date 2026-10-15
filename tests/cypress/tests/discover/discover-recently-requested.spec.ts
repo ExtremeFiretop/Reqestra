@@ -170,20 +170,21 @@ describe("Discover Recently Requested Tests", () => {
 
   it("Approve Requested Movie", () => {
 
+    const username = `pendingMovie${Date.now()}${Cypress._.random(1000, 9999)}`;
+    const password = "password";
+
+    // Create the request as a normal user so the database contains a genuinely
+    // pending request. Admin-created requests are auto-approved, and mocking
+    // only the GET response leaves the UI out of sync with the persisted state.
+    cy.createUser(username, password, [{
+      value: "requestmovie",
+      Enabled: "true",
+    }]);
+    cy.loginWithCreds(username, password);
     cy.requestMovie(55341);
+    cy.login();
 
-    cy.intercept("GET", "**/v2/Requests/recentlyRequested", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[0];
-        movie.available = false;
-        movie.approved = false;
-
-        body[0] = movie;
-        res.send(body);
-      });
-    }).as("response");
-
+    cy.intercept("GET", "**/v2/Requests/recentlyRequested").as("response");
     cy.intercept("POST", "**/v1/Request/Movie/Approve").as("approveCall");
 
     Page.visit();
@@ -191,11 +192,18 @@ describe("Discover Recently Requested Tests", () => {
     cy.wait("@response").then((_) => {
 
       const card = Page.recentlyRequested.getRequest("55341");
+      card.status.should('contain.text', 'Pending');
       card.reveal();
-      card.approveButton.should('be.visible');
-      card.approveButton.click();
+      // The card scales on hover while its action buttons animate into view. A
+      // Cypress .click() moves the virtual pointer onto the button and can race
+      // that transform, causing the click to miss even though the button was
+      // already reported visible. Dispatch the DOM click directly after the
+      // visibility check so we still exercise Angular's real approval handler
+      // and backend request without depending on pointer coordinates.
+      card.approveButton.should('be.visible').trigger('click');
 
-      cy.wait("@approveCall").then((_) => {
+      cy.wait("@approveCall").then((interception) => {
+        expect(interception.response?.statusCode).to.be.within(200, 299);
         card.status.should('contain.text', 'Approved');
       });
 
@@ -204,20 +212,18 @@ describe("Discover Recently Requested Tests", () => {
 
   it("Approve Requested Tv Show", () => {
 
+    const username = `pendingTv${Date.now()}${Cypress._.random(1000, 9999)}`;
+    const password = "password";
+
+    cy.createUser(username, password, [{
+      value: "requesttv",
+      Enabled: "true",
+    }]);
+    cy.loginWithCreds(username, password);
     cy.requestAllTv(71712);
+    cy.login();
 
-    cy.intercept("GET", "**/v2/Requests/recentlyRequested", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const movie = body[0];
-        movie.available = false;
-        movie.approved = false;
-
-        body[0] = movie;
-        res.send(body);
-      });
-    }).as("response");
-
+    cy.intercept("GET", "**/v2/Requests/recentlyRequested").as("response");
     cy.intercept("POST", "**/v1/Request/tv/approve").as("approveCall");
 
     Page.visit();
@@ -225,11 +231,12 @@ describe("Discover Recently Requested Tests", () => {
     cy.wait("@response").then((_) => {
 
       const card = Page.recentlyRequested.getRequest("71712");
+      card.status.should('contain.text', 'Pending');
       card.reveal();
-      card.approveButton.should('be.visible');
-      card.approveButton.click();
+      card.approveButton.should('be.visible').trigger('click');
 
-      cy.wait("@approveCall").then((_) => {
+      cy.wait("@approveCall").then((interception) => {
+        expect(interception.response?.statusCode).to.be.within(200, 299);
         card.status.should('contain.text', 'Approved');
       });
 

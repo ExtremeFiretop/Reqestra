@@ -110,7 +110,13 @@ namespace Ombi.Api.External.MediaServers.Plex
 
         public async Task<PlexAccount> GetAccount(string authToken)
         {
-            var request = new Request(GetAccountUri, string.Empty, HttpMethod.Get);
+            var request = new Request(GetAccountUri, string.Empty, HttpMethod.Get)
+            {
+                // plex.tv error responses (including 429 rate limits) are not guaranteed to be
+                // JSON PlexAccount payloads. Let the API layer log the HTTP failure and return
+                // null rather than producing a misleading JSON deserialization exception.
+                DeserializeErrorResponse = false
+            };
             await AddHeaders(request, authToken);
             return await Api.Request<PlexAccount>(request);
         }
@@ -245,7 +251,13 @@ namespace Ombi.Api.External.MediaServers.Plex
         /// <returns></returns>
         public async Task<PlexUsers> GetUsers(string authToken)
         {
-            var request = new Request(string.Empty, FriendsUri, HttpMethod.Get, ContentType.Xml);
+            var request = new Request(string.Empty, FriendsUri, HttpMethod.Get, ContentType.Xml)
+            {
+                // plex.tv may return a plain-text/HTML error body for failures such as HTTP 429.
+                // That body is not a PlexUsers XML document, so do not attempt to deserialize it
+                // as the success model. Callers treat the resulting null as a failed fetch.
+                DeserializeErrorResponse = false
+            };
             await AddHeaders(request, authToken);
 
             return await Api.Request<PlexUsers>(request);

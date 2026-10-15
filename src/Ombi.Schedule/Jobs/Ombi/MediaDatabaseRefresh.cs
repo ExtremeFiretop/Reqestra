@@ -7,6 +7,7 @@ using Ombi.Core.Settings.Models.External;
 using Ombi.Helpers;
 using Ombi.Schedule.Jobs.Emby;
 using Ombi.Schedule.Jobs.Jellyfin;
+using Ombi.Schedule.Jobs.Plex;
 using Ombi.Schedule.Jobs.Plex.Interfaces;
 using Ombi.Store.Repository;
 using Quartz;
@@ -146,15 +147,26 @@ namespace Ombi.Schedule.Jobs.Ombi
                     return;
                 }
 
-                const string episodeSQL = "DELETE FROM PlexEpisode";
-                const string seasonsSql = "DELETE FROM PlexSeasonsContent";
-                const string mainSql = "DELETE FROM PlexServerContent";
-                await _plexRepo.ExecuteSql(episodeSQL);
-                await _plexRepo.ExecuteSql(seasonsSql);
-                await _plexRepo.ExecuteSql(mainSql);
+                // A Plex content sync may have already loaded PlexServerContent rows that this
+                // refresh deletes. Serialize the destructive refresh with both full and
+                // recently-added content syncs so they cannot later insert child rows for
+                // parents that no longer exist.
+                using (await PlexContentSyncLock.AcquireAsync())
+                {
+                    const string episodeSQL = "DELETE FROM PlexEpisode";
+                    const string seasonsSql = "DELETE FROM PlexSeasonsContent";
+                    const string mainSql = "DELETE FROM PlexServerContent";
+                    await _plexRepo.ExecuteSql(episodeSQL);
+                    await _plexRepo.ExecuteSql(seasonsSql);
+                    await _plexRepo.ExecuteSql(mainSql);
 
-
-                await OmbiQuartz.Scheduler.TriggerJob(new JobKey(nameof(IPlexContentSync), "Plex"), new JobDataMap(new Dictionary<string, string> { { "recentlyAddedSearch", "false" } }));
+                    // Always queue a full resync after the destructive refresh. Do not use
+                    // TriggerJobIfNotRunning here: a full sync can already be waiting on this
+                    // lock, and Quartz may still report a just-finished sync as running. The
+                    // same lock will serialize any duplicate trigger safely.
+                    await OmbiQuartz.Scheduler.TriggerJob(new JobKey(nameof(IPlexContentSync), "Plex"),
+                        new JobDataMap(new Dictionary<string, string> { { JobDataKeys.RecentlyAddedSearch, "false" } }));
+                }
             }
             catch (Exception e)
             {

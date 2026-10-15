@@ -10,6 +10,9 @@ import { RequestServiceV2 } from "../../../../../services/requestV2.service";
 import { TranslateModule, TranslateService } from "@ngx-translate/core";
 import { OmbiDatePipe } from "../../../../../pipes/OmbiDatePipe";
 import { MatButtonModule } from "@angular/material/button";
+import { firstValueFrom } from "rxjs";
+import { AuthService } from "../../../../../auth/auth.service";
+import { QualityProfileRequestDialogComponent } from "../../../../../shared/quality-profile-request-dialog/quality-profile-request-dialog.component";
 
 @Component({
     templateUrl: "./tv-requests-panel.component.html",
@@ -26,6 +29,7 @@ export class TvRequestsPanelComponent {
     @Input() public tvRequest: IChildRequests[];
     @Input() public isAdmin: boolean;
     @Input() public manageOwnRequests: boolean;
+    @Input() public canSelectQualityProfile = false;
 
     public RequestSource = RequestSource;
     public expandedRequests = new Set<number>();
@@ -36,7 +40,8 @@ export class TvRequestsPanelComponent {
         private readonly requestService2: RequestServiceV2,
         private readonly messageService: MessageService,
         public dialog: MatDialog,
-        private readonly translateService: TranslateService
+        private readonly translateService: TranslateService,
+        private readonly auth: AuthService
     ) {}
 
     public isExpanded(request: IChildRequests): boolean {
@@ -65,6 +70,12 @@ export class TvRequestsPanelComponent {
     }
 
     public getRequestStatusClass(request: IChildRequests): string {
+        if (request.downloading) return "downloading";
+        if (request.importing) return "importing";
+        if (request.standby) return "standby";
+        if (request.queued) return "queued";
+        if (request.completed) return "completed";
+        if (request.searching) return "searching";
         if (request.available) return "available";
         if (request.denied) return "denied";
         if (request.approved) return "approved";
@@ -72,8 +83,14 @@ export class TvRequestsPanelComponent {
     }
 
     public getEpisodeStatusClass(ep: IEpisodesRequests, request: IChildRequests): string {
+        if (ep.downloading) return "downloading";
+        if (ep.importing) return "importing";
+        if (ep.standby) return "standby";
+        if (ep.queued) return "queued";
         if (ep.available) return "available";
         if (ep.denied || request.denied) return "denied";
+        if (ep.completed) return "completed";
+        if (ep.searching) return "searching";
         if (request.approved || ep.approved) return "approved";
         return "requested";
     }
@@ -167,5 +184,45 @@ export class TvRequestsPanelComponent {
                 this.messageService.sendRequestEngineResultError(x);
             }
         });
+    }
+
+    public canRetryWithProfile(request: IChildRequests): boolean {
+        const currentUsername = this.auth.claims()?.name;
+        const ownsRequest = !!currentUsername &&
+            request.requestedUser?.userName?.toUpperCase() === currentUsername.toUpperCase();
+        return this.canSelectQualityProfile && ownsRequest && request.approved && !request.denied;
+    }
+
+    public async reProcessRequestWithProfile(request: IChildRequests): Promise<void> {
+        if (!this.canRetryWithProfile(request)) {
+            return;
+        }
+
+        const profileDialog = this.dialog.open(QualityProfileRequestDialogComponent, {
+            width: "460px",
+            data: {
+                type: RequestType.tvShow,
+                initialProfileId: request.qualityOverride ?? request.parentRequest?.qualityOverride,
+                requireExplicitSelection: true,
+            },
+            panelClass: "modal-panel",
+        });
+        const profileSelection = await firstValueFrom(profileDialog.afterClosed());
+        if (!profileSelection || profileSelection.profileId == null || profileSelection.profileId < 0) {
+            return;
+        }
+
+        const result = await firstValueFrom(
+            this.requestService2.reprocessRequest(request.id, RequestType.tvShow, false, profileSelection.profileId),
+        );
+        if (result.result) {
+            request.qualityOverride = profileSelection.profileId;
+            if (request.parentRequest) {
+                request.parentRequest.qualityOverride = profileSelection.profileId;
+            }
+            this.messageService.send(this.translateService.instant("Requests.SuccessfullyReprocessed"));
+        } else {
+            this.messageService.sendRequestEngineResultError(result);
+        }
     }
 }

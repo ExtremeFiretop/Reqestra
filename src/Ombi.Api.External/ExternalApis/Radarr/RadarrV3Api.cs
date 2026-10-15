@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -168,6 +169,18 @@ namespace Ombi.Api.External.ExternalApis.Radarr
             AddHeaders(request, apiKey);
 
             return await Api.Request<List<Tag>>(request);
+        }
+
+        public async Task<RadarrQueueResponse> GetQueue(string apiKey, string baseUrl, int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            var request = new Request($"/api/v3/queue?page={page}&pageSize={pageSize}&includeMovie=true", baseUrl, HttpMethod.Get)
+            {
+                ThrowOnErrorStatus = true,
+                CacheDuration = System.TimeSpan.FromSeconds(10)
+            };
+            AddHeaders(request, apiKey);
+
+            return await Api.Request<RadarrQueueResponse>(request, cancellationToken);
         }
 
         private async Task<CommandResult> Command(string apiKey, string baseUrl, object body)

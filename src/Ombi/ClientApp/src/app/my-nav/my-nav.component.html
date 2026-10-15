@@ -40,7 +40,8 @@
                     <!-- Internal link -->
                     <div *ngIf="!nav.externalLink" class="nav-item-wrapper">
                         <a class="nav-item" id="{{nav.id}}"
-                            [routerLink]="nav.link" [routerLinkActive]="'nav-item--active'">
+                            [routerLink]="nav.link" [routerLinkActive]="'nav-item--active'"
+                            (click)="drawer.mode === 'over' && drawer.close()">
                             <span class="nav-indicator"></span>
                             <i class="nav-icon {{nav.icon}}" aria-hidden="true"></i>
                             <span class="nav-label">{{nav.name | translate}}</span>
@@ -111,6 +112,8 @@
             </div>
 
             <div class="top-bar-spacer"></div>
+
+            <app-system-status></app-system-status>
 
             <div class="profile-block">
                 <a routerLink="/user-preferences" class="profile-link" [attr.aria-label]="userName">

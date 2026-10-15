@@ -33,7 +33,7 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
     public readonly filterOptions = [
         { type: RequestFilterType.All, label: 'Requests.AllRequests', id: 'filterAll' },
         { type: RequestFilterType.Pending, label: 'Requests.PendingRequests', id: 'filterPending' },
-        { type: RequestFilterType.Processing, label: 'Requests.ProcessingRequests', id: 'filterProcessing' },
+        { type: RequestFilterType.Processing, label: 'Requests.InProgress', id: 'filterProcessing' },
         { type: RequestFilterType.Available, label: 'Requests.AvailableRequests', id: 'filterAvailable' },
         { type: RequestFilterType.Denied, label: 'Requests.DeniedRequests', id: 'filterDenied' },
     ];
@@ -131,6 +131,12 @@ export abstract class BaseGridComponent<T> implements OnInit, AfterViewInit {
     public getStatusClass(item: any): string {
         const status = (item.requestStatus || '').toLowerCase();
         if (status.includes('available')) return 'status-available';
+        if (status.includes('downloading')) return 'status-downloading';
+        if (status.includes('importing')) return 'status-importing';
+        if (status.includes('standby')) return 'status-standby';
+        if (status.includes('queued')) return 'status-queued';
+        if (status.includes('completed')) return 'status-completed';
+        if (status.includes('searching')) return 'status-searching';
         if (status.includes('pending') || status.includes('notyetrequest')) return 'status-pending';
         if (status.includes('processing') || status.includes('approved')) return 'status-processing';
         if (status.includes('denied')) return 'status-denied';

@@ -7,5 +7,6 @@ namespace Ombi.Core.Senders
     {
         public List<int> Tags { get; set; } = new List<int>();
         public Dictionary<int, int> IdentityRepairSeasonNumberMap { get; } = new Dictionary<int, int>();
+        public bool NewlyAddedSeries { get; set; }
     }
 }

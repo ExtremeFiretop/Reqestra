@@ -1,5 +1,6 @@
-﻿using System.Net.Http;
+using System.Net.Http;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Ombi.Api.External.ExternalApis.Sonarr.Models;
@@ -64,6 +65,18 @@ namespace Ombi.Api.External.ExternalApis.Sonarr
             request.AddHeader("X-Api-Key", apiKey);
             request.AddJsonBody(new { episodeIds = episodeIds, monitored = monitor });
             return await Api.Request<List<MonitoredEpisodeResult>>(request);
+        }
+
+        public async Task<SonarrQueueResponse> GetQueue(string apiKey, string baseUrl, int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            var request = new Request($"{ApiBaseUrl}queue?page={page}&pageSize={pageSize}&includeSeries=true&includeEpisode=true", baseUrl, HttpMethod.Get)
+            {
+                ThrowOnErrorStatus = true,
+                CacheDuration = System.TimeSpan.FromSeconds(10)
+            };
+            request.AddHeader("X-Api-Key", apiKey);
+
+            return await Api.Request<SonarrQueueResponse>(request, cancellationToken);
         }
     }
 }

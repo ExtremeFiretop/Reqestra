@@ -24,7 +24,7 @@ namespace Ombi.Mapping.Profiles
                 .ForMember(dest => dest.Overview, opts => opts.MapFrom(src => src.overview))
                 .ForMember(dest => dest.Popularity, opts => opts.MapFrom(src => src.popularity))
                 .ForMember(dest => dest.PosterPath, opts => opts.MapFrom(src => src.poster_path))
-                .ForMember(dest => dest.ReleaseDate, opts => opts.MapFrom(src => src.release_date))
+                .ForMember(dest => dest.ReleaseDate, opts => opts.MapFrom(src => string.IsNullOrEmpty(src.release_date) ? src.first_air_date : src.release_date))
                 .ForMember(dest => dest.Title, opts => opts.MapFrom(src => string.IsNullOrEmpty(src.title) ? src.name : src.title))
                 .ForMember(dest => dest.Video, opts => opts.MapFrom(src => src.video))
                 .ForMember(dest => dest.VoteAverage, opts => opts.MapFrom(src => src.vote_average))

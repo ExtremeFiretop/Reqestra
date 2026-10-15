@@ -234,8 +234,20 @@ namespace Ombi.Core.Senders
                 return false;
             }
 
-            // Missing episode numbers are a structural disagreement, not a provider-title variant.
-            // Keep treating those as unsafe.
+            // A provider can temporarily expose one more trailing episode than TVDB/Sonarr.
+            // The Chosen season 6 is a concrete example: request metadata can include the later
+            // theatrical finale as S06E07 while TVDB/Sonarr currently expose six streaming episodes.
+            // Treat that narrow shape as metadata lag, not a season-identity conflict, but only
+            // after a long contiguous exact-season prefix and only when overlapping title
+            // disagreements are placeholders. Shifted/middle gaps and real title conflicts still
+            // fail closed.
+            if (HasSafeTrailingProviderEpisodeGap(sourceSeason, fingerprint, exactSeason))
+            {
+                return false;
+            }
+
+            // Other missing episode numbers are a structural disagreement, not a provider-title
+            // variant. Keep treating those as unsafe.
             if (fingerprint.Any(expected => !exactSeason.ContainsKey(expected.EpisodeNumber)))
             {
                 return true;
@@ -246,6 +258,26 @@ namespace Ombi.Core.Senders
                 .ToList();
 
             if (mismatchedTitles.Count == 0)
+            {
+                return false;
+            }
+
+            // Newly-announced/unreleased seasons often exist in Sonarr before TVDB has supplied
+            // usable episode titles. Values such as "TBA" (or an empty title) are absence of
+            // identity evidence, not evidence that the exact-number season is wrong. Fall back to
+            // the exact season only when the complete episode-number structure agrees and every
+            // title mismatch is a placeholder. A single meaningful conflicting title keeps the
+            // normal fail-closed behavior below.
+            var sourceEpisodeNumbers = new HashSet<int>(sourceSeason?.Episodes?
+                .Where(x => x != null)
+                .Select(x => x.EpisodeNumber)
+                ?? Enumerable.Empty<int>());
+
+            if (sourceEpisodeNumbers.Count > 0 &&
+                exactSeason.Count == sourceEpisodeNumbers.Count &&
+                sourceEpisodeNumbers.SetEquals(exactSeason.Keys) &&
+                mismatchedTitles.All(expected =>
+                    IsPlaceholderEpisodeTitle(exactSeason[expected.EpisodeNumber])))
             {
                 return false;
             }
@@ -267,6 +299,73 @@ namespace Ombi.Core.Senders
             if (airDateMatches.Count == 1 && airDateMatches[0] == sourceSeason.SeasonNumber)
             {
                 return false;
+            }
+
+            return true;
+        }
+
+        private static bool HasSafeTrailingProviderEpisodeGap(
+            SeasonRequests sourceSeason,
+            IReadOnlyCollection<EpisodeFingerprint> fingerprint,
+            IReadOnlyDictionary<int, string> exactSeason)
+        {
+            var sourceEpisodes = sourceSeason?.Episodes?
+                .Where(x => x != null)
+                .GroupBy(x => x.EpisodeNumber)
+                .Select(x => x.First())
+                .ToDictionary(x => x.EpisodeNumber)
+                ?? new Dictionary<int, EpisodeRequests>();
+
+            // Episode-count disagreement is structural evidence, so require a much stronger prefix
+            // than the normal three-episode title fingerprint. This intentionally covers one
+            // source-only trailing episode after at least six Sonarr episodes, not arbitrary
+            // partial seasons.
+            const int minimumSafePrefixSize = 6;
+            if (exactSeason.Count < minimumSafePrefixSize ||
+                sourceEpisodes.Count != exactSeason.Count + 1)
+            {
+                return false;
+            }
+
+            if (exactSeason.Keys.Any(x => !sourceEpisodes.ContainsKey(x)))
+            {
+                return false;
+            }
+
+            var sourceOnlyEpisodeNumbers = sourceEpisodes.Keys
+                .Except(exactSeason.Keys)
+                .ToList();
+            if (sourceOnlyEpisodeNumbers.Count != 1)
+            {
+                return false;
+            }
+
+            var orderedSonarrEpisodeNumbers = exactSeason.Keys
+                .OrderBy(x => x)
+                .ToList();
+            if (!orderedSonarrEpisodeNumbers.SequenceEqual(
+                    Enumerable.Range(1, exactSeason.Count)))
+            {
+                return false;
+            }
+
+            var trailingSourceEpisodeNumber = sourceOnlyEpisodeNumbers[0];
+            if (trailingSourceEpisodeNumber != exactSeason.Count + 1 ||
+                trailingSourceEpisodeNumber != sourceEpisodes.Keys.Max())
+            {
+                return false;
+            }
+
+            // Every overlapping source title must either agree or meet an explicit Sonarr
+            // placeholder. A meaningful disagreement is identity evidence and must remain unsafe.
+            foreach (var expected in fingerprint.Where(x => exactSeason.ContainsKey(x.EpisodeNumber)))
+            {
+                var actualTitle = exactSeason[expected.EpisodeNumber];
+                if (!TitlesMatch(actualTitle, expected.NormalizedTitle) &&
+                    !IsPlaceholderEpisodeTitle(actualTitle))
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -450,6 +549,16 @@ namespace Ombi.Core.Senders
                 NormalizeTitle(actualTitle),
                 normalizedExpectedTitle,
                 StringComparison.Ordinal);
+        }
+
+        private static bool IsPlaceholderEpisodeTitle(string title)
+        {
+            var normalizedTitle = NormalizeTitle(title);
+            return string.IsNullOrEmpty(normalizedTitle) ||
+                   normalizedTitle == "tba" ||
+                   normalizedTitle == "tbd" ||
+                   normalizedTitle == "tobeannounced" ||
+                   normalizedTitle == "tobedetermined";
         }
 
         private static string NormalizeTitle(string title)

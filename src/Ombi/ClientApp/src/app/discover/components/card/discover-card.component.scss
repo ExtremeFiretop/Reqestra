@@ -156,6 +156,12 @@
     );
 }
 
+// Keep the title/overview above the request action. This is especially important
+// on touch layouts where both the overlay and request button are always visible.
+.card-inner.has-actions .card-overlay {
+    padding-bottom: 58px;
+}
+
 .overlay-content {
     transform: translateY(8px);
     transition: transform 0.3s ease;

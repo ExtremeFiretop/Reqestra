@@ -61,6 +61,13 @@
     display: none !important;
 }
 
+// Center cards within each PrimeNG carousel slot. This is especially visible
+// on mobile where numVisible is 1 and the card is narrower than the viewport.
+:host ::ng-deep .p-carousel-item {
+    display: flex;
+    justify-content: center;
+}
+
 // Carousel navigation arrows
 :host ::ng-deep .p-carousel-prev,
 :host ::ng-deep .p-carousel-next {

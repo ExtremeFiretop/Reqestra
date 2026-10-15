@@ -65,6 +65,11 @@
 						<i class="fas fa-check"></i> {{ 'Common.Available' | translate }}
 					</span>
 
+					<!-- Profile search stays available for owned approved requests, including available/downloading media -->
+					<button *ngIf="canRetryWithProfile(false)" class="action-btn action-btn--secondary" (click)="reProcessRequestWithProfile(false)">
+						<i class="fas fa-sync"></i> Change Profile &amp; Search Again
+					</button>
+
 					<!-- Regular request status -->
 					<ng-container *ngIf="!movie.available">
 						<ng-container *ngIf="movie.requested || movie.approved; else notRequestedBtn">
@@ -88,6 +93,9 @@
 							<span *ngIf="movie.available4K" class="action-btn action-btn--success">
 								<i class="fas fa-check"></i> {{ 'Common.Available4K' | translate }}
 							</span>
+							<button *ngIf="canRetryWithProfile(true)" class="action-btn action-btn--secondary" (click)="reProcessRequestWithProfile(true)">
+								<i class="fas fa-sync"></i> Change Profile &amp; Search Again
+							</button>
 							<ng-container *ngIf="!movie.available4K">
 								<ng-container *ngIf="movie.has4KRequest || movie.approved4K; else notRequestedBtn4K">
 									<span *ngIf="movieRequest && !movieRequest.denied4K" class="action-btn action-btn--warning">

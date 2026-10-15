@@ -60,6 +60,7 @@ namespace Ombi.Schedule.Jobs.Plex
             await _notification.SendNotificationToAdmins("Plex User Importer Started");
             var allUsers = await _userManager.Users.Where(x => x.UserType == UserType.PlexUser).ToListAsync();
             List<OmbiUser> newOrUpdatedUsers = new List<OmbiUser>();
+            var plexUserImportComplete = true;
 
             foreach (var server in settings.Servers)
             {
@@ -75,11 +76,26 @@ namespace Ombi.Schedule.Jobs.Plex
                 }
                 if (userManagementSettings.ImportPlexUsers)
                 {
-                    newOrUpdatedUsers.AddRange(await ImportPlexUsers(userManagementSettings, allUsers, server));
+                    var importedUsers = await ImportPlexUsers(userManagementSettings, allUsers, server);
+                    if (importedUsers == null)
+                    {
+                        // A failed Plex user-list fetch must not be interpreted as an empty list.
+                        // Cleanup uses the successfully imported set to decide who disappeared, so
+                        // running it with incomplete source data could delete valid Ombi users.
+                        plexUserImportComplete = false;
+                        continue;
+                    }
+
+                    newOrUpdatedUsers.AddRange(importedUsers);
                 }
             }
 
-            if (userManagementSettings.CleanupPlexUsers)
+            if (userManagementSettings.CleanupPlexUsers && !plexUserImportComplete)
+            {
+                _log.LogWarning(
+                    "Skipping Plex user cleanup because one or more Plex user-list requests failed. Existing Plex users will be preserved until a complete import succeeds.");
+            }
+            else if (userManagementSettings.CleanupPlexUsers)
             {
                 // Refresh users from updates
                 allUsers = await _userManager.Users.Where(x => x.UserType == UserType.PlexUser)
@@ -115,6 +131,14 @@ namespace Ombi.Schedule.Jobs.Plex
             List<OmbiUser> allUsers, PlexServers server)
         {
             var users = await _api.GetUsers(server.PlexAuthToken);
+
+            if (users?.User == null)
+            {
+                _log.LogWarning(
+                    "Could not import Plex users from server {ServerName}; the Plex user list could not be retrieved. Plex user cleanup will be skipped for this run.",
+                    server.Name);
+                return null;
+            }
 
             List<OmbiUser> newOrUpdatedUsers = new List<OmbiUser>();
             

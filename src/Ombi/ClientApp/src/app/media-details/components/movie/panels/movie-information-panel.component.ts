@@ -60,6 +60,30 @@ export class MovieInformationPanelComponent implements OnInit {
     }
 
     public getStatus(movie: ISearchMovieResultV2) {
+      if (this.request?.downloading) {
+        return "Common.Downloading";
+      }
+
+      if (this.request?.importing) {
+        return "Common.Importing";
+      }
+
+      if (this.request?.standby) {
+        return "Common.Standby";
+      }
+
+      if (this.request?.queued) {
+        return "Common.Queued";
+      }
+
+      if (this.request?.completed) {
+        return "Common.Completed";
+      }
+
+      if (this.request?.searching) {
+        return "Common.Searching";
+      }
+
       if (!movie.available && movie.requested) {
         if (movie.denied) {
           return "Common.RequestDenied";

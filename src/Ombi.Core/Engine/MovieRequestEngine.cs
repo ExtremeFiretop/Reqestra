@@ -1,4 +1,4 @@
-﻿using Ombi.Api.External.ExternalApis.TheMovieDb;
+using Ombi.Api.External.ExternalApis.TheMovieDb;
 using Ombi.Core.Models.Requests;
 using Ombi.Helpers;
 using Ombi.Store.Entities;
@@ -36,7 +36,8 @@ namespace Ombi.Core.Engine
             IFeatureService featureService,
             IUserPlayedMovieRepository userPlayedMovieRepository,
             IQualityProfileSelectionService qualityProfileSelectionService,
-            IMediaCleanupEngine mediaCleanupEngine = null)
+            IMediaCleanupEngine mediaCleanupEngine = null,
+            IDownloadStatusService downloadStatusService = null)
             : base(user, requestService, r, manager, cache, ombiSettings, sub)
         {
             MovieApi = movieApi;
@@ -49,6 +50,7 @@ namespace Ombi.Core.Engine
             _userPlayedMovieRepository = userPlayedMovieRepository;
             _qualityProfileSelectionService = qualityProfileSelectionService;
             _mediaCleanupEngine = mediaCleanupEngine;
+            _downloadStatusService = downloadStatusService;
         }
 
         private IMovieDbApi MovieApi { get; }
@@ -61,6 +63,7 @@ namespace Ombi.Core.Engine
         protected readonly IUserPlayedMovieRepository _userPlayedMovieRepository;
         private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
         private readonly IMediaCleanupEngine _mediaCleanupEngine;
+        private readonly IDownloadStatusService _downloadStatusService;
 
         /// <summary>
         /// Requests the movie.
@@ -565,6 +568,10 @@ namespace Ombi.Core.Engine
         {
             await CheckForSubscription(shouldHide.UserId, requests);
             await CheckForPlayed(shouldHide, requests);
+            if (_downloadStatusService != null)
+            {
+                await _downloadStatusService.PopulateMovieDownloadStatus(requests);
+            }
         }
 
         private async Task CheckForSubscription(string UserId, List<MovieRequests> movieRequests)
@@ -869,6 +876,99 @@ namespace Ombi.Core.Engine
                     Result = false,
                     ErrorMessage = "Request does not exist"
                 };
+            }
+
+            return await ProcessSendingMovie(request, is4K);
+        }
+
+        public async Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId)
+        {
+            var request = await MovieRepository.GetWithUser().FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+            if (request == null)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.RequestDoesNotExist,
+                    ErrorMessage = "Request does not exist"
+                };
+            }
+
+            var isPrivileged = Username.Equals("API", StringComparison.CurrentCultureIgnoreCase) ||
+                               await IsInRole(OmbiRoles.PowerUser) ||
+                               await IsInRole(OmbiRoles.Admin);
+
+            if (!isPrivileged)
+            {
+                var user = await GetUser();
+                var canSelectQualityProfile = await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+                var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
+                var approved = is4K ? request.Approved4K : request.Approved;
+                var denied = is4K ? request.Denied4K : request.Denied;
+
+                if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
+                    qualityProfileId.Value < 0 || !approved || denied == true)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorCode = ErrorCode.NoPermissions,
+                        ErrorMessage = "You do not have permission to reprocess this request."
+                    };
+                }
+            }
+
+            if (qualityProfileId.HasValue)
+            {
+                if (qualityProfileId.Value < 0)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "The selected Radarr quality profile is invalid."
+                    };
+                }
+
+                var resetToConfiguredDefault = qualityProfileId.Value == 0;
+                if (!resetToConfiguredDefault)
+                {
+                    try
+                    {
+                        if (!await _qualityProfileSelectionService.IsValidRadarrProfile(qualityProfileId.Value, is4K))
+                        {
+                            return new RequestEngineResult
+                            {
+                                Result = false,
+                                ErrorMessage = "The selected Radarr quality profile is no longer available."
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Could not validate selected {RadarrType} quality profile {ProfileId} while reprocessing request {RequestId}",
+                            is4K ? "Radarr 4K" : "Radarr", qualityProfileId.Value, requestId);
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorMessage = "Reqestra could not validate the selected Radarr quality profile because Radarr is unavailable."
+                        };
+                    }
+                }
+
+                if (is4K)
+                {
+                    request.QualityOverride4K = qualityProfileId.Value;
+                }
+                else
+                {
+                    request.QualityOverride = qualityProfileId.Value;
+                }
+
+                // Zero is an explicit retry instruction, not merely the absence of an override.
+                // Keep that distinction transient so ordinary requests stored with zero are not
+                // unexpectedly reprofiled when sent for unrelated reasons.
+                request.ResetQualityProfileToDefault = resetToConfiguredDefault;
+                await MovieRepository.Update(request);
             }
 
             return await ProcessSendingMovie(request, is4K);

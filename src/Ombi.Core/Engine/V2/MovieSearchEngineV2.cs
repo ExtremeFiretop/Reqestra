@@ -136,15 +136,18 @@ namespace Ombi.Core.Engine.V2
         {
             var langCode = await DefaultLanguageCode(langCustomCode);
 
-            var pages = PaginationHelper.GetNextPages(currentlyLoaded, toLoad, _theMovieDbMaxPageItems);
+            var today = DateTime.Today;
+            var todayKey = today.ToString("yyyyMMdd");
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentlyLoaded,
+                toLoad,
+                _theMovieDbMaxPageItems,
+                page => Cache.GetOrAddAsync(
+                    nameof(PopularMovies) + page + langCode + todayKey,
+                    () => MovieApi.PopularMovies(langCode, page, cancellationToken),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsReleased(item.ReleaseDate, today));
 
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(PopularMovies) + pagesToLoad.Page + langCode,
-                    () => MovieApi.PopularMovies(langCode, pagesToLoad.Page, cancellationToken), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
             return await TransformMovieResultsToResponse(results);
         }
 
@@ -201,15 +204,17 @@ namespace Ombi.Core.Engine.V2
         {
             var langCode = await DefaultLanguageCode(null);
 
-            var pages = PaginationHelper.GetNextPages(currentPosition, amountToLoad, _theMovieDbMaxPageItems);
+            var today = DateTime.Today;
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentPosition,
+                amountToLoad,
+                _theMovieDbMaxPageItems,
+                page => Cache.GetOrAddAsync(
+                    nameof(NowPlayingMovies) + page + langCode,
+                    () => MovieApi.TrendingMovies(langCode, page),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsReleased(item.ReleaseDate, today));
 
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(NowPlayingMovies) + pagesToLoad.Page + langCode,
-                    () => MovieApi.TrendingMovies(langCode, pagesToLoad.Page), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
             return await TransformMovieResultsToResponse(results);
         }
 
@@ -293,15 +298,18 @@ namespace Ombi.Core.Engine.V2
         {
             var langCode = await DefaultLanguageCode(null);
 
-            var pages = PaginationHelper.GetNextPages(currentPosition, amountToLoad, _theMovieDbMaxPageItems);
+            var today = DateTime.Today;
+            var todayKey = today.ToString("yyyyMMdd");
+            var results = await DiscoveryReleaseFilter.LoadFilteredPage(
+                currentPosition,
+                amountToLoad,
+                _theMovieDbMaxPageItems,
+                page => Cache.GetOrAddAsync(
+                    nameof(UpcomingMovies) + page + langCode + todayKey,
+                    () => MovieApi.UpcomingMovies(langCode, page),
+                    DateTimeOffset.Now.AddHours(12)),
+                item => DiscoveryReleaseFilter.IsUpcoming(item.ReleaseDate, today));
 
-            var results = new List<MovieDbSearchResult>();
-            foreach (var pagesToLoad in pages)
-            {
-                var apiResult = await Cache.GetOrAddAsync(nameof(UpcomingMovies) + pagesToLoad.Page + langCode,
-                    () =>  MovieApi.UpcomingMovies(langCode, pagesToLoad.Page), DateTimeOffset.Now.AddHours(12));
-                results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
-            }
             return await TransformMovieResultsToResponse(results);
         }
 

@@ -49,32 +49,39 @@ namespace Ombi.Schedule.Jobs.Plex
 
                 await _notification.SendNotificationToAdmins("Plex Episode Sync Started");
 
-                var servers = s.Servers ?? new List<PlexServers>();
-                var observedEpisodeKeys = new HashSet<string>();
-                var fullSnapshotComplete = servers.Count > 0;
+                // Serialize episode cache writes/reconciliation with full/recent content syncs and
+                // destructive Plex media database refreshes. A refresh deletes the parent series
+                // rows that PlexEpisode.GrandparentKey points to, so allowing this job to write at
+                // the same time can leave orphaned episode rows behind.
+                using (await PlexContentSyncLock.AcquireAsync())
+                {
+                    var servers = s.Servers ?? new List<PlexServers>();
+                    var observedEpisodeKeys = new HashSet<string>();
+                    var fullSnapshotComplete = servers.Count > 0;
 
-                foreach (var server in servers)
-                {
-                    try
+                    foreach (var server in servers)
                     {
-                        observedEpisodeKeys.UnionWith(await Cache(server));
+                        try
+                        {
+                            observedEpisodeKeys.UnionWith(await Cache(server));
+                        }
+                        catch (Exception e)
+                        {
+                            fullSnapshotComplete = false;
+                            _log.LogWarning(LoggingEvents.PlexEpisodeCacher, e,
+                                "Plex episode snapshot failed for server {ServerName}; stale episode cache entries will be preserved.",
+                                server.Name);
+                        }
                     }
-                    catch (Exception e)
-                    {
-                        fullSnapshotComplete = false;
-                        _log.LogWarning(LoggingEvents.PlexEpisodeCacher, e,
-                            "Plex episode snapshot failed for server {ServerName}; stale episode cache entries will be preserved.",
-                            server.Name);
-                    }
-                }
 
-                if (fullSnapshotComplete)
-                {
-                    await ReconcileEpisodeCache(observedEpisodeKeys);
-                }
-                else
-                {
-                    _log.LogWarning("Plex episode snapshot was incomplete; stale Plex episode cache entries were preserved.");
+                    if (fullSnapshotComplete)
+                    {
+                        await ReconcileEpisodeCache(observedEpisodeKeys);
+                    }
+                    else
+                    {
+                        _log.LogWarning("Plex episode snapshot was incomplete; stale Plex episode cache entries were preserved.");
+                    }
                 }
             }
             catch (Exception e)
@@ -172,10 +179,27 @@ namespace Ombi.Schedule.Jobs.Plex
 
         private async Task ReconcileEpisodeCache(HashSet<string> observedEpisodeKeys)
         {
+            // GetAllEpisodes eagerly loads Series. A null Series therefore means the cached
+            // episode no longer has a matching PlexServerContent parent, not merely that the
+            // navigation property was left unloaded.
             var cachedEpisodes = await _repo.GetAllEpisodes().Cast<PlexEpisode>().ToListAsync();
+            var orphanedEpisodeCount = cachedEpisodes.Count(x =>
+                string.IsNullOrWhiteSpace(x.GrandparentKey) || x.Series == null);
+
             var staleEpisodes = cachedEpisodes
-                .Where(x => string.IsNullOrWhiteSpace(x.Key) || !observedEpisodeKeys.Contains(x.Key))
+                .Where(x =>
+                    string.IsNullOrWhiteSpace(x.Key) ||
+                    string.IsNullOrWhiteSpace(x.GrandparentKey) ||
+                    x.Series == null ||
+                    !observedEpisodeKeys.Contains(x.Key))
                 .ToList();
+
+            if (orphanedEpisodeCount > 0)
+            {
+                _log.LogWarning(
+                    "Plex episode reconciliation found {OrphanedCount} orphaned episode cache rows; they will be removed.",
+                    orphanedEpisodeCount);
+            }
 
             if (staleEpisodes.Count > 0)
             {
@@ -183,9 +207,10 @@ namespace Ombi.Schedule.Jobs.Plex
             }
 
             _log.LogInformation(
-                "Plex episode reconciliation completed. Observed={ObservedCount}, Removed={RemovedCount}",
+                "Plex episode reconciliation completed. Observed={ObservedCount}, Removed={RemovedCount}, Orphaned={OrphanedCount}",
                 observedEpisodeKeys.Count,
-                staleEpisodes.Count);
+                staleEpisodes.Count,
+                orphanedEpisodeCount);
         }
 
         private static void AddObservedEpisodeKeys(HashSet<string> observedEpisodeKeys, IEnumerable<Metadata> episodes)

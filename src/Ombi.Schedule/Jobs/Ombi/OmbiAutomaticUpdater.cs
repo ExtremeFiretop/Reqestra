@@ -421,17 +421,37 @@ namespace Ombi.Schedule.Jobs.Ombi
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
+                Directory.CreateDirectory(tempPath);
+                var extractionRoot = Path.GetFullPath(tempPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+
                 using (var files = ZipFile.OpenRead(zipDir))
                 {
                     foreach (var entry in files.Entries)
                     {
-                        if (entry.FullName.Contains("/"))
+                        var destinationPath = Path.GetFullPath(Path.Combine(extractionRoot, entry.FullName));
+                        if (!destinationPath.StartsWith(extractionRoot, StringComparison.OrdinalIgnoreCase))
                         {
-                            var path = Path.GetDirectoryName(Path.Combine(tempPath, entry.FullName));
-                            Directory.CreateDirectory(path);
+                            throw new InvalidDataException(
+                                $"Archive entry '{entry.FullName}' would extract outside the update directory.");
                         }
 
-                        entry.ExtractToFile(Path.Combine(tempPath, entry.FullName));
+                        // Explicit ZIP directory entries (for example, ClientApp/) must not be
+                        // passed to ExtractToFile. Create them and continue to the next entry.
+                        if (string.IsNullOrEmpty(entry.Name))
+                        {
+                            Directory.CreateDirectory(destinationPath);
+                            continue;
+                        }
+
+                        var directory = Path.GetDirectoryName(destinationPath);
+                        if (!string.IsNullOrEmpty(directory))
+                        {
+                            Directory.CreateDirectory(directory);
+                        }
+
+                        entry.ExtractToFile(destinationPath, true);
                     }
                 }
             }

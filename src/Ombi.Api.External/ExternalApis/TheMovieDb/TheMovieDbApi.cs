@@ -294,6 +294,19 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb
             request.AddQueryString("api_key", ApiToken);
             request.AddQueryString("language", langCode);
             request.AddQueryString("sort_by", "popularity.desc");
+
+            // Keep dashboard Popular focused on media that has already premiered. Future titles
+            // belong to the dedicated Upcoming carousel instead of competing for Popular slots.
+            var today = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.Equals(type, "movie", StringComparison.OrdinalIgnoreCase))
+            {
+                request.AddQueryString("release_date.lte", today);
+            }
+            else if (string.Equals(type, "tv", StringComparison.OrdinalIgnoreCase))
+            {
+                request.AddQueryString("first_air_date.lte", today);
+            }
+
             if (page != null)
             {
                 request.AddQueryString("page", page.ToString());
@@ -381,7 +394,7 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb
 
             // The date range being used in `/movie/upcoming` isn't documented, but we infer it is
             // an offset from today based on the minimum and maximum date they provide in the output
-            var startDate = DateTime.Today.AddDays(7);
+            var startDate = DateTime.Today.AddDays(1);
             request.AddQueryString("release_date.gte", startDate.ToString("yyyy-MM-dd"));
             request.AddQueryString("release_date.lte", startDate.AddDays(17).ToString("yyyy-MM-dd"));
             if (page != null)

@@ -232,6 +232,7 @@ namespace Ombi.Core.Senders
             var currentRequestHasProfileChoice = model.QualityOverride.HasValue;
             var currentRequestQualityOverride = model.QualityOverride.GetValueOrDefault();
             var profileOverrideRequested = currentRequestHasProfileChoice && currentRequestQualityOverride > 0;
+            var profileChangeRequested = profileOverrideRequested || model.ResetQualityProfileToDefault;
 
             if (currentRequestHasProfileChoice)
             {
@@ -333,6 +334,7 @@ namespace Ombi.Core.Senders
                                 $"Sonarr returned no series metadata after adding '{model.ParentRequest.Title}' (series id {result.id}).");
                         }
 
+                        options.NewlyAddedSeries = true;
                         await SendToSonarr(model, existingSeries, s, options);
                     }
                     catch (Exception configurationException)
@@ -344,10 +346,11 @@ namespace Ombi.Core.Senders
                 else
                 {
                     var seriesNeedsUpdate = false;
-                    if (profileOverrideRequested && existingSeries.qualityProfileId != qualityToUse)
+                    if (profileChangeRequested && existingSeries.qualityProfileId != qualityToUse)
                     {
-                        // Sonarr quality profiles are series-wide. Selecting a new profile for
-                        // any season therefore reprofiles the whole existing series.
+                        // Sonarr quality profiles are series-wide. Selecting a profile, including
+                        // explicitly resetting to Reqestra's configured default, therefore
+                        // reprofiles the whole existing series.
                         existingSeries.qualityProfileId = qualityToUse;
                         seriesNeedsUpdate = true;
                     }
@@ -789,6 +792,39 @@ namespace Ombi.Core.Senders
                 }
             }
 
+            // A newly-added Sonarr series can come back with every season/episode monitored even
+            // though the add payload requested them unmonitored. Normalize only newly-created
+            // series here; existing Sonarr series may contain user-managed monitoring state that
+            // Reqestra must not disturb outside the requested seasons.
+            if (options.NewlyAddedSeries)
+            {
+                var requestedSonarrSeasons = seasonNumberMap.Values.ToHashSet();
+                var seasonMonitoringChanged = false;
+                foreach (var sonarrSeason in result.seasons ?? Enumerable.Empty<Season>())
+                {
+                    var shouldMonitor = requestedSonarrSeasons.Contains(sonarrSeason.seasonNumber);
+                    if (sonarrSeason.monitored != shouldMonitor)
+                    {
+                        sonarrSeason.monitored = shouldMonitor;
+                        seasonMonitoringChanged = true;
+                    }
+                }
+
+                if (seasonMonitoringChanged)
+                {
+                    result = await SonarrApi.UpdateSeries(result, s.ApiKey, s.FullUri);
+                }
+
+                // Enabling a season can cause Sonarr to mark all of its episodes monitored. Start
+                // the newly-added series from a known all-unmonitored episode state, then the
+                // request-scoped pass below enables only the requested episodes.
+                var allEpisodeIds = sonarrEpList.Select(x => x.id).Distinct().ToArray();
+                if (allEpisodeIds.Any())
+                {
+                    await SonarrApi.MonitorEpisode(allEpisodeIds, false, s.ApiKey, s.FullUri);
+                }
+            }
+
             var episodesToUpdate = new List<Episode>();
             foreach (var season in model.SeasonRequests)
             {
@@ -797,7 +833,7 @@ namespace Ombi.Core.Senders
                 {
                     var sonarrEp = sonarrEpList.FirstOrDefault(x =>
                         x.episodeNumber == ep.EpisodeNumber && x.seasonNumber == targetSeasonNumber);
-                    if (sonarrEp != null && !sonarrEp.monitored)
+                    if (sonarrEp != null && (!sonarrEp.monitored || options.NewlyAddedSeries))
                     {
                         sonarrEp.monitored = true;
                         episodesToUpdate.Add(sonarrEp);
@@ -817,7 +853,7 @@ namespace Ombi.Core.Senders
                 // Make sure this season is set to monitored. Sonarr monitors every episode when a
                 // season is enabled, so reset the season's episodes and then enable only the ones
                 // represented by the Ombi request.
-                if (!existingSeason.monitored)
+                if (!existingSeason.monitored && !options.NewlyAddedSeries)
                 {
                     existingSeason.monitored = true;
                     var sea = result.seasons.FirstOrDefault(x => x.seasonNumber == existingSeason.seasonNumber);

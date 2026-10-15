@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using AutoMapper;
 using Ombi.Api.External.ExternalApis.TvMaze;
 using Ombi.Api.External.ExternalApis.TheMovieDb;
@@ -41,7 +41,8 @@ namespace Ombi.Core.Engine
             IUserPlayedEpisodeRepository userPlayedEpisodeRepository,
             IQualityProfileSelectionService qualityProfileSelectionService,
             IRepository<RequestQueue> requestQueue,
-            IMediaCleanupEngine mediaCleanupEngine = null) : base(user, requestService, rule, manager, cache, settings, sub)
+            IMediaCleanupEngine mediaCleanupEngine = null,
+            IDownloadStatusService downloadStatusService = null) : base(user, requestService, rule, manager, cache, settings, sub)
         {
             TvApi = tvApi;
             MovieDbApi = movApi;
@@ -54,6 +55,7 @@ namespace Ombi.Core.Engine
             _qualityProfileSelectionService = qualityProfileSelectionService;
             _requestQueueRepository = requestQueue;
             _mediaCleanupEngine = mediaCleanupEngine;
+            _downloadStatusService = downloadStatusService;
         }
 
         private INotificationHelper NotificationHelper { get; }
@@ -68,6 +70,7 @@ namespace Ombi.Core.Engine
         private readonly IQualityProfileSelectionService _qualityProfileSelectionService;
         private readonly IRepository<RequestQueue> _requestQueueRepository;
         private readonly IMediaCleanupEngine _mediaCleanupEngine;
+        private readonly IDownloadStatusService _downloadStatusService;
 
         public async Task<RequestEngineResult> RequestTvShow(TvRequestViewModel tv)
         {
@@ -588,12 +591,13 @@ namespace Ombi.Core.Engine
 
             allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
@@ -648,12 +652,13 @@ namespace Ombi.Core.Engine
                 return new RequestsViewModel<ChildRequests>();
             }
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
@@ -690,12 +695,13 @@ namespace Ombi.Core.Engine
 
             allRequests = FilterByRequestedUser(allRequests.AsQueryable(), requestedByUserId, shouldHide.IsAdmin).ToList();
 
-            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
-
             await FillAdditionalFields(shouldHide, allRequests);
 
-            // Make sure we do not show duplicate child requests
-            allRequests = allRequests.DistinctBy(x => x.ParentRequest.Title).ToList();
+            // Represent each TV series with one deterministic child request. The representative is
+            // selected by lifecycle priority rather than the caller's sort order so the same series
+            // cannot show different statuses on different clients.
+            allRequests = TvRequestGridAggregator.CollapseToSeriesCards(allRequests);
+            allRequests = ApplySortTv(allRequests, sortProperty, sortOrder);
 
             var total = allRequests.Count;
             allRequests = allRequests.Skip(position).Take(count).ToList();
@@ -1144,6 +1150,10 @@ namespace Ombi.Core.Engine
         {
             await CheckForSubscription(shouldHide, childRequests);
             CheckForPlayed(shouldHide, childRequests);
+            if (_downloadStatusService != null)
+            {
+                await _downloadStatusService.PopulateTvDownloadStatus(childRequests);
+            }
         }
 
         private async Task CheckForSubscription(HideResult shouldHide, List<ChildRequests> childRequests)
@@ -1266,6 +1276,95 @@ namespace Ombi.Core.Engine
                     ErrorCode = ErrorCode.RequestDoesNotExist,
                     ErrorMessage = "Request does not exist"
                 };
+            }
+
+            return await ProcessSendingShow(request, completeActiveFailuresOnSuccess: true);
+        }
+
+        public async Task<RequestEngineResult> ReProcessRequest(int requestId, bool is4K, CancellationToken cancellationToken, int? qualityProfileId)
+        {
+            var request = await TvRepository.GetChild().FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+            if (request == null)
+            {
+                return new RequestEngineResult
+                {
+                    Result = false,
+                    ErrorCode = ErrorCode.RequestDoesNotExist,
+                    ErrorMessage = "Request does not exist"
+                };
+            }
+
+            var isPrivileged = Username.Equals("API", StringComparison.CurrentCultureIgnoreCase) ||
+                               await IsInRole(OmbiRoles.PowerUser) ||
+                               await IsInRole(OmbiRoles.Admin);
+
+            if (!isPrivileged)
+            {
+                var user = await GetUser();
+                var canSelectQualityProfile = await UserManager.IsInRoleAsync(user, OmbiRoles.SelectQualityProfile);
+                var ownsRequest = string.Equals(request.RequestedUserId, user?.Id, StringComparison.Ordinal);
+
+                if (!canSelectQualityProfile || !ownsRequest || !qualityProfileId.HasValue ||
+                    qualityProfileId.Value < 0 || !request.Approved || request.Denied == true)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorCode = ErrorCode.NoPermissions,
+                        ErrorMessage = "You do not have permission to reprocess this request."
+                    };
+                }
+            }
+
+            if (qualityProfileId.HasValue)
+            {
+                if (qualityProfileId.Value < 0)
+                {
+                    return new RequestEngineResult
+                    {
+                        Result = false,
+                        ErrorMessage = "The selected Sonarr quality profile is invalid."
+                    };
+                }
+
+                var resetToConfiguredDefault = qualityProfileId.Value == 0;
+                if (!resetToConfiguredDefault)
+                {
+                    try
+                    {
+                        if (!await _qualityProfileSelectionService.IsValidSonarrProfile(qualityProfileId.Value))
+                        {
+                            return new RequestEngineResult
+                            {
+                                Result = false,
+                                ErrorMessage = "The selected Sonarr quality profile is no longer available."
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not validate selected Sonarr quality profile {ProfileId} while reprocessing request {RequestId}",
+                            qualityProfileId.Value, requestId);
+                        return new RequestEngineResult
+                        {
+                            Result = false,
+                            ErrorMessage = "Reqestra could not validate the selected Sonarr quality profile because Sonarr is unavailable."
+                        };
+                    }
+                }
+
+                // Persist zero on the child so this request explicitly has no request-level
+                // override. Clear the parent fallback too so later sends cannot resurrect the
+                // old series-wide selection.
+                request.QualityOverride = qualityProfileId.Value;
+                request.ResetQualityProfileToDefault = resetToConfiguredDefault;
+                if (request.ParentRequest != null)
+                {
+                    request.ParentRequest.QualityOverride = resetToConfiguredDefault
+                        ? (int?)null
+                        : qualityProfileId.Value;
+                }
+                await TvRepository.UpdateChild(request);
             }
 
             return await ProcessSendingShow(request, completeActiveFailuresOnSuccess: true);

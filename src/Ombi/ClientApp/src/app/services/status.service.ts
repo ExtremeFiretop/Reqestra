@@ -11,6 +11,10 @@ export class StatusService extends ServiceHelpers {
     constructor(http: HttpClient, @Inject(APP_BASE_HREF) href:string) {
         super(http, "/api/v1/status/", href);
     }
+    public getStatus(): Observable<string> {
+        return this.http.get(`${this.url}`, {headers: this.headers, responseType: "text"});
+    }
+
     public getWizardStatus(): Observable<WizardResult> {
         return this.http.get<WizardResult>(`${this.url}Wizard/`, {headers: this.headers});
     }

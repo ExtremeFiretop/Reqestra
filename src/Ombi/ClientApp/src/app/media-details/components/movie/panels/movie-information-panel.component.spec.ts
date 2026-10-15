@@ -33,6 +33,42 @@ describe('MovieInformationPanelComponent', () => {
   });
 
   describe('getStatus', () => {
+    it('should return Downloading when the request is in the Radarr queue', () => {
+      const { comp } = createComponent();
+      comp.request = { downloading: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Downloading');
+    });
+
+    it('should return Queued when the request is waiting in the Radarr queue', () => {
+      const { comp } = createComponent();
+      comp.request = { queued: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Queued');
+    });
+
+    it('should return Importing while Radarr is importing a completed download', () => {
+      const { comp } = createComponent();
+      comp.request = { importing: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Importing');
+    });
+
+    it('should return Standby for ambiguous post-download or paused client state', () => {
+      const { comp } = createComponent();
+      comp.request = { standby: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Standby');
+    });
+
+    it('should return Completed after Radarr imports the file but before media-server sync', () => {
+      const { comp } = createComponent();
+      comp.request = { completed: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Completed');
+    });
+
+    it('should return Searching when Radarr has a monitored request without a download', () => {
+      const { comp } = createComponent();
+      comp.request = { searching: true } as any;
+      expect(comp.getStatus({ available: false, requested: true, approved: true } as any)).toBe('Common.Searching');
+    });
+
     it('should return RequestDenied for denied movie', () => {
       const { comp } = createComponent();
       expect(comp.getStatus({ available: false, requested: true, denied: true } as any)).toBe('Common.RequestDenied');

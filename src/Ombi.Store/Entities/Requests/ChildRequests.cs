@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
@@ -16,11 +16,34 @@ namespace Ombi.Store.Entities.Requests
         public SeriesType SeriesType { get; set; }
         public int? QualityOverride { get; set; }
 
+        // Set only for an explicit "use configured default" retry. A zero child override is
+        // persisted to mean no request-level override, while this transient flag tells the
+        // sender to actively reprofile an existing Sonarr series during this retry.
+        [NotMapped]
+        [JsonIgnore]
+        public bool ResetQualityProfileToDefault { get; set; }
+
         /// <summary>
         /// This is to see if the user is subscribed in the UI
         /// </summary>
         [NotMapped]
         public bool Subscribed { get; set; }
+        [NotMapped]
+        public bool Downloading { get; set; }
+        [NotMapped]
+        public bool Queued { get; set; }
+        [NotMapped]
+        public bool Importing { get; set; }
+        [NotMapped]
+        public bool Standby { get; set; }
+        [NotMapped]
+        public bool Searching { get; set; }
+        [NotMapped]
+        public bool Completed { get; set; }
+        [NotMapped]
+        public int? DownloadProgress { get; set; }
+        [NotMapped]
+        public int? DownloadEtaMinutes { get; set; }
 
         [NotMapped]
         public bool ShowSubscribe { get; set; }
@@ -65,6 +88,26 @@ namespace Ombi.Store.Entities.Requests
         {
             get
             {
+                if (Downloading)
+                {
+                    return "Common.Downloading";
+                }
+
+                if (Importing)
+                {
+                    return "Common.Importing";
+                }
+
+                if (Standby)
+                {
+                    return "Common.Standby";
+                }
+
+                if (Queued)
+                {
+                    return "Common.Queued";
+                }
+
                 if (Available)
                 {
                     return "Common.Available";
@@ -73,6 +116,16 @@ namespace Ombi.Store.Entities.Requests
                 if (Denied ?? false)
                 {
                     return "Common.Denied";
+                }
+
+                if (Completed)
+                {
+                    return "Common.Completed";
+                }
+
+                if (Searching)
+                {
+                    return "Common.Searching";
                 }
 
                 if (Approved & !Available)

@@ -396,6 +396,55 @@ namespace Ombi.Schedule.Tests
         
         
         [Test]
+        public async Task Import_UserListFailure_DoesNotThrow_Or_DeleteExistingUsers()
+        {
+            _mocker.Setup<ISettingsService<UserManagementSettings>, Task<UserManagementSettings>>(x => x.GetSettingsAsync())
+                .ReturnsAsync(new UserManagementSettings
+                {
+                    ImportPlexAdmin = false,
+                    ImportPlexUsers = true,
+                    CleanupPlexUsers = true
+                });
+            _mocker.Setup<IPlexApi, Task<PlexUsers>>(x => x.GetUsers(It.IsAny<string>()))
+                .ReturnsAsync((PlexUsers)null);
+
+            Assert.DoesNotThrowAsync(() => _subject.Execute(null));
+
+            _mocker.Verify<IUserDeletionEngine>(x => x.DeleteUser(It.IsAny<OmbiUser>()), Times.Never);
+            _mocker.Verify<OmbiUserManager>(x => x.CreateAsync(It.IsAny<OmbiUser>()), Times.Never);
+            _mocker.Verify<OmbiUserManager>(x => x.UpdateAsync(It.IsAny<OmbiUser>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Import_UserListFailure_OnAnyServer_SkipsCleanupForEntireRun()
+        {
+            _mocker.Setup<ISettingsService<UserManagementSettings>, Task<UserManagementSettings>>(x => x.GetSettingsAsync())
+                .ReturnsAsync(new UserManagementSettings
+                {
+                    ImportPlexAdmin = false,
+                    ImportPlexUsers = true,
+                    CleanupPlexUsers = true
+                });
+            _mocker.Setup<ISettingsService<PlexSettings>, Task<PlexSettings>>(x => x.GetSettingsAsync()).ReturnsAsync(new PlexSettings
+            {
+                Enable = true,
+                Servers = new List<PlexServers>
+                {
+                    new PlexServers { Name = "Healthy", MachineIdentifier = "123", PlexAuthToken = "healthy-token" },
+                    new PlexServers { Name = "RateLimited", MachineIdentifier = "456", PlexAuthToken = "rate-limited-token" }
+                }
+            });
+            _mocker.Setup<IPlexApi, Task<PlexUsers>>(x => x.GetUsers("healthy-token"))
+                .ReturnsAsync(new PlexUsers { User = Array.Empty<UserFriends>() });
+            _mocker.Setup<IPlexApi, Task<PlexUsers>>(x => x.GetUsers("rate-limited-token"))
+                .ReturnsAsync((PlexUsers)null);
+
+            Assert.DoesNotThrowAsync(() => _subject.Execute(null));
+
+            _mocker.Verify<IUserDeletionEngine>(x => x.DeleteUser(It.IsAny<OmbiUser>()), Times.Never);
+        }
+
+        [Test]
         public async Task Import_Cleanup_Missing_Plex_Users()
         {
             _mocker.Setup<ISettingsService<UserManagementSettings>, Task<UserManagementSettings>>(x => x.GetSettingsAsync())

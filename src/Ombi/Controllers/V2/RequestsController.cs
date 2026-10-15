@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 using System.Threading.Tasks;
 
@@ -210,16 +211,16 @@ namespace Ombi.Controllers.V2
             return result;
         }
 
-        [PowerUser]
+        [Authorize(Roles = OmbiRoles.Admin + "," + OmbiRoles.PowerUser + "," + OmbiRoles.SelectQualityProfile)]
         [HttpPost("reprocess/{type}/{requestId}/{is4K}")]
-        public async Task<IActionResult> ReProcessRequest(RequestType type, int requestId, bool? is4K)
+        public async Task<IActionResult> ReProcessRequest(RequestType type, int requestId, bool? is4K, [FromQuery] int? qualityProfileId = null)
         {
             switch (type)
             {
                 case RequestType.TvShow:
-                    return Ok(await _tvRequestEngine.ReProcessRequest(requestId, false, HttpContext.RequestAborted));
+                    return Ok(await _tvRequestEngine.ReProcessRequest(requestId, false, HttpContext.RequestAborted, qualityProfileId));
                 case RequestType.Movie:
-                    return Ok(await _movieRequestEngine.ReProcessRequest(requestId, is4K ?? false, HttpContext.RequestAborted));
+                    return Ok(await _movieRequestEngine.ReProcessRequest(requestId, is4K ?? false, HttpContext.RequestAborted, qualityProfileId));
             }
 
             return BadRequest();

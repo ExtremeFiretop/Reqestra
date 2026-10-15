@@ -507,6 +507,64 @@ export class MovieDetailsComponent implements OnInit {
 		});
 	}
 
+	public canRetryWithProfile(is4K: boolean): boolean {
+		if (!this.canSelectQualityProfile || !this.movieRequest || !this.movieRequest.requestedUser) {
+			return false;
+		}
+
+		const currentUsername = this.auth.claims()?.name;
+		const ownsRequest = !!currentUsername &&
+			this.movieRequest.requestedUser.userName?.toUpperCase() === currentUsername.toUpperCase();
+		const approved = is4K ? this.movieRequest.approved4K : this.movieRequest.approved;
+		const denied = is4K ? this.movieRequest.denied4K : this.movieRequest.denied;
+		const requested = is4K ? this.movieRequest.has4KRequest : true;
+
+		return ownsRequest && requested && approved && !denied;
+	}
+
+	public async reProcessRequestWithProfile(is4K: boolean): Promise<void> {
+		if (!this.canRetryWithProfile(is4K)) {
+			return;
+		}
+
+		const currentProfileId = is4K
+			? this.movieRequest.qualityOverride4K
+			: this.movieRequest.qualityOverride;
+		const profileDialog = this.dialog.open(QualityProfileRequestDialogComponent, {
+			width: '460px',
+			data: {
+				type: RequestType.movie,
+				is4K,
+				initialProfileId: currentProfileId,
+				requireExplicitSelection: true,
+			},
+			panelClass: 'modal-panel',
+		});
+		const profileSelection = await firstValueFrom(profileDialog.afterClosed());
+		if (!profileSelection || profileSelection.profileId == null || profileSelection.profileId < 0) {
+			return;
+		}
+
+		const result = await firstValueFrom(
+			this.requestService2.reprocessRequest(
+				this.movieRequest.id,
+				RequestType.movie,
+				is4K,
+				profileSelection.profileId,
+			),
+		);
+		if (result.result) {
+			if (is4K) {
+				this.movieRequest.qualityOverride4K = profileSelection.profileId;
+			} else {
+				this.movieRequest.qualityOverride = profileSelection.profileId;
+			}
+			this.messageService.send(result.message ? result.message : this.translate.instant('Requests.SuccessfullyReprocessed'), 'Ok');
+		} else {
+			this.messageService.sendRequestEngineResultError(result);
+		}
+	}
+
 	public notify() {
 		this.requestService.subscribeToMovie(this.movieRequest.id).subscribe((result) => {
 			if (result) {
@@ -534,14 +592,14 @@ export class MovieDetailsComponent implements OnInit {
 			if (!this.movie.backdropPath) {
 				this.movie.background = this.sanitizer.bypassSecurityTrustStyle('url(' + x + ')');
 		} else if (this.movie.backdropPath && this.movie.backdropPath !== null && this.movie.backdropPath !== undefined) {
-			this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
-				'url(https://image.tmdb.org/t/p/original/' + this.movie.backdropPath + ')',
-			);
-		} else {
-			this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
-				'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5))',
-			);
-		}
+				this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
+					'url(https://image.tmdb.org/t/p/original/' + this.movie.backdropPath + ')',
+				);
+			} else {
+				this.movie.background = this.sanitizer.bypassSecurityTrustStyle(
+					'linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5))',
+				);
+			}
 		});
 	}
 	private checkPoster() {

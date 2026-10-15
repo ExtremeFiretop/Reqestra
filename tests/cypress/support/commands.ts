@@ -172,8 +172,10 @@ Cypress.Commands.add('createUser', (username: string, password: string, claims: 
   if (!token) {
     throw new Error('No authentication token found. Please login first.');
   }
-  
-  cy.request({
+
+  // User creation is test setup. Fail immediately if it does not succeed rather
+  // than allowing a later login/request assertion to obscure the real cause.
+  return cy.request({
     method: 'POST',
     url: '/api/v1/identity',
     body: {
@@ -184,16 +186,10 @@ Cypress.Commands.add('createUser', (username: string, password: string, claims: 
     headers: {
       'Authorization': `Bearer ${token}`,
     },
-    failOnStatusCode: false
   }).then((resp) => {
-    if (resp.status !== 200) {
-      // Use console.log instead of cy.log inside promise
-      console.log(`Failed to create user ${username}: ${resp.status}`);
-    }
+    expect(resp.status).to.be.within(200, 299);
+    cy.log(`Created user: ${username}`);
   });
-  
-  // Log outside of the promise chain
-  cy.log(`Creating user: ${username}`);
 });
 
 // Enhanced unique ID generation

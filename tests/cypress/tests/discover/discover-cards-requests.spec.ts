@@ -1,6 +1,7 @@
 import { DiscoverType } from "@/integration/page-objects/shared/DiscoverCard";
 import { discoverPage as Page } from "@/integration/page-objects";
 import popularMovies from "@fixtures/discover/popularMovies.json";
+import popularTv from "@fixtures/discover/popularTv.json";
 
 const initialDiscoverLoad = 20;
 
@@ -42,6 +43,28 @@ const interceptPopularMovie = (index: number, overrides: Partial<(typeof popular
       { body: topUpMovies },
     ).as("cardsTopUpResponse");
   }
+};
+
+// Keep TV request-state tests independent from TMDB's live Popular ordering.
+// The checked-in fixture gives us stable cards while the explicit overrides
+// model the state each test is exercising. Do not let the carousel's top-up
+// request fall through to the live provider either; an empty second page is
+// sufficient for these card-state tests and avoids duplicate fixture IDs.
+const interceptPopularTv = (index: number, overrides: Partial<(typeof popularTv)[number]>) => {
+  const body = popularTv.map((show) => ({ ...show }));
+  Object.assign(body[index], overrides);
+
+  cy.intercept(
+    "GET",
+    `**/search/Tv/popular/0/${initialDiscoverLoad}`,
+    { body },
+  ).as("cardsResponse");
+
+  cy.intercept(
+    "GET",
+    `**/search/Tv/popular/${initialDiscoverLoad}/**`,
+    { body: [] },
+  ).as("cardsTopUpResponseTv");
 };
 
 describe("Discover Cards Requests Tests", () => {
@@ -266,16 +289,13 @@ describe("Discover Cards Requests Tests", () => {
   });
 
   it("Available TV does not allow us to request", () => {
-    cy.intercept("GET", "**/search/Tv/popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const tv = body[1];
-        tv.fullyAvailable = true;
-
-        body[1] = tv;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    interceptPopularTv(1, {
+      available: false,
+      approved: false,
+      requested: false,
+      fullyAvailable: true,
+      partlyAvailable: false,
+    });
     cy.intercept("GET", "**/search/Tv/moviedb/**", (req) => {
       req.reply((res2) => {
         const body = res2.body;
@@ -305,7 +325,13 @@ describe("Discover Cards Requests Tests", () => {
   });
 
   it("Available TV (From Details Call) does not allow us to request", () => {
-    cy.intercept("GET", "**/search/Tv/popular/**", { fixture: "discover/popularTv" }).as("cardsResponse");
+    interceptPopularTv(0, {
+      available: false,
+      approved: false,
+      requested: false,
+      fullyAvailable: false,
+      partlyAvailable: false,
+    });
     cy.intercept("GET", "**/search/Tv/moviedb/88396", (req) => {
       req.reply((res2) => {
         const body = res2.body;
@@ -339,16 +365,15 @@ describe("Discover Cards Requests Tests", () => {
   });
 
   it("Not available TV allow admin to request", () => {
-    cy.intercept("GET", "**/search/Tv/popular/**", (req) => {
-      req.reply((res) => {
-        const body = res.body;
-        const tv = body[3];
-        tv.fullyAvailable = false;
-
-        body[3] = tv;
-        res.send(body);
-      });
-    }).as("cardsResponse");
+    const tvIndex = 4;
+    interceptPopularTv(tvIndex, {
+      available: false,
+      approved: false,
+      requested: false,
+      fullyAvailable: false,
+      partlyAvailable: false,
+      requestId: 0,
+    });
     cy.intercept("GET", "**/search/Tv/**").as("otherResponses");
     cy.intercept("POST", "**/Requests/TV/", {
       result: true,
@@ -364,8 +389,8 @@ describe("Discover Cards Requests Tests", () => {
     cy.wait("@otherResponses");
     cy.wait("@cardsResponse").then((res) => {
       const body = res.response!.body
-      var expectedId = body[3].id;
-      var title = body[3].title;
+      var expectedId = body[tvIndex].id;
+      var title = body[tvIndex].title;
 
       const card = Page.popularCarousel.getCard(expectedId, false, DiscoverType.Popular);
       // The card resolves its availability via an async detail lookup and only
@@ -404,16 +429,15 @@ describe("Discover Cards Requests Tests", () => {
         cy.removeLogin();
         cy.loginWithCreds(id, "a");
 
-        cy.intercept("GET", "**/search/Tv/popular/**", (req) => {
-          req.reply((res) => {
-            const body = res.body;
-            const tv = body[5];
-            tv.fullyAvailable = false;
-
-            body[5] = tv;
-            res.send(body);
-          });
-        }).as("cardsResponse");
+        const tvIndex = 6;
+        interceptPopularTv(tvIndex, {
+          available: false,
+          approved: false,
+          requested: false,
+          fullyAvailable: false,
+          partlyAvailable: false,
+          requestId: 0,
+        });
         cy.intercept("GET", "**/search/Tv/**").as("otherResponses");
         cy.intercept("POST", "**/Requests/TV/", {
           result: true,
@@ -429,8 +453,8 @@ describe("Discover Cards Requests Tests", () => {
         cy.wait("@otherResponses");
         cy.wait("@cardsResponse").then((res) => {
           const body = res.response!.body
-          var expectedId = body[5].id;
-          var title = body[5].title;
+          var expectedId = body[tvIndex].id;
+          var title = body[tvIndex].title;
 
           const card = Page.popularCarousel.getCard(expectedId, false, DiscoverType.Popular);
           // The card resolves its availability via an async detail lookup and
