@@ -42,6 +42,7 @@ namespace Ombi.Core.Engine.V2
             _customizationSettings = customizationSettings;
             _movieRequestEngine = movieRequestEngine;
             _client = httpClientFactory.CreateClient();
+            _seasonalKeywordProvider = new SeasonalKeywordProvider(_client, movApi, logger);
             _feature = feature;
         }
 
@@ -51,6 +52,7 @@ namespace Ombi.Core.Engine.V2
         private readonly ISettingsService<CustomizationSettings> _customizationSettings;
         private readonly IMovieRequestEngine _movieRequestEngine;
         private readonly HttpClient _client;
+        private readonly SeasonalKeywordProvider _seasonalKeywordProvider;
         private readonly IFeatureService _feature;
 
         public async Task<MovieFullInfoViewModel> GetFullMovieInformation(int theMovieDbId, CancellationToken cancellationToken, string langCode = null)
@@ -221,11 +223,13 @@ namespace Ombi.Core.Engine.V2
         public async Task<IEnumerable<SearchMovieViewModel>> SeasonalList(int currentPosition, int amountToLoad, CancellationToken cancellationToken)
         {
             var langCode = await DefaultLanguageCode(null);
+            var today = DateTime.Today;
+            var keyWordIds = await Cache.GetOrAddAsync(
+                nameof(SeasonalList) + "KeywordDefinition" + today.ToString("yyyyMMdd"),
+                () => _seasonalKeywordProvider.ResolveAsync(today, cancellationToken),
+                DateTimeOffset.Now.AddHours(6));
 
-            var result = await _client.GetAsync("https://raw.githubusercontent.com/Ombi-app/Ombi.News/main/Seasonal.md");
-            var keyWordIds = await result.Content.ReadAsStringAsync();
-
-            if (string.IsNullOrEmpty(keyWordIds) || keyWordIds.Equals("\n"))
+            if (string.IsNullOrEmpty(keyWordIds))
             {
                 return new List<SearchMovieViewModel>();
             }

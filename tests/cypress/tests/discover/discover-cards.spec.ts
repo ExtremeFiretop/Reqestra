@@ -5,6 +5,25 @@ describe("Discover Cards Tests", () => {
     cy.login();
   });
 
+  it("Seasonal loads while hidden and becomes visible when movies are returned", () => {
+    cy.intercept("GET", "**/search/Movie/seasonal/**", { fixture: "discover/popularMovies.json" }).as("seasonalMovies");
+
+    Page.visit();
+
+    cy.wait("@seasonalMovies");
+    cy.get("#seasonal-section").should("be.visible");
+    cy.get("#seasonal-section carousel-list").should("exist");
+  });
+
+  it("Seasonal stays hidden when no movies are returned", () => {
+    cy.intercept("GET", "**/search/Movie/seasonal/**", []).as("seasonalMovies");
+
+    Page.visit();
+
+    cy.wait("@seasonalMovies");
+    cy.get("#seasonal-section").should("not.be.visible");
+  });
+
   it("Popular combined should load movies and TV", () => {
     cy.intercept("GET", "**/search/Movie/Popular/**").as("moviePopular");
     cy.intercept("GET", "**/search/Tv/popular/**").as("tvPopular");
