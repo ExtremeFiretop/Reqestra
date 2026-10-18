@@ -1,3 +1,12 @@
+## [4.68.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.11...v4.68.12) (2026-10-18)
+
+
+### Bug Fixes
+
+* **discover:** restore resilient seasonal discovery ([20118ad](https://github.com/ExtremeFiretop/Reqestra/commit/20118ad5bb2042b17a027515ff0d068eca032831))
+
+
+
 ## [4.68.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.10...v4.68.11) (2026-10-15)
 
 
@@ -344,15 +353,6 @@
 * **ci:** make release versioning tag-driven ([6cc5800](https://github.com/ExtremeFiretop/Reqestra/commit/6cc580080d84d3f440db028ba69e392ec40f82f8))
 * **notifications:** bound queue and retry transient failures ([35236e3](https://github.com/ExtremeFiretop/Reqestra/commit/35236e36d9997ae315bdeb50b4cb3e634858239b))
 * **notifications:** replace fire-and-forget cleanup emails ([244574d](https://github.com/ExtremeFiretop/Reqestra/commit/244574d0e49b1f15d4f83a4061fc49e49439d5f8))
-
-
-
-## [4.61.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.5...v4.61.6) (2026-10-03)
-
-
-### Bug Fixes
-
-* **updater:** align Microsoft.Extensions dependencies with .NET 8 ([3f99665](https://github.com/ExtremeFiretop/Reqestra/commit/3f9966597ccb4066f3af348dd8c8a07fe5fe5bb8))
 
 
 
