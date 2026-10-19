@@ -46,7 +46,25 @@ export class CarouselListComponent implements OnDestroy {
     public movieCount = output<number>();
     
     @ViewChild('carousel', {static: false}) carousel: Carousel;
-    @ViewChild('carouselRoot', { static: false }) carouselRoot?: ElementRef<HTMLElement>;
+    private carouselRootRef?: ElementRef<HTMLElement>;
+
+    @ViewChild('carouselRoot', { static: false })
+    set carouselRoot(value: ElementRef<HTMLElement> | undefined) {
+        this.carouselRootRef = value;
+
+        // The carousel lives inside an @defer block, so it may not exist when the
+        // results are first modeled. A ViewChild setter runs when that deferred
+        // view actually materializes, which gives us a reliable point to attach
+        // the observer and refine the initial viewport-based sizing.
+        if (!value) {
+            return;
+        }
+
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
+        this.initResizeObserver();
+        setTimeout(() => this.recalculateCarouselDimensions(), 0);
+    }
 
     // Services using inject() function
     private searchService = inject(SearchV2Service);
@@ -84,6 +102,14 @@ export class CarouselListComponent implements OnDestroy {
 
     constructor() {
         Carousel.prototype.onTouchMove = () => { };
+
+        // Give PrimeNG a sensible slot count before the deferred carousel is
+        // rendered. Without this, numVisible starts at 10 on every viewport; on
+        // phones that briefly creates ten tiny slots and can leave the carousel
+        // in that state if the deferred ViewChild has not appeared yet.
+        if (typeof window !== 'undefined') {
+            this.updateCarouselDimensions(window.innerWidth);
+        }
     }
 
     public async ngOnInit() {
@@ -359,7 +385,7 @@ export class CarouselListComponent implements OnDestroy {
     }
 
     private initResizeObserver() {
-        const root = this.carouselRoot?.nativeElement;
+        const root = this.carouselRootRef?.nativeElement;
         if (!root || this.resizeObserver) {
             return;
         }
@@ -369,7 +395,7 @@ export class CarouselListComponent implements OnDestroy {
     }
 
     private recalculateCarouselDimensions() {
-        const root = this.carouselRoot?.nativeElement;
+        const root = this.carouselRootRef?.nativeElement;
         if (!root) {
             return;
         }
@@ -382,17 +408,19 @@ export class CarouselListComponent implements OnDestroy {
             return;
         }
 
-        // Discover cards are capped at 200px and have 4px host padding on each side.
-        // Prefer a rendered card measurement when available, but keep a stable
-        // fallback so the first sizing pass does not depend on PrimeNG's slot width.
-        let targetCardWidth = 208;
-        const firstCard = root.querySelector<HTMLElement>('discover-card');
-        if (firstCard) {
-            const measuredWidth = Math.ceil(firstCard.getBoundingClientRect().width);
-            if (measuredWidth >= 120 && measuredWidth <= 260) {
-                targetCardWidth = measuredWidth;
-            }
+        this.updateCarouselDimensions(width);
+    }
+
+    private updateCarouselDimensions(width: number) {
+        if (!width) {
+            return;
         }
+
+        // Discover cards are capped at 200px with 4px host padding on each side.
+        // Keep this target stable instead of measuring the discover-card host: the
+        // host itself inherits PrimeNG's current slot width, so feeding that value
+        // back into numVisible can create an unstable sizing loop.
+        const targetCardWidth = 208;
 
         // Do not clamp this to the result count. PrimeNG derives slot width and
         // translation distance from numVisible; keeping the viewport capacity here
