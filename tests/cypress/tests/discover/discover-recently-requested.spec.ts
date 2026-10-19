@@ -18,6 +18,53 @@ describe("Discover Recently Requested Tests", () => {
     cy.get("#recently-requested-section").should("not.be.visible");
   });
 
+  it("Keeps sparse Recently Requested cards compact on wide desktops", () => {
+    cy.viewport(3840, 2160);
+
+    const requests = Array.from({ length: 8 }, (_, index) => ({
+      requestId: index + 1,
+      userId: "layout-user",
+      username: "Layout User",
+      available: false,
+      tvPartiallyAvailable: false,
+      requestDate: "2026-10-19T00:00:00Z",
+      title: `Layout Request ${index + 1}`,
+      overview: "",
+      releaseDate: "2026-01-01T00:00:00Z",
+      approved: true,
+      denied: false,
+      mediaId: `${900000 + index}`,
+      type: 1,
+      posterPath: "",
+      background: "",
+    }));
+
+    cy.intercept("GET", "**/v2/Requests/recentlyRequested", {
+      statusCode: 200,
+      body: requests,
+    }).as("recentlyRequested");
+
+    Page.visit();
+    cy.wait("@recentlyRequested");
+
+    cy.get("#recently-requested-section .p-carousel-item")
+      .first()
+      .should(($item) => {
+        // Eight results used to be stretched into eight equal-width slots across
+        // the whole 4K row. The dynamic capacity should keep each slot close to
+        // the normalized 200px card footprint instead.
+        expect($item[0].getBoundingClientRect().width).to.be.lessThan(260);
+      });
+
+    cy.get("#recently-requested-section ombi-detailed-card .detailed-card")
+      .should("have.length", 8)
+      .then(($cards) => {
+        const first = $cards[0].getBoundingClientRect();
+        const second = $cards[1].getBoundingClientRect();
+        expect(second.left - first.right).to.be.lessThan(40);
+      });
+  });
+
   it("Requested Movie Is Displayed", () => {
 
     cy.requestMovie(315635);

@@ -86,10 +86,13 @@
     }
 }
 
-// Responsive item sizing
+// Responsive item sizing. Keep desktop slots fixed-width instead of allowing
+// sparse result sets to stretch each slot across the available row. The cards
+// remain centered within their slots, but Popular/Trending/Seasonal now keep
+// the same poster spacing even when one feed returns fewer items.
 @media (min-width: 755px) {
     :host ::ng-deep .p-carousel-item {
-        flex: 1 0 200px !important;
+        flex: 0 0 200px !important;
     }
 }
 

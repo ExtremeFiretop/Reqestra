@@ -154,7 +154,8 @@ export class RecentlyRequestedListComponent implements OnInit, OnDestroy, AfterV
             const requests = x || [];
             this.requests.set(requests);
             this.requestCount.emit(requests.length);
-            // Recalculate on data arrival to prevent blank space when fewer items than numVisible
+            // Recalculate on data arrival so PrimeNG sizes slots from the available width
+            // instead of stretching a sparse result set across the row.
             // Use setTimeout to allow the @defer block to render after signal update
             setTimeout(() => {
                 // Initialize ResizeObserver now that the element should exist
@@ -196,28 +197,31 @@ export class RecentlyRequestedListComponent implements OnInit, OnDestroy, AfterV
         const width = widthSource.clientWidth;
         if (!width) { return; }
 
-        // Try to measure an actual rendered item width for accurate calculation.
+        // Measure the rendered card footprint so PrimeNG can size each slot close
+        // to the card itself instead of stretching a sparse row across the viewport.
         let targetCardWidth: number;
         const firstItem: HTMLElement | null = containerEl.querySelector('.p-carousel-item ombi-detailed-card');
         if (firstItem) {
             const itemRect = firstItem.getBoundingClientRect();
-            targetCardWidth = Math.ceil(itemRect.width) + 20; // Add padding
+            targetCardWidth = Math.ceil(itemRect.width);
         }
-        // Fallback heuristic if items not yet rendered
+        // The Recently Requested card is normalized to 200px plus its host padding.
+        // Use that footprint until a rendered card can be measured.
         if (!targetCardWidth || targetCardWidth === 0) {
-            // Get viewport width for responsive heuristics
-            const viewportWidth = globalThis.window?.innerWidth || globalThis.document?.documentElement?.clientWidth || width;
-            targetCardWidth = viewportWidth <= 768 ? 170 : 200;
+            targetCardWidth = 208;
         }
         // Guard against pathological values
         if (targetCardWidth < 120) { targetCardWidth = 120; }
 
-        const maxVisible = 8;
-        let calculatedVisible = Math.max(1, Math.min(maxVisible, Math.floor(width / targetCardWidth)));
+        // Keep the same practical desktop ceiling as the shared Discover carousel.
+        // Do not clamp numVisible to the result count: PrimeNG uses numVisible to
+        // determine slot width, so clamping eight results to eight slots on a 4K
+        // display spreads those eight cards across the entire row. A larger
+        // numVisible keeps the slots compact and simply leaves unused space after
+        // the final card when the feed is sparse.
+        const maxVisible = 17;
+        const calculatedVisible = Math.max(1, Math.min(maxVisible, Math.floor(width / targetCardWidth)));
         const total = this.requests()?.length ?? 0;
-        if (total && calculatedVisible > total) {
-            calculatedVisible = total; // Avoid blank trailing space
-        }
         this.numVisible = calculatedVisible || 1;
 
         const maxScroll = 3;
