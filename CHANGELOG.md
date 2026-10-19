@@ -1,3 +1,12 @@
+## [4.69.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.1...v4.69.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **cleanup:** only expand truncated descriptions ([a547541](https://github.com/ExtremeFiretop/Reqestra/commit/a547541184be79d90addbe3047e29b4310e7153e))
+
+
+
 ## [4.69.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.0...v4.69.1) (2026-10-19)
 
 
@@ -340,15 +349,6 @@
 
 
 ## [4.61.15](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.14...v4.61.15) (2026-10-08)
-
-
-
-## [4.61.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.13...v4.61.14) (2026-10-08)
-
-
-### Bug Fixes
-
-* **sonarr:** normalize monitoring for newly-added series ([310469a](https://github.com/ExtremeFiretop/Reqestra/commit/310469abdf82324c81c2c6372f7ead2b38ae74bd))
 
 
 
