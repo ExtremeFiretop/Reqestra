@@ -125,6 +125,11 @@ describe("Discover Cards Requests Tests", () => {
       var expectedId = body[0].id;
       var title = body[0].title;
 
+      // #86d refills short Discover feeds in the background and rebuilds the
+      // carousel model when that refill lands. Wait for that render boundary
+      // before hovering/clicking so the card cannot be replaced mid-action.
+      cy.wait("@cardsTopUpResponse");
+
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
       card.requestButton.should("exist");
@@ -183,6 +188,11 @@ describe("Discover Cards Requests Tests", () => {
           const body = res.response!.body
           var expectedId = body[6].id;
           var title = body[6].title;
+
+          // The background refill rebuilds the carousel and can clear hover
+          // state between the visibility assertion and click. Let it settle
+          // before interacting with the request action.
+          cy.wait("@cardsTopUpResponse");
 
           const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
           card.verifyTitle(title);
