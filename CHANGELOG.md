@@ -1,3 +1,7 @@
+## [4.69.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.4...v4.69.5) (2026-10-19)
+
+
+
 ## [4.69.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.3...v4.69.4) (2026-10-19)
 
 
@@ -340,10 +344,6 @@
 ### Bug Fixes
 
 * **plex:** harden episode sync against orphaned cache rows ([6b747dd](https://github.com/ExtremeFiretop/Reqestra/commit/6b747dd577d43761e41c1ef2bd6257c26c4ba5d6))
-
-
-
-## [4.61.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.16...v4.61.17) (2026-10-09)
 
 
 
