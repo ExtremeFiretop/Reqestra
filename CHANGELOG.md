@@ -1,3 +1,12 @@
+## [4.68.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.13...v4.68.14) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** normalize recently requested spacing ([13be3f9](https://github.com/ExtremeFiretop/Reqestra/commit/13be3f98fc4107b93c79515085bf0c1a3ad70d28))
+
+
+
 ## [4.68.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.12...v4.68.13) (2026-10-19)
 
 
@@ -342,16 +351,6 @@
 * **ci:** reconcile release tag ancestry before versioning ([91a2310](https://github.com/ExtremeFiretop/Reqestra/commit/91a2310d4ee5676378dda23b3cadc69aaa9a07ab))
 * **plex:** handle rate-limited API failures safely ([a19e043](https://github.com/ExtremeFiretop/Reqestra/commit/a19e043f1c8bc5d3b8c727455e4a8197542b0c9b))
 * **tests:** import Plex friends models in API tests ([a787933](https://github.com/ExtremeFiretop/Reqestra/commit/a7879331163373502374ec6798d265b2431bbe2a))
-
-
-
-## [4.61.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.7...v4.61.8) (2026-10-03)
-
-
-### Bug Fixes
-
-* **ci:** isolate wizard from full E2E suite ([0fb9839](https://github.com/ExtremeFiretop/Reqestra/commit/0fb983961a9be135435f08379fd5b8d9c1c3f716))
-* **security:** harden user-controlled logging ([c65a46c](https://github.com/ExtremeFiretop/Reqestra/commit/c65a46c8bb2653bf91a07ea0f83ee01d98a6cc89))
 
 
 
