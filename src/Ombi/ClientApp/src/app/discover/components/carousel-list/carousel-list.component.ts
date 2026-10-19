@@ -19,6 +19,7 @@ export enum DiscoverType {
     Popular,
     RecentlyRequested,
     Seasonal,
+    Recommended,
 }
 
 @Component({
@@ -42,8 +43,9 @@ export class CarouselListComponent implements OnDestroy {
     public id = input.required<string>();
     public isAdmin = input<boolean>(false);
     
-    // Output using new output() function  
+    // Outputs using new output() function
     public movieCount = output<number>();
+    public resultCount = output<number>();
     
     @ViewChild('carousel', {static: false}) carousel: Carousel;
     private carouselRootRef?: ElementRef<HTMLElement>;
@@ -190,6 +192,19 @@ export class CarouselListComponent implements OnDestroy {
         await Promise.all([moviePromise, tvPromise].filter(Boolean));
         this.currentlyLoaded += this.amountToLoad;
         this.createInitialModel(clearExisting);
+
+        // A persisted Movie-only/TV-only recommendation preference can become empty
+        // as the user's recent request mix changes. Falling back to Combined prevents
+        // the whole personalized section (including its media toggle) from disappearing
+        // even though recommendations of the other media type are available.
+        if (this.discoverType() === DiscoverType.Recommended
+            && this.discoverResults().length === 0
+            && +this.discoverOptions() !== DiscoverOption.Combined) {
+            this.currentlyLoaded = 0;
+            this.discoverOptions.set(DiscoverOption.Combined);
+            this.storageService.save(this.mediaTypeStorageKey, DiscoverOption.Combined.toString());
+            await this.loadData(true);
+        }
     }
 
     private async topUpCarousel(loadVersion: number) {
@@ -316,6 +331,8 @@ export class CarouselListComponent implements OnDestroy {
                 return await this.searchService.recentlyRequestedMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.Seasonal:
                 return await this.searchService.seasonalMoviesByPage(loadOffset, amountToLoad);
+            case DiscoverType.Recommended:
+                return await this.searchService.recommendedMoviesByPage(loadOffset, amountToLoad);
             default:
                 return [];
         }
@@ -337,6 +354,8 @@ export class CarouselListComponent implements OnDestroy {
             case DiscoverType.RecentlyRequested:
                 // TODO need to do some more mapping
                 return [];
+            case DiscoverType.Recommended:
+                return await this.searchService.recommendedTvByPage(loadOffset, amountToLoad);
             default:
                 return [];
         }
@@ -356,7 +375,9 @@ export class CarouselListComponent implements OnDestroy {
             case DiscoverOption.Combined:
                 tempResults.push(...this.mapMovieModel());
                 tempResults.push(...this.mapTvModel());
-                this.shuffle(tempResults);
+                if (this.discoverType() !== DiscoverType.Recommended) {
+                    this.shuffle(tempResults);
+                }
                 break;
             case DiscoverOption.Movie:
                 tempResults.push(...this.mapMovieModel());
@@ -366,7 +387,14 @@ export class CarouselListComponent implements OnDestroy {
                 break;
         }
 
-        this.discoverResults.update(current => [...current, ...tempResults]);
+        this.discoverResults.update(current => {
+            const updated = [...current, ...tempResults];
+            if (this.discoverType() === DiscoverType.Recommended) {
+                updated.sort((a, b) => (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0));
+            }
+            return updated;
+        });
+        this.resultCount.emit(this.discoverResults().length);
         this.scheduleCarouselSizing();
 
         this.finishLoading();
@@ -388,7 +416,8 @@ export class CarouselListComponent implements OnDestroy {
                 approved: m.approved,
                 imdbid: m.imdbId,
                 denied: false,
-                background: m.backdropPath
+                background: m.backdropPath,
+                recommendationScore: m.recommendationScore
             });
         });
         return tempResults;
@@ -411,7 +440,8 @@ export class CarouselListComponent implements OnDestroy {
                 approved: m.approved || m.partlyAvailable,
                 imdbid: m.imdbId,
                 denied: false,
-                background: m.backdropPath
+                background: m.backdropPath,
+                recommendationScore: m.recommendationScore
             });
         });
         return tempResults;

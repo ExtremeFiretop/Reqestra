@@ -33,7 +33,7 @@ namespace Ombi.Core.Engine.V2
         public MovieSearchEngineV2(ICurrentUser identity, IRequestServiceMain service, IMovieDbApi movApi, IMapper mapper,
             ILogger<MovieSearchEngineV2> logger, IRuleEvaluator r, OmbiUserManager um, ICacheService mem, ISettingsService<OmbiSettings> s, IRepository<RequestSubscription> sub,
             ISettingsService<CustomizationSettings> customizationSettings, IMovieRequestEngine movieRequestEngine, IHttpClientFactory httpClientFactory,
-            IFeatureService feature)
+            IFeatureService feature, IPersonalizedRecommendationService personalizedRecommendations)
             : base(identity, service, r, um, mem, s, sub)
         {
             MovieApi = movApi;
@@ -44,6 +44,7 @@ namespace Ombi.Core.Engine.V2
             _client = httpClientFactory.CreateClient();
             _seasonalKeywordProvider = new SeasonalKeywordProvider(_client, movApi, logger);
             _feature = feature;
+            _personalizedRecommendations = personalizedRecommendations;
         }
 
         private IMovieDbApi MovieApi { get; }
@@ -54,6 +55,7 @@ namespace Ombi.Core.Engine.V2
         private readonly HttpClient _client;
         private readonly SeasonalKeywordProvider _seasonalKeywordProvider;
         private readonly IFeatureService _feature;
+        private readonly IPersonalizedRecommendationService _personalizedRecommendations;
 
         public async Task<MovieFullInfoViewModel> GetFullMovieInformation(int theMovieDbId, CancellationToken cancellationToken, string langCode = null)
         {
@@ -244,6 +246,18 @@ namespace Ombi.Core.Engine.V2
                 results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
             }
             return await TransformMovieResultsToResponse(results);
+        }
+
+        public async Task<IEnumerable<SearchMovieViewModel>> RecommendedMovies(int currentPosition, int amountToLoad, CancellationToken cancellationToken)
+        {
+            var langCode = await DefaultLanguageCode(null);
+            var ranked = await _personalizedRecommendations.GetMovieRecommendations(langCode, cancellationToken);
+            var page = ranked.Skip(currentPosition).Take(amountToLoad);
+            var processed = await TransformMovieResultsToResponse(page);
+
+            // Recommended for You should suggest something new to consume, even when the
+            // global Hide Available From Discover preference is disabled.
+            return processed.Where(x => !x.Available);
         }
 
         /// <summary>

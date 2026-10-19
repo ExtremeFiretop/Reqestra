@@ -279,7 +279,7 @@ namespace Ombi.Core.Tests.Engine.V2
                 MockHelper.MockUserManager(new List<OmbiUser>()).Object, new TestCacheService(),
                 new Mock<ISettingsService<OmbiSettings>>().Object, new Mock<IRepository<RequestSubscription>>().Object,
                 _movieApi.Object, _customizationSettings.Object, new Mock<ITvRequestEngine>().Object,
-                new Mock<IFeatureService>().Object);
+                new Mock<IFeatureService>().Object, new Mock<IPersonalizedRecommendationService>().Object);
         }
 
         [Test]

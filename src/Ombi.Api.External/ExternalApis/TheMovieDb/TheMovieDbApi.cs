@@ -239,6 +239,44 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb
             return Mapper.Map<List<MovieDbSearchResult>>(result.results);
         }
 
+        public Task<List<MovieDbSearchResult>> GetRecommendations(int mediaId, string mediaType, string langCode, CancellationToken cancellationToken)
+        {
+            return GetRelatedMedia(mediaId, mediaType, "recommendations", langCode, cancellationToken);
+        }
+
+        public Task<List<MovieDbSearchResult>> GetSimilar(int mediaId, string mediaType, string langCode, CancellationToken cancellationToken)
+        {
+            return GetRelatedMedia(mediaId, mediaType, "similar", langCode, cancellationToken);
+        }
+
+        private async Task<List<MovieDbSearchResult>> GetRelatedMedia(
+            int mediaId,
+            string mediaType,
+            string relationship,
+            string langCode,
+            CancellationToken cancellationToken)
+        {
+            if (!HasValidTmdbId(mediaId, nameof(GetRelatedMedia))
+                || (mediaType != "movie" && mediaType != "tv"))
+            {
+                return new List<MovieDbSearchResult>();
+            }
+
+            var request = new Request($"{mediaType}/{mediaId}/{relationship}", BaseUri, HttpMethod.Get);
+            request.AddQueryString("api_key", ApiToken);
+            request.AddQueryString("language", langCode);
+            request.CacheDuration = TimeSpan.FromHours(4);
+            AddRetry(request);
+
+            var result = await Api.Request<TheMovieDbContainer<SearchResult>>(request, cancellationToken);
+            if (result?.results == null)
+            {
+                return new List<MovieDbSearchResult>();
+            }
+
+            return Mapper.Map<List<MovieDbSearchResult>>(result.results);
+        }
+
         public async Task<MovieResponseDto> GetMovieInformationWithExtraInfo(int movieId, string langCode = "en")
         {
             if (!HasValidTmdbId(movieId, nameof(GetMovieInformationWithExtraInfo)))

@@ -257,6 +257,7 @@ namespace Ombi.DependencyInjection
             services.AddTransient<IChangeLogProcessor, ChangeLogProcessor>();
             services.AddScoped<IFeatureService, FeatureService>();
             services.AddTransient<IRecentlyRequestedService, RecentlyRequestedService>();
+            services.AddTransient<IPersonalizedRecommendationService, PersonalizedRecommendationService>();
             services.AddTransient<IQualityProfileSelectionService, QualityProfileSelectionService>();
             services.AddSingleton<IActiveDownloadEtaEstimator, ActiveDownloadEtaEstimator>();
             services.AddSingleton<IPostDownloadTransitionTracker, PostDownloadTransitionTracker>();

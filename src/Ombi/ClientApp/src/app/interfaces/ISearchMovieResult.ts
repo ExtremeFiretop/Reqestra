@@ -13,6 +13,7 @@
     voteCount: number;
     video: boolean;
     voteAverage: number;
+    recommendationScore?: number;
     alreadyInCp: boolean;
     trailer: string;
     homepage: string;

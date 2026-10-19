@@ -16,6 +16,7 @@ function makeMovie(overrides: Partial<ISearchMovieResult> = {}): ISearchMovieRes
     posterPath: '/movie-poster.jpg',
     backdropPath: '/movie-backdrop.jpg',
     voteAverage: 7.5,
+    recommendationScore: 0,
     imdbId: 'tt1234567',
     available: false,
     approved: false,
@@ -73,6 +74,7 @@ function makeTvShow(overrides: Partial<ISearchTvResult> = {}): ISearchTvResult {
     airsDayOfWeek: '',
     airsTime: '',
     siteRating: 0,
+    recommendationScore: 0,
     trailer: '',
     homepage: '',
     seasonRequests: [],
@@ -129,9 +131,11 @@ describe('CarouselListComponent', () => {
       upcomingMoviesByPage: vi.fn().mockResolvedValue([]),
       recentlyRequestedMoviesByPage: vi.fn().mockResolvedValue([]),
       seasonalMoviesByPage: vi.fn().mockResolvedValue([]),
+      recommendedMoviesByPage: vi.fn().mockResolvedValue([]),
       popularTvByPage: vi.fn().mockResolvedValue([]),
       trendingTvByPage: vi.fn().mockResolvedValue([]),
       anticipatedTvByPage: vi.fn().mockResolvedValue([]),
+      recommendedTvByPage: vi.fn().mockResolvedValue([]),
     };
   });
 
@@ -358,6 +362,42 @@ describe('CarouselListComponent', () => {
       await component.ngOnInit();
 
       expect(mockSearchService.trendingTvByPage).toHaveBeenCalled();
+    });
+
+    it('should call personalized endpoints for Recommended combined mode', async () => {
+      mockSearchService.recommendedMoviesByPage.mockResolvedValue([
+        makeMovie({ id: 10, recommendationScore: 100 })
+      ]);
+      mockSearchService.recommendedTvByPage.mockResolvedValue([
+        makeTvShow({ id: 20, recommendationScore: 200 })
+      ]);
+
+      const { component } = createComponent(mockSearchService);
+      setupInputs(component, DiscoverType.Recommended, DiscoverOption.Combined);
+      (component as any).amountToLoad = 2;
+      await component.ngOnInit();
+
+      expect(mockSearchService.recommendedMoviesByPage).toHaveBeenCalledWith(0, 2);
+      expect(mockSearchService.recommendedTvByPage).toHaveBeenCalledWith(0, 2);
+      expect(component.discoverResults().map(result => result.id)).toEqual([20, 10]);
+    });
+
+    it('should fall back to Combined when a Recommended single-media preference has no results', async () => {
+      mockSearchService.recommendedMoviesByPage.mockResolvedValue([]);
+      mockSearchService.recommendedTvByPage.mockResolvedValue([
+        makeTvShow({ id: 20, recommendationScore: 200 })
+      ]);
+
+      const { component, mockStorageService } = createComponent(mockSearchService);
+      setupInputs(component, DiscoverType.Recommended, DiscoverOption.Movie);
+      (component as any).amountToLoad = 1;
+      await component.ngOnInit();
+
+      expect(component.discoverOptions()).toBe(DiscoverOption.Combined);
+      expect(mockSearchService.recommendedMoviesByPage).toHaveBeenCalledTimes(2);
+      expect(mockSearchService.recommendedTvByPage).toHaveBeenCalledWith(0, 1);
+      expect(mockStorageService.save).toHaveBeenCalledWith('DiscoverOptions5', DiscoverOption.Combined.toString());
+      expect(component.discoverResults().map(result => result.id)).toEqual([20]);
     });
   });
 

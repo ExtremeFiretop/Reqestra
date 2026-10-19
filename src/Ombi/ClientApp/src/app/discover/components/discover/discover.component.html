@@ -22,6 +22,20 @@
 		</section>
 
 		@defer (on idle) {
+			<section id="recommended-section" class="discover-section" [hidden]="!showRecommended()">
+				<div class="section-header">
+					<h2>{{ 'Discovery.RecommendedForYouTab' | translate }}</h2>
+				</div>
+				<carousel-list
+					[id]="'recommended'"
+					[isAdmin]="isAdmin()"
+					[discoverType]="DiscoverType.Recommended"
+					(resultCount)="setRecommendedResultCount($event)"
+				></carousel-list>
+			</section>
+		}
+
+		@defer (on idle) {
 			<section id="seasonal-section" class="discover-section" [hidden]="!showSeasonal()">
 				<div class="section-header">
 					<h2>{{ 'Discovery.SeasonalTab' | translate }}</h2>
