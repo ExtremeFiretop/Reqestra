@@ -1,4 +1,4 @@
-import { Component, ViewChild, Inject, input, output, signal, computed, inject, ChangeDetectionStrategy } from "@angular/core";
+import { Component, ViewChild, Inject, input, output, signal, computed, inject, ChangeDetectionStrategy, ElementRef, OnDestroy } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { MatButtonToggleModule, MatButtonToggleChange } from '@angular/material/button-toggle';
 import { TranslateModule } from "@ngx-translate/core";
@@ -36,7 +36,7 @@ export enum DiscoverType {
         DiscoverCardComponent
     ]
 })
-export class CarouselListComponent {
+export class CarouselListComponent implements OnDestroy {
     // Inputs using new input() function
     public discoverType = input.required<DiscoverType>();
     public id = input.required<string>();
@@ -46,6 +46,7 @@ export class CarouselListComponent {
     public movieCount = output<number>();
     
     @ViewChild('carousel', {static: false}) carousel: Carousel;
+    @ViewChild('carouselRoot', { static: false }) carouselRoot?: ElementRef<HTMLElement>;
 
     // Services using inject() function
     private searchService = inject(SearchV2Service);
@@ -65,6 +66,8 @@ export class CarouselListComponent {
     public tvShows = signal<ISearchTvResult[]>([]);
     public loadingFlag = signal<boolean>(false);
     public is4kEnabled = signal<boolean>(false);
+    public numVisible = signal<number>(10);
+    public numScroll = signal<number>(9);
     
     // Computed properties
     public hasResults = computed(() => this.discoverResults().length > 0);
@@ -77,98 +80,10 @@ export class CarouselListComponent {
     private amountToLoad = 20;
     private currentlyLoaded = 0;
     private loadVersion = 0;
-    public responsiveOptions: any;
+    private resizeObserver?: ResizeObserver;
 
     constructor() {
-
-        Carousel.prototype.onTouchMove = () => { },
-        this.responsiveOptions = [
-            {
-                breakpoint: '4000px',
-                numVisible: 17,
-                numScroll: 16
-            },
-            {
-                breakpoint: '3800px',
-                numVisible: 16,
-                numScroll: 15
-            },
-            {
-                breakpoint: '3600px',
-                numVisible: 15,
-                numScroll: 14
-            },
-            {
-                breakpoint: '3400px',
-                numVisible: 14,
-                numScroll: 13
-            },
-            {
-                breakpoint: '3200px',
-                numVisible: 13,
-                numScroll: 12
-            },
-            {
-                breakpoint: '3000px',
-                numVisible: 12,
-                numScroll: 11
-            },
-            {
-                breakpoint: '2800px',
-                numVisible: 11,
-                numScroll: 10
-            },
-            {
-                breakpoint: '2600px',
-                numVisible: 10,
-                numScroll: 9
-            },
-            {
-                breakpoint: '2400px',
-                numVisible: 9,
-                numScroll: 8
-            },
-            {
-                breakpoint: '2200px',
-                numVisible: 8,
-                numScroll: 7
-            },
-            {
-                breakpoint: '2000px',
-                numVisible: 7,
-                numScroll: 6
-            },
-            {
-                breakpoint: '1800px',
-                numVisible: 6,
-                numScroll: 5
-            },
-            {
-                breakpoint: '1650px',
-                numVisible: 5,
-                numScroll: 4
-            },
-            {
-                breakpoint: '1500px',
-                numVisible: 4,
-                numScroll: 3
-            },
-            {
-                breakpoint: '768px',
-                numVisible: 3,
-                numScroll: 2
-            },
-            {
-                breakpoint: '660px',
-                numVisible: 2,
-                numScroll: 2
-            },
-            {
-                breakpoint: '480px',
-                numVisible: 1,
-                numScroll: 1
-            }
-        ];
+        Carousel.prototype.onTouchMove = () => { };
     }
 
     public async ngOnInit() {
@@ -384,6 +299,7 @@ export class CarouselListComponent {
         }
 
         this.discoverResults.update(current => [...current, ...tempResults]);
+        this.scheduleCarouselSizing();
 
         this.finishLoading();
     }
@@ -431,6 +347,66 @@ export class CarouselListComponent {
             });
         });
         return tempResults;
+    }
+
+    private scheduleCarouselSizing() {
+        // The carousel is rendered by an @defer block after results arrive. Yield
+        // once so the root exists before measuring its actual content width.
+        setTimeout(() => {
+            this.initResizeObserver();
+            this.recalculateCarouselDimensions();
+        }, 0);
+    }
+
+    private initResizeObserver() {
+        const root = this.carouselRoot?.nativeElement;
+        if (!root || this.resizeObserver) {
+            return;
+        }
+
+        this.resizeObserver = new ResizeObserver(() => this.recalculateCarouselDimensions());
+        this.resizeObserver.observe(root);
+    }
+
+    private recalculateCarouselDimensions() {
+        const root = this.carouselRoot?.nativeElement;
+        if (!root) {
+            return;
+        }
+
+        // Use the actual PrimeNG viewport rather than the browser width so sidebar,
+        // navigation buttons, and page padding are naturally accounted for.
+        const itemsContent = root.querySelector<HTMLElement>('.p-carousel-items-content');
+        const width = (itemsContent ?? root).clientWidth;
+        if (!width) {
+            return;
+        }
+
+        // Discover cards are capped at 200px and have 4px host padding on each side.
+        // Prefer a rendered card measurement when available, but keep a stable
+        // fallback so the first sizing pass does not depend on PrimeNG's slot width.
+        let targetCardWidth = 208;
+        const firstCard = root.querySelector<HTMLElement>('discover-card');
+        if (firstCard) {
+            const measuredWidth = Math.ceil(firstCard.getBoundingClientRect().width);
+            if (measuredWidth >= 120 && measuredWidth <= 260) {
+                targetCardWidth = measuredWidth;
+            }
+        }
+
+        // Do not clamp this to the result count. PrimeNG derives slot width and
+        // translation distance from numVisible; keeping the viewport capacity here
+        // prevents sparse feeds from stretching their few cards across the row.
+        const maxVisible = 17;
+        const visible = Math.max(1, Math.min(maxVisible, Math.floor(width / targetCardWidth)));
+        const scroll = visible <= 2 ? visible : visible - 1;
+
+        this.numVisible.set(visible);
+        this.numScroll.set(Math.max(1, scroll));
+    }
+
+    public ngOnDestroy(): void {
+        this.resizeObserver?.disconnect();
     }
 
     private clear() {

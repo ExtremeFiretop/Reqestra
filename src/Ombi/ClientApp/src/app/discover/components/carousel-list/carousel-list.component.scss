@@ -61,11 +61,14 @@
     display: none !important;
 }
 
-// Center cards within each PrimeNG carousel slot. This is especially visible
-// on mobile where numVisible is 1 and the card is narrower than the viewport.
+// Center cards within each PrimeNG carousel slot. Keep PrimeNG's percentage
+// flex-basis, but disable flex growth so a sparse result set cannot expand its
+// few slots to fill the entire row. This keeps paging math aligned with
+// numVisible while preserving consistent card spacing.
 :host ::ng-deep .p-carousel-item {
     display: flex;
     justify-content: center;
+    flex-grow: 0 !important;
 }
 
 // Carousel navigation arrows
@@ -83,16 +86,6 @@
     &:hover {
         background: rgba(255, 255, 255, 0.15) !important;
         border-color: rgba(255, 255, 255, 0.3) !important;
-    }
-}
-
-// Responsive item sizing. Keep desktop slots fixed-width instead of allowing
-// sparse result sets to stretch each slot across the available row. The cards
-// remain centered within their slots, but Popular/Trending/Seasonal now keep
-// the same poster spacing even when one feed returns fewer items.
-@media (min-width: 755px) {
-    :host ::ng-deep .p-carousel-item {
-        flex: 0 0 200px !important;
     }
 }
 

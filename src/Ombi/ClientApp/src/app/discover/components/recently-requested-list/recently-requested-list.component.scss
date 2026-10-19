@@ -29,6 +29,9 @@
 :host ::ng-deep .p-carousel-item {
     display: flex;
     justify-content: center;
+    // PrimeNG uses numVisible to generate the percentage flex-basis used by its
+    // paging math. Prevent sparse result sets from growing beyond that basis.
+    flex-grow: 0 !important;
 }
 
 // Match the 200px Discover card footprint at every viewport size without

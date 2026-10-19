@@ -31,20 +31,44 @@ describe("Discover Cards Tests", () => {
     cy.get("#seasonal-section").should("not.be.visible");
   });
 
-  it("Keeps desktop carousel slots from stretching when a feed is sparse", () => {
-    cy.viewport(1920, 1080);
+  it("Keeps sparse desktop feeds compact using PrimeNG native slot sizing", () => {
+    cy.viewport(3840, 2160);
     window.localStorage.setItem("DiscoverOptions2", "2");
-    cy.intercept("GET", "**/search/Movie/Popular/**").as("moviePopular");
 
-    Page.visit();
-    cy.wait("@moviePopular");
+    let popularRequest = 0;
+    cy.fixture("discover/popularMovies.json").then((movies) => {
+      cy.intercept("GET", "**/search/Movie/Popular/**", (req) => {
+        popularRequest++;
+        req.reply({
+          statusCode: 200,
+          body: popularRequest === 1 ? movies.slice(0, 10) : [],
+        });
+      }).as("moviePopular");
+
+      Page.visit();
+      cy.wait("@moviePopular");
+      cy.wait("@moviePopular");
+    });
 
     cy.get("#popularMovie-button")
       .closest("carousel-list")
       .find(".p-carousel-item")
       .first()
-      .should("have.css", "flex-grow", "0")
-      .and("have.css", "flex-basis", "200px");
+      .should(($item) => {
+        // The carousel should keep enough virtual slots for the viewport instead
+        // of stretching ten sparse results across the full 4K row.
+        expect($item[0].getBoundingClientRect().width).to.be.lessThan(260);
+      });
+
+    cy.get("#popularMovie-button")
+      .closest("carousel-list")
+      .find("discover-card .card-wrapper")
+      .should("have.length", 10)
+      .then(($cards) => {
+        const first = $cards[0].getBoundingClientRect();
+        const second = $cards[1].getBoundingClientRect();
+        expect(second.left - first.right).to.be.lessThan(50);
+      });
   });
 
   it("Popular combined should load movies and TV", () => {
