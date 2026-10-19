@@ -1,3 +1,12 @@
+## [4.68.16](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.15...v4.68.16) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** stabilize deferred carousel sizing ([af616a8](https://github.com/ExtremeFiretop/Reqestra/commit/af616a833b37f215ea60f56a0cf339d1d8c415ef))
+
+
+
 ## [4.68.15](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.14...v4.68.15) (2026-10-19)
 
 
@@ -340,15 +349,6 @@
 ### Bug Fixes
 
 * **sonarr:** allow placeholder metadata for exact seasons ([177d226](https://github.com/ExtremeFiretop/Reqestra/commit/177d2265cc5e2f28c6386056f6adbce9b260958d))
-
-
-
-## [4.61.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.9...v4.61.10) (2026-10-07)
-
-
-### Bug Fixes
-
-* **plex:** serialize content sync and database refresh ([339c106](https://github.com/ExtremeFiretop/Reqestra/commit/339c106d7026e023a16e8f326df4f22da5a77e81))
 
 
 
