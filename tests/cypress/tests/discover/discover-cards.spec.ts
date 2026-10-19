@@ -5,6 +5,13 @@ describe("Discover Cards Tests", () => {
     cy.login();
   });
 
+  it("Explains the difference between Popular and Trending in the section headings", () => {
+    Page.visit();
+
+    cy.contains("h2", "Popular (Most Watched)").should("exist");
+    cy.contains("h2", "Trending (This Week)").should("exist");
+  });
+
   it("Seasonal loads while hidden and becomes visible when movies are returned", () => {
     cy.intercept("GET", "**/search/Movie/seasonal/**", { fixture: "discover/popularMovies.json" }).as("seasonalMovies");
 
