@@ -1,3 +1,7 @@
+## [4.69.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.3...v4.69.4) (2026-10-19)
+
+
+
 ## [4.69.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.2...v4.69.3) (2026-10-19)
 
 
@@ -340,15 +344,6 @@
 
 
 ## [4.61.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.16...v4.61.17) (2026-10-09)
-
-
-
-## [4.61.16](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.15...v4.61.16) (2026-10-09)
-
-
-### Bug Fixes
-
-* **newsletter:** skip orphaned media episodes ([949b28f](https://github.com/ExtremeFiretop/Reqestra/commit/949b28fbe8e2b242f6f32389dd1151a26bec0322))
 
 
 
