@@ -114,18 +114,21 @@
                             <p class="metadata">
                                 {{ mediaTypeText(item.requestType) }}<span *ngIf="item.releaseDate"> · {{ item.releaseDate | date:'yyyy' }}</span><span *ngIf="item.requestedBy"> · Requested by {{ item.requestedBy }}</span>
                             </p>
-                            <ng-container *ngIf="item.overview">
-                                <button class="overview-expander overview-expander-voting" type="button"
-                                        *ngIf="overviewCanExpand(item, 3); else plainVotingOverview"
-                                        (click)="toggleOverview(item)" [attr.aria-expanded]="isOverviewExpanded(item)"
+                            <div class="overview-expander overview-expander-voting" *ngIf="item.overview">
+                                <p #overviewText
+                                   class="media-overview media-overview-voting"
+                                   [class.media-overview-expanded]="isOverviewExpanded(item)"
+                                   [class.media-overview-clickable]="overviewCanExpand(item, 'voting')"
+                                   [attr.data-overview-key]="overviewMeasurementKey(item, 'voting')"
+                                   (click)="toggleOverviewIfExpandable(item, 'voting')">{{ item.overview }}</p>
+                                <button class="overview-toggle-label" type="button"
+                                        *ngIf="overviewCanExpand(item, 'voting')"
+                                        (click)="toggleOverview(item)"
+                                        [attr.aria-expanded]="isOverviewExpanded(item)"
                                         [attr.aria-label]="(isOverviewExpanded(item) ? 'Collapse description for ' : 'Expand description for ') + item.title">
-                                    <span class="media-overview media-overview-voting" [class.media-overview-expanded]="isOverviewExpanded(item)">{{ item.overview }}</span>
-                                    <span class="overview-toggle-label">{{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}</span>
+                                    {{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}
                                 </button>
-                                <ng-template #plainVotingOverview>
-                                    <p class="media-overview media-overview-voting">{{ item.overview }}</p>
-                                </ng-template>
-                            </ng-container>
+                            </div>
                             <p class="metadata" *ngIf="item.cleanup as cleanup">{{ cleanup.deleteVotes }} remove · {{ cleanup.keepVotes }} keep</p>
                             <p class="vote-needed-message" *ngIf="!hasVoted(item)">You have not voted yet.</p>
                             <p class="metadata" *ngIf="item.cleanup?.votingEndsAt">Voting ends {{ item.cleanup?.votingEndsAt | date:'medium' }}</p>
@@ -331,18 +334,21 @@
                         </div>
                     </div>
 
-                    <ng-container *ngIf="item.overview">
-                        <button class="overview-expander overview-expander-catalog" type="button"
-                                *ngIf="overviewCanExpand(item, 4); else plainCatalogOverview"
-                                (click)="toggleOverview(item)" [attr.aria-expanded]="isOverviewExpanded(item)"
+                    <div class="overview-expander overview-expander-catalog" *ngIf="item.overview">
+                        <p #overviewText
+                           class="media-overview media-overview-catalog"
+                           [class.media-overview-expanded]="isOverviewExpanded(item)"
+                           [class.media-overview-clickable]="overviewCanExpand(item, 'catalog')"
+                           [attr.data-overview-key]="overviewMeasurementKey(item, 'catalog')"
+                           (click)="toggleOverviewIfExpandable(item, 'catalog')">{{ item.overview }}</p>
+                        <button class="overview-toggle-label" type="button"
+                                *ngIf="overviewCanExpand(item, 'catalog')"
+                                (click)="toggleOverview(item)"
+                                [attr.aria-expanded]="isOverviewExpanded(item)"
                                 [attr.aria-label]="(isOverviewExpanded(item) ? 'Collapse description for ' : 'Expand description for ') + item.title">
-                            <span class="media-overview media-overview-catalog" [class.media-overview-expanded]="isOverviewExpanded(item)">{{ item.overview }}</span>
-                            <span class="overview-toggle-label">{{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}</span>
+                            {{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}
                         </button>
-                        <ng-template #plainCatalogOverview>
-                            <p class="media-overview media-overview-catalog">{{ item.overview }}</p>
-                        </ng-template>
-                    </ng-container>
+                    </div>
                     <p class="metadata" *ngIf="item.requestedBy">Requested by {{ item.requestedBy }}</p>
                     <p class="metadata stewardship-metadata" *ngIf="item.isCleanupSteward">
                         <mat-icon>verified_user</mat-icon>

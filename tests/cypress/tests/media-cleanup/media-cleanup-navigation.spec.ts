@@ -46,6 +46,26 @@ describe("Media Cleanup descriptions and details links", () => {
           sizeOnDisk: 0,
         },
         {
+          requestType: 1,
+          requestId: 44,
+          mediaId: 551,
+          title: "Responsive Overview Movie",
+          posterPath: "/responsive-poster.jpg",
+          overview: "As New York City is invaded by alien creatures who hunt by sound, a woman named Sammy fights to survive while searching for safety.",
+          releaseDate: "2024-06-28T00:00:00Z",
+          requestedBy: "Test User",
+          ownedByCurrentUser: true,
+          isCleanupSteward: false,
+          canRequestOwnRemoval: true,
+          canNominate: false,
+          canVote: false,
+          canManage: false,
+          canCancel: false,
+          communityAgeEligible: true,
+          lastPlayedKnown: false,
+          sizeOnDisk: 0,
+        },
+        {
           requestType: 0,
           requestId: 43,
           mediaId: 1399,
@@ -83,6 +103,19 @@ describe("Media Cleanup descriptions and details links", () => {
       cy.get(".media-overview-catalog").should("have.class", "media-overview-expanded");
       cy.contains(".overview-toggle-label", "Show less").click();
       cy.get(".media-overview-catalog").should("not.have.class", "media-overview-expanded");
+    });
+  });
+
+  it("shows the expansion control only when the rendered description is actually truncated", () => {
+    cy.contains(".cleanup-card", "Responsive Overview Movie").within(() => {
+      cy.get(".media-overview-catalog").invoke("css", "width", "500px");
+      cy.get(".overview-toggle-label").should("not.exist");
+
+      cy.get(".media-overview-catalog").invoke("css", "width", "120px");
+      cy.contains(".overview-toggle-label", "Show more").should("be.visible");
+
+      cy.get(".media-overview-catalog").invoke("css", "width", "500px");
+      cy.get(".overview-toggle-label").should("not.exist");
     });
   });
 

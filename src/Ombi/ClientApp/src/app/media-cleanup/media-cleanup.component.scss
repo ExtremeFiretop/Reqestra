@@ -159,34 +159,38 @@
 .overview-expander {
     display: block;
     width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
 }
 
-.overview-expander:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 3px;
-    border-radius: 2px;
+.media-overview-clickable {
+    cursor: pointer;
 }
 
 .overview-toggle-label {
     display: inline-block;
     margin-top: .25rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     font-size: .82rem;
     font-weight: 600;
     opacity: .78;
+    text-align: left;
     text-decoration: underline;
     text-underline-offset: 2px;
+    cursor: pointer;
 }
 
-.overview-expander:hover .overview-toggle-label,
-.overview-expander:focus-visible .overview-toggle-label {
+.overview-toggle-label:hover,
+.overview-toggle-label:focus-visible {
     opacity: 1;
+}
+
+.overview-toggle-label:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 2px;
 }
 
 .media-title-link {

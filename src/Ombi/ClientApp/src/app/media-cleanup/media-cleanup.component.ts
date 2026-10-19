@@ -1,5 +1,14 @@
 import { CommonModule } from "@angular/common";
-import { Component, OnInit } from "@angular/core";
+import {
+    AfterViewInit,
+    Component,
+    ElementRef,
+    NgZone,
+    OnDestroy,
+    OnInit,
+    QueryList,
+    ViewChildren
+} from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
 import { MatButtonToggleModule } from "@angular/material/button-toggle";
@@ -53,7 +62,7 @@ import {
         TvCleanupSelectionDialogComponent
     ]
 })
-export class MediaCleanupComponent implements OnInit {
+export class MediaCleanupComponent implements OnInit, AfterViewInit, OnDestroy {
     public overview!: IMediaCleanupOverview;
     public loading = true;
     public loadingMetrics = false;
@@ -61,6 +70,11 @@ export class MediaCleanupComponent implements OnInit {
     private readonly busyItemKeys = new Set<string>();
     private readonly expandedVoterKeys = new Set<string>();
     private readonly expandedOverviewKeys = new Set<string>();
+    private readonly expandableOverviewKeys = new Set<string>();
+    @ViewChildren("overviewText") private overviewTextElements!: QueryList<ElementRef<HTMLElement>>;
+    private overviewElementsSubscription?: Subscription;
+    private overviewResizeObserver?: ResizeObserver;
+    private overviewMeasureTimer?: ReturnType<typeof setTimeout>;
     private metricsSubscription?: Subscription;
     private lastPlayedSubscription?: Subscription;
     public viewMode: "all" | "mine" | "stewardship" = "mine";
@@ -78,10 +92,28 @@ export class MediaCleanupComponent implements OnInit {
     constructor(
         private readonly cleanupService: MediaCleanupService,
         private readonly notificationService: NotificationService,
-        private readonly dialog: MatDialog) { }
+        private readonly dialog: MatDialog,
+        private readonly zone: NgZone) { }
 
     public ngOnInit(): void {
         this.load();
+    }
+
+    public ngAfterViewInit(): void {
+        this.overviewElementsSubscription = this.overviewTextElements.changes.subscribe(() => {
+            this.scheduleOverviewMeasurements();
+        });
+        this.scheduleOverviewMeasurements();
+    }
+
+    public ngOnDestroy(): void {
+        this.metricsSubscription?.unsubscribe();
+        this.lastPlayedSubscription?.unsubscribe();
+        this.overviewElementsSubscription?.unsubscribe();
+        this.overviewResizeObserver?.disconnect();
+        if (this.overviewMeasureTimer) {
+            clearTimeout(this.overviewMeasureTimer);
+        }
     }
 
     public load(): void {
@@ -445,16 +477,83 @@ export class MediaCleanupComponent implements OnInit {
         } else {
             this.expandedOverviewKeys.add(key);
         }
+        this.scheduleOverviewMeasurements();
     }
 
     public isOverviewExpanded(item: IMediaCleanupItem): boolean {
         return this.expandedOverviewKeys.has(this.itemKey(item));
     }
 
-    public overviewCanExpand(item: IMediaCleanupItem, lineLimit: number): boolean {
-        // Use a conservative character estimate so narrow/mobile cards still get an
-        // expansion affordance before the CSS line clamp is likely to truncate text.
-        return (item.overview?.trim().length ?? 0) > lineLimit * 25;
+    public overviewCanExpand(item: IMediaCleanupItem, context: "voting" | "catalog"): boolean {
+        return this.expandableOverviewKeys.has(this.overviewMeasurementKey(item, context));
+    }
+
+    public overviewMeasurementKey(item: IMediaCleanupItem, context: "voting" | "catalog"): string {
+        return `${this.itemKey(item)}:${context}`;
+    }
+
+    public toggleOverviewIfExpandable(item: IMediaCleanupItem, context: "voting" | "catalog"): void {
+        if (this.overviewCanExpand(item, context)) {
+            this.toggleOverview(item);
+        }
+    }
+
+    private scheduleOverviewMeasurements(): void {
+        if (this.overviewMeasureTimer) {
+            clearTimeout(this.overviewMeasureTimer);
+        }
+
+        this.overviewMeasureTimer = setTimeout(() => {
+            this.overviewMeasureTimer = undefined;
+            this.zone.run(() => this.observeAndMeasureOverviews());
+        }, 0);
+    }
+
+    private observeAndMeasureOverviews(): void {
+        this.overviewResizeObserver?.disconnect();
+        const elements = this.overviewTextElements?.toArray().map(x => x.nativeElement) ?? [];
+        if (!elements.length) {
+            return;
+        }
+
+        for (const element of elements) {
+            this.measureOverviewElement(element);
+        }
+
+        if (typeof ResizeObserver === "undefined") {
+            return;
+        }
+
+        this.overviewResizeObserver = new ResizeObserver(entries => {
+            this.zone.run(() => {
+                for (const entry of entries) {
+                    this.measureOverviewElement(entry.target as HTMLElement);
+                }
+            });
+        });
+        for (const element of elements) {
+            this.overviewResizeObserver.observe(element);
+        }
+    }
+
+    private measureOverviewElement(element: HTMLElement): void {
+        const measurementKey = element.dataset["overviewKey"];
+        if (!measurementKey) {
+            return;
+        }
+
+        // While expanded, preserve the affordance until the user collapses it.
+        // The collapsed element is remeasured immediately afterwards.
+        if (element.classList.contains("media-overview-expanded")) {
+            return;
+        }
+
+        const canExpand = element.scrollHeight > element.clientHeight + 1;
+        if (canExpand) {
+            this.expandableOverviewKeys.add(measurementKey);
+        } else {
+            this.expandableOverviewKeys.delete(measurementKey);
+        }
     }
 
     public mediaDetailsLink(item: IMediaCleanupItem): string | null {
