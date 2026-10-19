@@ -9,6 +9,7 @@ using Ombi.Core.Settings;
 using Ombi.Helpers;
 using Ombi.Settings.Settings.Models;
 using Ombi.Store.Entities;
+using Ombi.Store.Entities.Requests;
 using Ombi.Store.Repository.Requests;
 using System;
 using System.Collections.Generic;
