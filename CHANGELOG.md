@@ -1,3 +1,12 @@
+## [4.68.15](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.14...v4.68.15) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** use responsive carousel slot sizing ([2543e8a](https://github.com/ExtremeFiretop/Reqestra/commit/2543e8af781bd4ad6241a640ae5d88f6f06600ef)), closes [#86](https://github.com/ExtremeFiretop/Reqestra/issues/86)
+
+
+
 ## [4.68.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.13...v4.68.14) (2026-10-19)
 
 
@@ -340,17 +349,6 @@
 ### Bug Fixes
 
 * **plex:** serialize content sync and database refresh ([339c106](https://github.com/ExtremeFiretop/Reqestra/commit/339c106d7026e023a16e8f326df4f22da5a77e81))
-
-
-
-## [4.61.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.8...v4.61.9) (2026-10-06)
-
-
-### Bug Fixes
-
-* **ci:** reconcile release tag ancestry before versioning ([91a2310](https://github.com/ExtremeFiretop/Reqestra/commit/91a2310d4ee5676378dda23b3cadc69aaa9a07ab))
-* **plex:** handle rate-limited API failures safely ([a19e043](https://github.com/ExtremeFiretop/Reqestra/commit/a19e043f1c8bc5d3b8c727455e4a8197542b0c9b))
-* **tests:** import Plex friends models in API tests ([a787933](https://github.com/ExtremeFiretop/Reqestra/commit/a7879331163373502374ec6798d265b2431bbe2a))
 
 
 
