@@ -378,11 +378,17 @@ describe('CarouselListComponent', () => {
       expect(component.hasResults()).toBe(true);
     });
 
-    it('should render the first batch before topping up in the background', async () => {
+    it('should render the first batch before iteratively topping up filtered movie results', async () => {
       vi.useFakeTimers();
       try {
-        const movies = [makeMovie({ id: 1 }), makeMovie({ id: 2 }), makeMovie({ id: 3 })];
-        mockSearchService.popularMoviesByPage.mockResolvedValue(movies);
+        mockSearchService.popularMoviesByPage
+          .mockResolvedValueOnce([
+            makeMovie({ id: 1 }),
+            makeMovie({ id: 2 }),
+            makeMovie({ id: 3 }),
+          ])
+          .mockResolvedValueOnce(Array.from({ length: 7 }, (_, i) => makeMovie({ id: 10 + i })))
+          .mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => makeMovie({ id: 20 + i })));
 
         const { component } = createComponent(mockSearchService);
         setupInputs(component, DiscoverType.Popular, DiscoverOption.Movie);
@@ -394,9 +400,42 @@ describe('CarouselListComponent', () => {
 
         await vi.runAllTimersAsync();
 
-        expect(component.totalResults()).toBe(6);
+        expect(component.totalResults()).toBe(20);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenCalledTimes(3);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(2, 20, 20);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(3, 40, 20);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should top up again after switching from TV to a filtered Movie-only feed', async () => {
+      vi.useFakeTimers();
+      try {
+        mockSearchService.popularTvByPage.mockResolvedValue(
+          Array.from({ length: 20 }, (_, i) => makeTvShow({ id: 100 + i }))
+        );
+        mockSearchService.popularMoviesByPage
+          .mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => makeMovie({ id: 200 + i })))
+          .mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => makeMovie({ id: 300 + i })));
+
+        const { component } = createComponent(mockSearchService);
+        setupInputs(component, DiscoverType.Popular, DiscoverOption.Tv);
+        await component.ngOnInit();
+
+        expect(component.totalResults()).toBe(20);
+        expect(mockSearchService.popularMoviesByPage).not.toHaveBeenCalled();
+
+        await (component as any).switchDiscoverMode(DiscoverOption.Movie);
+
+        expect(component.totalResults()).toBe(10);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(1, 0, 20);
+
+        await vi.runAllTimersAsync();
+
+        expect(component.totalResults()).toBe(20);
         expect(mockSearchService.popularMoviesByPage).toHaveBeenCalledTimes(2);
-        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(2, 20, 17);
+        expect(mockSearchService.popularMoviesByPage).toHaveBeenNthCalledWith(2, 20, 20);
       } finally {
         vi.useRealTimers();
       }

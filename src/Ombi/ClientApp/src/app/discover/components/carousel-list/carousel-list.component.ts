@@ -127,11 +127,12 @@ export class CarouselListComponent implements OnDestroy {
         const loadVersion = ++this.loadVersion;
         await this.loadData(false);
 
-        // If filtering leaves the carousel short, top it up in the background.
-        // This deliberately caps the automatic initial load at two batches while
-        // avoiding a second expensive TV enrichment pass on the critical render path.
+        // If downstream availability/privacy filtering leaves the first batch short,
+        // refill it in the background. Keep the first paint fast, but continue through
+        // later source ranges until the carousel has a useful buffer of displayable
+        // cards (or a small safety limit is reached).
         if (this.discoverResults().length < this.amountToLoad) {
-            void this.topUpInitialCarousel(loadVersion);
+            void this.topUpCarousel(loadVersion);
         }
     }
 
@@ -191,54 +192,87 @@ export class CarouselListComponent implements OnDestroy {
         this.createInitialModel(clearExisting);
     }
 
-    private async topUpInitialCarousel(loadVersion: number) {
-        // Yield so Angular can paint the first batch before starting another request.
+    private async topUpCarousel(loadVersion: number) {
+        // Yield so Angular can paint the first batch before starting follow-up requests.
         await new Promise<void>(resolve => setTimeout(resolve, 0));
 
-        if (loadVersion !== this.loadVersion || this.discoverResults().length >= this.amountToLoad) {
-            return;
-        }
-
-        const offset = this.currentlyLoaded;
         const discoverOption = +this.discoverOptions();
-        const amountToTopUp = this.amountToLoad - this.discoverResults().length;
+        const targetCount = Math.max(this.amountToLoad, this.numVisible());
 
-        try {
-            let movieResults: ISearchMovieResult[] | undefined;
-            let tvResults: ISearchTvResult[] | undefined;
+        // Single-media feeds can be heavily reduced by Hide Available From Discover.
+        // Scan a few additional source ranges so a batch of 20 candidates does not turn
+        // into a half-empty carousel merely because many of those candidates were hidden.
+        // Combined already draws from two feeds, so retain a single conservative refill
+        // there to avoid unnecessary TV enrichment work.
+        const maxAttempts = discoverOption === DiscoverOption.Combined ? 1 : 3;
 
-            switch (discoverOption) {
-                case DiscoverOption.Combined:
-                    [movieResults, tvResults] = await Promise.all([
-                        this.fetchMovies(offset, amountToTopUp),
-                        this.fetchTv(offset, amountToTopUp)
-                    ]);
-                    break;
-                case DiscoverOption.Movie:
-                    movieResults = await this.fetchMovies(offset, amountToTopUp);
-                    break;
-                case DiscoverOption.Tv:
-                    tvResults = await this.fetchTv(offset, amountToTopUp);
-                    break;
-            }
-
-            // The user may have changed media mode while the background request was running.
-            if (loadVersion !== this.loadVersion || discoverOption !== +this.discoverOptions()) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if (loadVersion !== this.loadVersion
+                || discoverOption !== +this.discoverOptions()
+                || this.discoverResults().length >= targetCount) {
                 return;
             }
 
-            if (movieResults) {
-                this.movies.set(movieResults);
-                this.movieCount.emit(movieResults.length);
-            }
-            if (tvResults) {
-                this.tvShows.set(tvResults);
-            }
+            const missing = targetCount - this.discoverResults().length;
+            const requestAmount = discoverOption === DiscoverOption.Combined
+                ? Math.max(1, Math.ceil(missing / 2))
+                : this.amountToLoad;
+            const offset = this.currentlyLoaded;
 
-            this.currentlyLoaded += amountToTopUp;
-            this.createInitialModel(false);
-        } catch (error) {
-            console.warn('Discover carousel background top-up failed', error);
+            try {
+                let movieResults: ISearchMovieResult[] | undefined;
+                let tvResults: ISearchTvResult[] | undefined;
+
+                switch (discoverOption) {
+                    case DiscoverOption.Combined:
+                        [movieResults, tvResults] = await Promise.all([
+                            this.fetchMovies(offset, requestAmount),
+                            this.fetchTv(offset, requestAmount)
+                        ]);
+                        break;
+                    case DiscoverOption.Movie:
+                        movieResults = await this.fetchMovies(offset, requestAmount);
+                        break;
+                    case DiscoverOption.Tv:
+                        tvResults = await this.fetchTv(offset, requestAmount);
+                        break;
+                }
+
+                // The user may have changed media mode while the background request was running.
+                if (loadVersion !== this.loadVersion || discoverOption !== +this.discoverOptions()) {
+                    return;
+                }
+
+                if (movieResults) {
+                    this.movies.set(movieResults);
+                }
+                if (tvResults) {
+                    this.tvShows.set(tvResults);
+                }
+
+                // Offset tracks source candidates requested, not displayable results returned.
+                // The backend may remove available media after paging, so advancing by the
+                // requested amount prevents us from repeatedly scanning the same candidates.
+                this.currentlyLoaded += requestAmount;
+                this.createInitialModel(false);
+
+                if (movieResults) {
+                    // movieCount represents the carousel's total visible movie population,
+                    // not just the latest refill batch. This matters for Seasonal: an empty
+                    // later batch must not hide a section that already has visible movies.
+                    const visibleMovieCount = this.discoverResults()
+                        .filter(result => result.type === RequestType.movie).length;
+                    this.movieCount.emit(visibleMovieCount);
+                }
+
+                // Yield between refill passes so a sparse feed never monopolizes rendering.
+                if (this.discoverResults().length < targetCount && attempt + 1 < maxAttempts) {
+                    await new Promise<void>(resolve => setTimeout(resolve, 0));
+                }
+            } catch (error) {
+                console.warn('Discover carousel background top-up failed', error);
+                return;
+            }
         }
     }
 
@@ -246,13 +280,21 @@ export class CarouselListComponent implements OnDestroy {
         if (this.discoverOptions() === newMode) {
             return;
         }
-        // Invalidate any deferred initial top-up from the previous mode.
-        this.loadVersion++;
+        // Invalidate any deferred top-up from the previous mode.
+        const loadVersion = ++this.loadVersion;
         this.loading();
         this.currentlyLoaded = 0;
         this.discoverOptions.set(+newMode);
         this.storageService.save(this.mediaTypeStorageKey, newMode.toString());
         await this.loadData();
+
+        // Media-mode changes previously loaded only one source range. If that range was
+        // heavily reduced by Hide Available From Discover, Movie-only/TV-only could stop
+        // with a visibly half-empty row even though later results were available.
+        if (this.discoverResults().length < this.amountToLoad) {
+            void this.topUpCarousel(loadVersion);
+        }
+
         this.finishLoading();
     }
 
