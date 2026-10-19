@@ -1,3 +1,12 @@
+## [4.68.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.16...v4.68.17) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** refill filtered carousel results ([a2f14f8](https://github.com/ExtremeFiretop/Reqestra/commit/a2f14f837bc0c11b8876067380a44a0a9b45963e))
+
+
+
 ## [4.68.16](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.15...v4.68.16) (2026-10-19)
 
 
@@ -340,15 +349,6 @@
 
 
 ## [4.61.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.11...v4.61.12) (2026-10-08)
-
-
-
-## [4.61.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.10...v4.61.11) (2026-10-08)
-
-
-### Bug Fixes
-
-* **sonarr:** allow placeholder metadata for exact seasons ([177d226](https://github.com/ExtremeFiretop/Reqestra/commit/177d2265cc5e2f28c6386056f6adbce9b260958d))
 
 
 
