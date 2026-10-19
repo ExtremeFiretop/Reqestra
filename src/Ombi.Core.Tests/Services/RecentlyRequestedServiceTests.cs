@@ -351,7 +351,7 @@ namespace Ombi.Core.Tests.Services
 
         private void SetupCurrentUser(string userId = "test-user")
         {
-            var user = new OmbiUser { Id = userId, Alias = "TestUser", Language = "en" };
+            var user = new OmbiUser { Id = userId, Alias = "TestUser", Language = "en", UserType = UserType.LocalUser };
             _currentUserMock.Setup(x => x.GetUser()).ReturnsAsync(user);
             _currentUserMock.Setup(x => x.Username).Returns("testuser");
             
