@@ -10,15 +10,19 @@ const initialDiscoverLoad = 20;
 // listed movie with sparse external metadata cannot change the card's loading
 // path and make the state assertions nondeterministic.
 //
-// The fixture contains fewer than the carousel's 20-item initial target. The
-// production refill contract scans a full source-candidate window even when
-// only a few visible cards are missing. Return only enough unique cards to
-// fill the row while intercepting that full refill window.
-const interceptPopularMovie = (index: number, overrides: Partial<(typeof popularMovies)[number]>) => {
-  const body = popularMovies.map((movie) => ({ ...movie }));
-  Object.assign(body[index], overrides);
+// The fixture contains fewer than the carousel's 20-item initial target. Most
+// request-state tests are not refill tests, so fill their initial response to
+// 20 cards and keep the async refill path isolated to the dedicated regression
+// case below.
+const interceptPopularMovie = (
+  index: number,
+  overrides: Partial<(typeof popularMovies)[number]>,
+  simulateSparseFeed = false,
+) => {
+  const fixtureMovies = popularMovies.map((movie) => ({ ...movie }));
+  Object.assign(fixtureMovies[index], overrides);
 
-  const amountToTopUp = Math.max(0, initialDiscoverLoad - body.length);
+  const amountToTopUp = Math.max(0, initialDiscoverLoad - fixtureMovies.length);
   const refillRequestAmount = initialDiscoverLoad;
   const topUpMovies = popularMovies.slice(0, amountToTopUp).map((movie, topUpIndex) => {
     const id = 9_000_000 + topUpIndex;
@@ -32,13 +36,17 @@ const interceptPopularMovie = (index: number, overrides: Partial<(typeof popular
     };
   });
 
+  const body = simulateSparseFeed
+    ? fixtureMovies
+    : [...fixtureMovies, ...topUpMovies];
+
   cy.intercept(
     "GET",
     `**/search/Movie/Popular/0/${initialDiscoverLoad}`,
     { body },
   ).as("cardsResponse");
 
-  if (amountToTopUp > 0) {
+  if (simulateSparseFeed && amountToTopUp > 0) {
     cy.intercept(
       "GET",
       `**/search/Movie/Popular/${initialDiscoverLoad}/${refillRequestAmount}`,
@@ -79,7 +87,7 @@ describe("Discover Cards Requests Tests", () => {
       available: false,
       approved: false,
       requested: false,
-    });
+    }, true);
 
     cy.then(() => {
       window.localStorage.setItem("DiscoverOptions2", "2");
@@ -125,17 +133,12 @@ describe("Discover Cards Requests Tests", () => {
       var expectedId = body[0].id;
       var title = body[0].title;
 
-      // #86d refills short Discover feeds in the background and rebuilds the
-      // carousel model when that refill lands. Wait for that render boundary
-      // before hovering/clicking so the card cannot be replaced mid-action.
-      cy.wait("@cardsTopUpResponse");
-
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
       card.requestButton.should("exist");
       // Not visible until hover
       card.requestButton.should("not.be.visible");
-      card.topLevelCard.realHover();
+      card.cardInner.realHover();
 
       card.requestButton.should("be.visible");
       card.requestButton.click();
@@ -189,17 +192,12 @@ describe("Discover Cards Requests Tests", () => {
           var expectedId = body[6].id;
           var title = body[6].title;
 
-          // The background refill rebuilds the carousel and can clear hover
-          // state between the visibility assertion and click. Let it settle
-          // before interacting with the request action.
-          cy.wait("@cardsTopUpResponse");
-
           const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
           card.verifyTitle(title);
           card.requestButton.should("exist");
           // Not visible until hover
           card.requestButton.should("not.be.visible");
-          card.topLevelCard.realHover();
+          card.cardInner.realHover();
 
           card.requestButton.should("be.visible");
           card.requestButton.click();
@@ -238,7 +236,7 @@ describe("Discover Cards Requests Tests", () => {
 
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
-      card.topLevelCard.realHover();
+      card.cardInner.realHover();
 
       card.requestButton.should("not.exist");
       card.availabilityText.should("have.text", "Available");

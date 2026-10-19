@@ -72,8 +72,12 @@ describe("Discover Cards Tests", () => {
     cy.get("#popularMovie-button")
       .closest("carousel-list")
       .find("discover-card .card-wrapper")
-      .should("have.length", 20)
-      .then(($cards) => {
+      .should(($cards) => {
+        // PrimeNG can still be applying its final responsive slot widths after
+        // the refill responses complete. Keep both count and geometry inside a
+        // retryable assertion so we measure the settled layout, not an
+        // intermediate carousel frame.
+        expect($cards).to.have.length(20);
         const first = $cards[0].getBoundingClientRect();
         const second = $cards[1].getBoundingClientRect();
         expect(second.left - first.right).to.be.lessThan(50);
