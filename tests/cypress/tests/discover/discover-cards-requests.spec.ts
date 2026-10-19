@@ -136,9 +136,11 @@ describe("Discover Cards Requests Tests", () => {
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
       card.requestButton.should("exist");
-      // Not visible until hover
+      // Use the card's keyboard-accessible focus path rather than native hover.
+      // focus-within keeps the action area visible throughout Cypress's click
+      // actionability checks in headless browsers.
       card.requestButton.should("not.be.visible");
-      card.cardInner.realHover();
+      card.cardInner.find(".card-poster-link").focus().should("be.focused");
 
       card.requestButton.should("be.visible");
       card.requestButton.click();
@@ -195,9 +197,11 @@ describe("Discover Cards Requests Tests", () => {
           const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
           card.verifyTitle(title);
           card.requestButton.should("exist");
-          // Not visible until hover
+          // Use the card's keyboard-accessible focus path rather than native hover.
+          // focus-within keeps the action area visible throughout Cypress's click
+          // actionability checks in headless browsers.
           card.requestButton.should("not.be.visible");
-          card.cardInner.realHover();
+          card.cardInner.find(".card-poster-link").focus().should("be.focused");
 
           card.requestButton.should("be.visible");
           card.requestButton.click();
