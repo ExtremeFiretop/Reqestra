@@ -1,3 +1,12 @@
+# [4.69.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.17...v4.69.0) (2026-10-19)
+
+
+### Features
+
+* **cleanup:** expand descriptions and link media details ([a37b348](https://github.com/ExtremeFiretop/Reqestra/commit/a37b348159c457cdea71c0bfa98b7c3c6974ca91))
+
+
+
 ## [4.68.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.16...v4.68.17) (2026-10-19)
 
 
@@ -345,10 +354,6 @@
 ### Bug Fixes
 
 * **sonarr:** allow safe trailing provider episode gaps ([d36a349](https://github.com/ExtremeFiretop/Reqestra/commit/d36a3499ebdbcba920afd8adabebc51df9a30a25))
-
-
-
-## [4.61.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.11...v4.61.12) (2026-10-08)
 
 
 
