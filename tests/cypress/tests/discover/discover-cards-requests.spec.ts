@@ -10,14 +10,16 @@ const initialDiscoverLoad = 20;
 // listed movie with sparse external metadata cannot change the card's loading
 // path and make the state assertions nondeterministic.
 //
-// The fixture contains fewer than the carousel's 20-item initial target.
-// Preserve the production pagination contract by returning a distinct second
-// page when the carousel asks to top up the missing cards.
+// The fixture contains fewer than the carousel's 20-item initial target. The
+// production refill contract scans a full source-candidate window even when
+// only a few visible cards are missing. Return only enough unique cards to
+// fill the row while intercepting that full refill window.
 const interceptPopularMovie = (index: number, overrides: Partial<(typeof popularMovies)[number]>) => {
   const body = popularMovies.map((movie) => ({ ...movie }));
   Object.assign(body[index], overrides);
 
   const amountToTopUp = Math.max(0, initialDiscoverLoad - body.length);
+  const refillRequestAmount = initialDiscoverLoad;
   const topUpMovies = popularMovies.slice(0, amountToTopUp).map((movie, topUpIndex) => {
     const id = 9_000_000 + topUpIndex;
     return {
@@ -39,7 +41,7 @@ const interceptPopularMovie = (index: number, overrides: Partial<(typeof popular
   if (amountToTopUp > 0) {
     cy.intercept(
       "GET",
-      `**/search/Movie/Popular/${initialDiscoverLoad}/${amountToTopUp}`,
+      `**/search/Movie/Popular/${initialDiscoverLoad}/${refillRequestAmount}`,
       { body: topUpMovies },
     ).as("cardsTopUpResponse");
   }
@@ -90,7 +92,7 @@ describe("Discover Cards Requests Tests", () => {
     });
 
     cy.wait("@cardsTopUpResponse").then((topUp) => {
-      expect(topUp.request.url).to.match(/\/search\/Movie\/Popular\/20\/4(?:\?.*)?$/i);
+      expect(topUp.request.url).to.match(/\/search\/Movie\/Popular\/20\/20(?:\?.*)?$/i);
       expect(topUp.response!.body).to.have.length(4);
 
       const ids = topUp.response!.body.map((movie: (typeof popularMovies)[number]) => movie.id);
