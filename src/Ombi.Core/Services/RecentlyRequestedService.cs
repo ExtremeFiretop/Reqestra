@@ -54,33 +54,50 @@ namespace Ombi.Core.Services
         public async Task<IEnumerable<RecentlyRequestedModel>> GetRecentlyRequested(CancellationToken cancellationToken)
         {
             var customizationSettingsTask = _customizationSettings.GetSettingsAsync();
+            var hideUsersTask = HideFromOtherUsers();
 
-            var recentMovieRequests = _movieRequestRepository.GetAll().Include(x => x.RequestedUser).OrderByDescending(x => x.RequestedDate).Take(AmountToTake);
-            var recentTvRequests = _tvRequestRepository.GetChild()
-                .AsSplitQuery()
+            var settings = await customizationSettingsTask;
+            var hideUsers = await hideUsersTask;
+
+            IQueryable<MovieRequests> movieRequests = _movieRequestRepository.GetAll().Include(x => x.RequestedUser);
+            IQueryable<ChildRequests> tvRequests = _tvRequestRepository.GetChild().AsSplitQuery();
+            IQueryable<AlbumRequest> musicRequests = _musicRequestRepository.GetAll().Include(x => x.RequestedUser);
+
+            // Apply visibility rules before limiting the result set. Taking the newest rows first and
+            // filtering afterwards can produce an empty/short carousel even when older requests that
+            // the current user is allowed to see still exist.
+            if (hideUsers.Hide)
+            {
+                movieRequests = movieRequests.Where(x => x.RequestedUserId == hideUsers.UserId);
+                tvRequests = tvRequests.Where(x => x.RequestedUserId == hideUsers.UserId);
+                musicRequests = musicRequests.Where(x => x.RequestedUserId == hideUsers.UserId);
+            }
+
+            if (settings.HideAvailableRecentlyRequested)
+            {
+                movieRequests = movieRequests.Where(x => !x.Available);
+                tvRequests = tvRequests.Where(x => !x.Available);
+                musicRequests = musicRequests.Where(x => !x.Available);
+            }
+
+            var recentMovieRequests = movieRequests
                 .OrderByDescending(x => x.RequestedDate)
                 .ThenByDescending(x => x.Id)
                 .Take(AmountToTake);
-            var recentMusicRequests = _musicRequestRepository.GetAll().Include(x => x.RequestedUser).OrderByDescending(x => x.RequestedDate).Take(AmountToTake);
-
-            var settings = await customizationSettingsTask;
-            if (settings.HideAvailableRecentlyRequested)
-            {
-                recentMovieRequests = recentMovieRequests.Where(x => !x.Available);
-                recentTvRequests = recentTvRequests.Where(x => !x.Available);
-                recentMusicRequests = recentMusicRequests.Where(x => !x.Available);
-            }
-            var hideUsers = await HideFromOtherUsers();
+            var recentTvRequests = tvRequests
+                .OrderByDescending(x => x.RequestedDate)
+                .ThenByDescending(x => x.Id)
+                .Take(AmountToTake);
+            var recentMusicRequests = musicRequests
+                .OrderByDescending(x => x.RequestedDate)
+                .ThenByDescending(x => x.Id)
+                .Take(AmountToTake);
 
             var model = new List<RecentlyRequestedModel>();
 
             var lang = await DefaultLanguageCode();
             foreach (var item in await recentMovieRequests.ToListAsync(cancellationToken))
             {
-                if (hideUsers.Hide && item.RequestedUserId != hideUsers.UserId)
-                {
-                    continue;
-                }
                 var images = await _cache.GetOrAddAsync($"{CacheKeys.TmdbImages}movie{item.TheMovieDbId}", () => _movieDbApi.GetMovieImages(item.TheMovieDbId.ToString(), cancellationToken), DateTimeOffset.Now.AddDays(1));
                 model.Add(new RecentlyRequestedModel
                 {
@@ -103,10 +120,6 @@ namespace Ombi.Core.Services
 
             foreach (var item in await recentMusicRequests.ToListAsync(cancellationToken))
             {
-                if (hideUsers.Hide && item.RequestedUserId != hideUsers.UserId)
-                {
-                    continue;
-                }
                 model.Add(new RecentlyRequestedModel
                 {
                     RequestId = item.Id,
@@ -126,10 +139,6 @@ namespace Ombi.Core.Services
 
             foreach (var item in await recentTvRequests.ToListAsync(cancellationToken))
             {
-                if (hideUsers.Hide && item.RequestedUserId != hideUsers.UserId)
-                {
-                    continue;
-                }
                 var providerId = item.ParentRequest.ExternalProviderId.ToString();
                 var images = await _cache.GetOrAddAsync($"{CacheKeys.TmdbImages}tv{providerId}", () => _movieDbApi.GetTvImages(providerId.ToString(), cancellationToken), DateTimeOffset.Now.AddDays(1));
                 

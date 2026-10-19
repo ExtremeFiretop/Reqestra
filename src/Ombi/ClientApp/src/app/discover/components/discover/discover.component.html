@@ -11,11 +11,14 @@
 			<genre-button-select></genre-button-select>
 		</section>
 
-		<section class="discover-section">
+		<section id="recently-requested-section" class="discover-section" [hidden]="!showRecentlyRequested()">
 			<div class="section-header">
 				<h2>{{ 'Discovery.RecentlyRequestedTab' | translate }}</h2>
 			</div>
-			<ombi-recently-list [id]="'recentlyRequested'"></ombi-recently-list>
+			<ombi-recently-list
+				[id]="'recentlyRequested'"
+				(requestCount)="setRecentlyRequestedCount($event)"
+			></ombi-recently-list>
 		</section>
 
 		@defer (on idle) {

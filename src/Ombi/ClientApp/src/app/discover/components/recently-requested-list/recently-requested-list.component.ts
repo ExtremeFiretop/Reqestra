@@ -1,4 +1,4 @@
-import { Component, OnInit, Input, ViewChild, OnDestroy, AfterViewInit, ElementRef, signal } from "@angular/core";
+import { Component, OnInit, Input, Output, EventEmitter, ViewChild, OnDestroy, AfterViewInit, ElementRef, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { RouterModule } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
@@ -48,6 +48,7 @@ export class RecentlyRequestedListComponent implements OnInit, OnDestroy, AfterV
 
     @Input() public id: string;
     @Input() public isAdmin: boolean;
+    @Output() public requestCount = new EventEmitter<number>();
     @ViewChild('carousel', {static: false}) carousel: Carousel;
 
     public requests$: Observable<IRecentlyRequested[]>;
@@ -150,7 +151,9 @@ export class RecentlyRequestedListComponent implements OnInit, OnDestroy, AfterV
             takeUntil(this.$loadSub),
             finalize(() => this.finishLoading())
         ).subscribe(x => {
-            this.requests.set(x || []);
+            const requests = x || [];
+            this.requests.set(requests);
+            this.requestCount.emit(requests.length);
             // Recalculate on data arrival to prevent blank space when fewer items than numVisible
             // Use setTimeout to allow the @defer block to render after signal update
             setTimeout(() => {

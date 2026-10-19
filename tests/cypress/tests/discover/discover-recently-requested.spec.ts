@@ -6,6 +6,18 @@ describe("Discover Recently Requested Tests", () => {
     cy.login();
   });
 
+  it("Hides Recently Requested When No Requests Are Visible", () => {
+    cy.intercept("GET", "**/v2/Requests/recentlyRequested", {
+      statusCode: 200,
+      body: [],
+    }).as("response");
+
+    Page.visit();
+
+    cy.wait("@response");
+    cy.get("#recently-requested-section").should("not.be.visible");
+  });
+
   it("Requested Movie Is Displayed", () => {
 
     cy.requestMovie(315635);
@@ -15,6 +27,7 @@ describe("Discover Recently Requested Tests", () => {
 
     cy.wait("@response").then((_) => {
 
+      cy.get("#recently-requested-section").should("be.visible");
       const card = Page.recentlyRequested.getRequest("315635");
       card.verifyTitle("Spider-Man: Homecoming");
       card.status.should('contain.text', 'Approved'); 
