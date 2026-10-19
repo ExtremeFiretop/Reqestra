@@ -1,3 +1,12 @@
+# [4.70.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.5...v4.70.0) (2026-10-19)
+
+
+### Features
+
+* **discover:** add personalized recommendations ([aeafbe5](https://github.com/ExtremeFiretop/Reqestra/commit/aeafbe5d7343af7611371e362f666e57d994cc57))
+
+
+
 ## [4.69.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.4...v4.69.5) (2026-10-19)
 
 
@@ -335,15 +344,6 @@
 ### Bug Fixes
 
 * **updater:** harden Windows update extraction ([dabbe88](https://github.com/ExtremeFiretop/Reqestra/commit/dabbe88a4ce05cee2414411282b89f9e2be1eaa4))
-
-
-
-## [4.61.18](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.17...v4.61.18) (2026-10-09)
-
-
-### Bug Fixes
-
-* **plex:** harden episode sync against orphaned cache rows ([6b747dd](https://github.com/ExtremeFiretop/Reqestra/commit/6b747dd577d43761e41c1ef2bd6257c26c4ba5d6))
 
 
 
