@@ -1,3 +1,13 @@
+## [4.68.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.12...v4.68.13) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** clarify popular and trending headings ([18bb688](https://github.com/ExtremeFiretop/Reqestra/commit/18bb6883e75a393862bffbc5a4852bad1cacfa6d))
+* **discover:** hide empty recently requested results ([573e254](https://github.com/ExtremeFiretop/Reqestra/commit/573e254df10172c4f0a71b251c3887f1c9c3f1b3))
+
+
+
 ## [4.68.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.11...v4.68.12) (2026-10-18)
 
 
@@ -342,17 +352,6 @@
 
 * **ci:** isolate wizard from full E2E suite ([0fb9839](https://github.com/ExtremeFiretop/Reqestra/commit/0fb983961a9be135435f08379fd5b8d9c1c3f716))
 * **security:** harden user-controlled logging ([c65a46c](https://github.com/ExtremeFiretop/Reqestra/commit/c65a46c8bb2653bf91a07ea0f83ee01d98a6cc89))
-
-
-
-## [4.61.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.6...v4.61.7) (2026-10-03)
-
-
-### Bug Fixes
-
-* **ci:** make release versioning tag-driven ([6cc5800](https://github.com/ExtremeFiretop/Reqestra/commit/6cc580080d84d3f440db028ba69e392ec40f82f8))
-* **notifications:** bound queue and retry transient failures ([35236e3](https://github.com/ExtremeFiretop/Reqestra/commit/35236e36d9997ae315bdeb50b4cb3e634858239b))
-* **notifications:** replace fire-and-forget cleanup emails ([244574d](https://github.com/ExtremeFiretop/Reqestra/commit/244574d0e49b1f15d4f83a4061fc49e49439d5f8))
 
 
 
