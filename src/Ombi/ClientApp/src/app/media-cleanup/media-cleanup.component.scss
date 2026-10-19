@@ -150,6 +150,56 @@
     font-size: .9rem;
 }
 
+.media-overview.media-overview-expanded {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+}
+
+.overview-expander {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.overview-expander:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 2px;
+}
+
+.overview-toggle-label {
+    display: inline-block;
+    margin-top: .25rem;
+    font-size: .82rem;
+    font-weight: 600;
+    opacity: .78;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.overview-expander:hover .overview-toggle-label,
+.overview-expander:focus-visible .overview-toggle-label {
+    opacity: 1;
+}
+
+.media-title-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.media-title-link:hover,
+.media-title-link:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
 .owner-chip,
 .veto {
     display: inline-block;

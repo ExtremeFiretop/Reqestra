@@ -271,6 +271,7 @@ namespace Ombi.Core.Engine
                     {
                         RequestType = RequestType.Movie,
                         RequestId = movie.Id,
+                        MediaId = movie.TheMovieDbId,
                         Title = movie.Title,
                         PosterPath = movie.PosterPath,
                         Overview = movie.Overview,
@@ -360,6 +361,7 @@ namespace Ombi.Core.Engine
                     {
                         RequestType = RequestType.TvShow,
                         RequestId = tv.Id,
+                        MediaId = tv.ExternalProviderId,
                         Title = tv.Title,
                         PosterPath = tv.PosterPath,
                         Overview = tv.Overview,
@@ -488,6 +490,7 @@ namespace Ombi.Core.Engine
                     {
                         RequestType = RequestType.TvShow,
                         RequestId = record.MediaRequestId,
+                        MediaId = record.TheMovieDbId,
                         Title = record.Title,
                         PosterPath = record.PosterPath,
                         RequestedBy = requestedBy.Count == 1 ? requestedBy[0] : requestedBy.Count > 1 ? "Multiple users" : string.Empty,
@@ -600,6 +603,7 @@ namespace Ombi.Core.Engine
                     {
                         RequestType = record.RequestType,
                         RequestId = record.MediaRequestId,
+                        MediaId = record.TheMovieDbId,
                         Title = record.Title,
                         PosterPath = record.PosterPath,
                         RequestedBy = requestedBy.Count == 1 ? requestedBy[0] : requestedBy.Count > 1 ? "Multiple users" : string.Empty,

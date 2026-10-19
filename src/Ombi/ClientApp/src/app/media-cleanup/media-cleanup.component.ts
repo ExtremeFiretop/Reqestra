@@ -1,5 +1,6 @@
 import { CommonModule } from "@angular/common";
 import { Component, OnInit } from "@angular/core";
+import { RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
 import { MatButtonToggleModule } from "@angular/material/button-toggle";
 import { MatCardModule } from "@angular/material/card";
@@ -48,6 +49,7 @@ import {
         MatSelectModule,
         MatProgressSpinnerModule,
         MatTooltipModule,
+        RouterLink,
         TvCleanupSelectionDialogComponent
     ]
 })
@@ -58,6 +60,7 @@ export class MediaCleanupComponent implements OnInit {
     public loadingLastPlayed = false;
     private readonly busyItemKeys = new Set<string>();
     private readonly expandedVoterKeys = new Set<string>();
+    private readonly expandedOverviewKeys = new Set<string>();
     private metricsSubscription?: Subscription;
     private lastPlayedSubscription?: Subscription;
     public viewMode: "all" | "mine" | "stewardship" = "mine";
@@ -433,6 +436,39 @@ export class MediaCleanupComponent implements OnInit {
         }
 
         this.execute(item, this.cleanupService.cancel(item.cleanup.id));
+    }
+
+    public toggleOverview(item: IMediaCleanupItem): void {
+        const key = this.itemKey(item);
+        if (this.expandedOverviewKeys.has(key)) {
+            this.expandedOverviewKeys.delete(key);
+        } else {
+            this.expandedOverviewKeys.add(key);
+        }
+    }
+
+    public isOverviewExpanded(item: IMediaCleanupItem): boolean {
+        return this.expandedOverviewKeys.has(this.itemKey(item));
+    }
+
+    public overviewCanExpand(item: IMediaCleanupItem, lineLimit: number): boolean {
+        // Use a conservative character estimate so narrow/mobile cards still get an
+        // expansion affordance before the CSS line clamp is likely to truncate text.
+        return (item.overview?.trim().length ?? 0) > lineLimit * 25;
+    }
+
+    public mediaDetailsLink(item: IMediaCleanupItem): string | null {
+        if (!item.mediaId || item.mediaId <= 0) {
+            return null;
+        }
+
+        if (item.requestType === RequestType.movie) {
+            return `/details/movie/${item.mediaId}`;
+        }
+        if (item.requestType === RequestType.tvShow) {
+            return `/details/tv/${item.mediaId}`;
+        }
+        return null;
     }
 
     public toggleVoters(item: IMediaCleanupItem): void {
