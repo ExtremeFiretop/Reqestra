@@ -1,3 +1,12 @@
+## [4.70.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.0...v4.70.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **discover:** group optional personalized sections ([ebacb9e](https://github.com/ExtremeFiretop/Reqestra/commit/ebacb9ebbe250cf03fec1cc0166c8e3b7036259b))
+
+
+
 # [4.70.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.5...v4.70.0) (2026-10-19)
 
 
@@ -335,15 +344,6 @@
 ### Bug Fixes
 
 * **newsletter:** avoid redundant metadata and N+1 queries ([57105df](https://github.com/ExtremeFiretop/Reqestra/commit/57105dfcb16308b34f4b1e5cb97e1fbb90f13688))
-
-
-
-## [4.61.19](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.18...v4.61.19) (2026-10-09)
-
-
-### Bug Fixes
-
-* **updater:** harden Windows update extraction ([dabbe88](https://github.com/ExtremeFiretop/Reqestra/commit/dabbe88a4ce05cee2414411282b89f9e2be1eaa4))
 
 
 
