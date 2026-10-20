@@ -16,6 +16,7 @@ namespace Ombi.Core
         Task<IEnumerable<SearchTvShowViewModel>> Popular(int currentlyLoaded, int amountToLoad, string langCustomCode = null);
         Task<IEnumerable<SearchTvShowViewModel>> Anticipated(int currentlyLoaded, int amountToLoad);
         Task<IEnumerable<SearchTvShowViewModel>> Trending(int currentlyLoaded, int amountToLoad);
+        Task<IEnumerable<SearchTvShowViewModel>> Recommended(int currentlyLoaded, int amountToLoad, CancellationToken cancellationToken);
         Task<IEnumerable<SearchFullInfoTvShowViewModel>> RecentlyRequestedShows(int currentlyLoaded, int toLoad, CancellationToken cancellationToken);
     }
 }

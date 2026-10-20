@@ -60,6 +60,10 @@ export class SearchV2Service extends ServiceHelpers {
         return this.http.get<ISearchMovieResult[]>(`${this.url}/Movie/Popular/${currentlyLoaded}/${toLoad}`).toPromise();
     }
 
+    public recommendedMoviesByPage(currentlyLoaded: number, toLoad: number): Promise<ISearchMovieResult[]> {
+        return this.http.get<ISearchMovieResult[]>(`${this.url}/Movie/recommended/${currentlyLoaded}/${toLoad}`).toPromise();
+    }
+
     public advancedSearch(model: IDiscoverModel, currentlyLoaded: number, toLoad: number): Promise<ISearchMovieResult[]> {
         return this.http.post<ISearchMovieResult[]>(`${this.url}/advancedSearch/Movie/${currentlyLoaded}/${toLoad}`, model).toPromise();
     }
@@ -101,6 +105,10 @@ export class SearchV2Service extends ServiceHelpers {
 
     public popularTvByPage(currentlyLoaded: number, toLoad: number): Promise<ISearchTvResult[]> {
         return this.http.get<ISearchTvResult[]>(`${this.url}/Tv/popular/${currentlyLoaded}/${toLoad}`, { headers: this.headers }).toPromise();
+    }
+
+    public recommendedTvByPage(currentlyLoaded: number, toLoad: number): Promise<ISearchTvResult[]> {
+        return this.http.get<ISearchTvResult[]>(`${this.url}/Tv/recommended/${currentlyLoaded}/${toLoad}`, { headers: this.headers }).toPromise();
     }
 
     public mostWatchedTv(): Observable<ISearchTvResult[]> {

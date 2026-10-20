@@ -1,4 +1,4 @@
-import { Component, ViewChild, Inject, input, output, signal, computed, inject, ChangeDetectionStrategy } from "@angular/core";
+import { Component, ViewChild, Inject, input, output, signal, computed, inject, ChangeDetectionStrategy, ElementRef, OnDestroy } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { MatButtonToggleModule, MatButtonToggleChange } from '@angular/material/button-toggle';
 import { TranslateModule } from "@ngx-translate/core";
@@ -19,6 +19,7 @@ export enum DiscoverType {
     Popular,
     RecentlyRequested,
     Seasonal,
+    Recommended,
 }
 
 @Component({
@@ -36,16 +37,36 @@ export enum DiscoverType {
         DiscoverCardComponent
     ]
 })
-export class CarouselListComponent {
+export class CarouselListComponent implements OnDestroy {
     // Inputs using new input() function
     public discoverType = input.required<DiscoverType>();
     public id = input.required<string>();
     public isAdmin = input<boolean>(false);
     
-    // Output using new output() function  
+    // Outputs using new output() function
     public movieCount = output<number>();
+    public resultCount = output<number>();
     
     @ViewChild('carousel', {static: false}) carousel: Carousel;
+    private carouselRootRef?: ElementRef<HTMLElement>;
+
+    @ViewChild('carouselRoot', { static: false })
+    set carouselRoot(value: ElementRef<HTMLElement> | undefined) {
+        this.carouselRootRef = value;
+
+        // The carousel lives inside an @defer block, so it may not exist when the
+        // results are first modeled. A ViewChild setter runs when that deferred
+        // view actually materializes, which gives us a reliable point to attach
+        // the observer and refine the initial viewport-based sizing.
+        if (!value) {
+            return;
+        }
+
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
+        this.initResizeObserver();
+        setTimeout(() => this.recalculateCarouselDimensions(), 0);
+    }
 
     // Services using inject() function
     private searchService = inject(SearchV2Service);
@@ -65,6 +86,8 @@ export class CarouselListComponent {
     public tvShows = signal<ISearchTvResult[]>([]);
     public loadingFlag = signal<boolean>(false);
     public is4kEnabled = signal<boolean>(false);
+    public numVisible = signal<number>(10);
+    public numScroll = signal<number>(9);
     
     // Computed properties
     public hasResults = computed(() => this.discoverResults().length > 0);
@@ -77,98 +100,18 @@ export class CarouselListComponent {
     private amountToLoad = 20;
     private currentlyLoaded = 0;
     private loadVersion = 0;
-    public responsiveOptions: any;
+    private resizeObserver?: ResizeObserver;
 
     constructor() {
+        Carousel.prototype.onTouchMove = () => { };
 
-        Carousel.prototype.onTouchMove = () => { },
-        this.responsiveOptions = [
-            {
-                breakpoint: '4000px',
-                numVisible: 17,
-                numScroll: 16
-            },
-            {
-                breakpoint: '3800px',
-                numVisible: 16,
-                numScroll: 15
-            },
-            {
-                breakpoint: '3600px',
-                numVisible: 15,
-                numScroll: 14
-            },
-            {
-                breakpoint: '3400px',
-                numVisible: 14,
-                numScroll: 13
-            },
-            {
-                breakpoint: '3200px',
-                numVisible: 13,
-                numScroll: 12
-            },
-            {
-                breakpoint: '3000px',
-                numVisible: 12,
-                numScroll: 11
-            },
-            {
-                breakpoint: '2800px',
-                numVisible: 11,
-                numScroll: 10
-            },
-            {
-                breakpoint: '2600px',
-                numVisible: 10,
-                numScroll: 9
-            },
-            {
-                breakpoint: '2400px',
-                numVisible: 9,
-                numScroll: 8
-            },
-            {
-                breakpoint: '2200px',
-                numVisible: 8,
-                numScroll: 7
-            },
-            {
-                breakpoint: '2000px',
-                numVisible: 7,
-                numScroll: 6
-            },
-            {
-                breakpoint: '1800px',
-                numVisible: 6,
-                numScroll: 5
-            },
-            {
-                breakpoint: '1650px',
-                numVisible: 5,
-                numScroll: 4
-            },
-            {
-                breakpoint: '1500px',
-                numVisible: 4,
-                numScroll: 3
-            },
-            {
-                breakpoint: '768px',
-                numVisible: 3,
-                numScroll: 2
-            },
-            {
-                breakpoint: '660px',
-                numVisible: 2,
-                numScroll: 2
-            },
-            {
-                breakpoint: '480px',
-                numVisible: 1,
-                numScroll: 1
-            }
-        ];
+        // Give PrimeNG a sensible slot count before the deferred carousel is
+        // rendered. Without this, numVisible starts at 10 on every viewport; on
+        // phones that briefly creates ten tiny slots and can leave the carousel
+        // in that state if the deferred ViewChild has not appeared yet.
+        if (typeof window !== 'undefined') {
+            this.updateCarouselDimensions(window.innerWidth);
+        }
     }
 
     public async ngOnInit() {
@@ -186,11 +129,12 @@ export class CarouselListComponent {
         const loadVersion = ++this.loadVersion;
         await this.loadData(false);
 
-        // If filtering leaves the carousel short, top it up in the background.
-        // This deliberately caps the automatic initial load at two batches while
-        // avoiding a second expensive TV enrichment pass on the critical render path.
+        // If downstream availability/privacy filtering leaves the first batch short,
+        // refill it in the background. Keep the first paint fast, but continue through
+        // later source ranges until the carousel has a useful buffer of displayable
+        // cards (or a small safety limit is reached).
         if (this.discoverResults().length < this.amountToLoad) {
-            void this.topUpInitialCarousel(loadVersion);
+            void this.topUpCarousel(loadVersion);
         }
     }
 
@@ -248,56 +192,102 @@ export class CarouselListComponent {
         await Promise.all([moviePromise, tvPromise].filter(Boolean));
         this.currentlyLoaded += this.amountToLoad;
         this.createInitialModel(clearExisting);
+
+        // A persisted Movie-only/TV-only recommendation preference can become empty
+        // as the user's recent request mix changes. Falling back to Combined prevents
+        // the whole personalized section (including its media toggle) from disappearing
+        // even though recommendations of the other media type are available.
+        if (this.discoverType() === DiscoverType.Recommended
+            && this.discoverResults().length === 0
+            && +this.discoverOptions() !== DiscoverOption.Combined) {
+            this.currentlyLoaded = 0;
+            this.discoverOptions.set(DiscoverOption.Combined);
+            this.storageService.save(this.mediaTypeStorageKey, DiscoverOption.Combined.toString());
+            await this.loadData(true);
+        }
     }
 
-    private async topUpInitialCarousel(loadVersion: number) {
-        // Yield so Angular can paint the first batch before starting another request.
+    private async topUpCarousel(loadVersion: number) {
+        // Yield so Angular can paint the first batch before starting follow-up requests.
         await new Promise<void>(resolve => setTimeout(resolve, 0));
 
-        if (loadVersion !== this.loadVersion || this.discoverResults().length >= this.amountToLoad) {
-            return;
-        }
-
-        const offset = this.currentlyLoaded;
         const discoverOption = +this.discoverOptions();
-        const amountToTopUp = this.amountToLoad - this.discoverResults().length;
+        const targetCount = Math.max(this.amountToLoad, this.numVisible());
 
-        try {
-            let movieResults: ISearchMovieResult[] | undefined;
-            let tvResults: ISearchTvResult[] | undefined;
+        // Single-media feeds can be heavily reduced by Hide Available From Discover.
+        // Scan a few additional source ranges so a batch of 20 candidates does not turn
+        // into a half-empty carousel merely because many of those candidates were hidden.
+        // Combined already draws from two feeds, so retain a single conservative refill
+        // there to avoid unnecessary TV enrichment work.
+        const maxAttempts = discoverOption === DiscoverOption.Combined ? 1 : 3;
 
-            switch (discoverOption) {
-                case DiscoverOption.Combined:
-                    [movieResults, tvResults] = await Promise.all([
-                        this.fetchMovies(offset, amountToTopUp),
-                        this.fetchTv(offset, amountToTopUp)
-                    ]);
-                    break;
-                case DiscoverOption.Movie:
-                    movieResults = await this.fetchMovies(offset, amountToTopUp);
-                    break;
-                case DiscoverOption.Tv:
-                    tvResults = await this.fetchTv(offset, amountToTopUp);
-                    break;
-            }
-
-            // The user may have changed media mode while the background request was running.
-            if (loadVersion !== this.loadVersion || discoverOption !== +this.discoverOptions()) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if (loadVersion !== this.loadVersion
+                || discoverOption !== +this.discoverOptions()
+                || this.discoverResults().length >= targetCount) {
                 return;
             }
 
-            if (movieResults) {
-                this.movies.set(movieResults);
-                this.movieCount.emit(movieResults.length);
-            }
-            if (tvResults) {
-                this.tvShows.set(tvResults);
-            }
+            const missing = targetCount - this.discoverResults().length;
+            const requestAmount = discoverOption === DiscoverOption.Combined
+                ? Math.max(1, Math.ceil(missing / 2))
+                : this.amountToLoad;
+            const offset = this.currentlyLoaded;
 
-            this.currentlyLoaded += amountToTopUp;
-            this.createInitialModel(false);
-        } catch (error) {
-            console.warn('Discover carousel background top-up failed', error);
+            try {
+                let movieResults: ISearchMovieResult[] | undefined;
+                let tvResults: ISearchTvResult[] | undefined;
+
+                switch (discoverOption) {
+                    case DiscoverOption.Combined:
+                        [movieResults, tvResults] = await Promise.all([
+                            this.fetchMovies(offset, requestAmount),
+                            this.fetchTv(offset, requestAmount)
+                        ]);
+                        break;
+                    case DiscoverOption.Movie:
+                        movieResults = await this.fetchMovies(offset, requestAmount);
+                        break;
+                    case DiscoverOption.Tv:
+                        tvResults = await this.fetchTv(offset, requestAmount);
+                        break;
+                }
+
+                // The user may have changed media mode while the background request was running.
+                if (loadVersion !== this.loadVersion || discoverOption !== +this.discoverOptions()) {
+                    return;
+                }
+
+                if (movieResults) {
+                    this.movies.set(movieResults);
+                }
+                if (tvResults) {
+                    this.tvShows.set(tvResults);
+                }
+
+                // Offset tracks source candidates requested, not displayable results returned.
+                // The backend may remove available media after paging, so advancing by the
+                // requested amount prevents us from repeatedly scanning the same candidates.
+                this.currentlyLoaded += requestAmount;
+                this.createInitialModel(false);
+
+                if (movieResults) {
+                    // movieCount represents the carousel's total visible movie population,
+                    // not just the latest refill batch. This matters for Seasonal: an empty
+                    // later batch must not hide a section that already has visible movies.
+                    const visibleMovieCount = this.discoverResults()
+                        .filter(result => result.type === RequestType.movie).length;
+                    this.movieCount.emit(visibleMovieCount);
+                }
+
+                // Yield between refill passes so a sparse feed never monopolizes rendering.
+                if (this.discoverResults().length < targetCount && attempt + 1 < maxAttempts) {
+                    await new Promise<void>(resolve => setTimeout(resolve, 0));
+                }
+            } catch (error) {
+                console.warn('Discover carousel background top-up failed', error);
+                return;
+            }
         }
     }
 
@@ -305,13 +295,21 @@ export class CarouselListComponent {
         if (this.discoverOptions() === newMode) {
             return;
         }
-        // Invalidate any deferred initial top-up from the previous mode.
-        this.loadVersion++;
+        // Invalidate any deferred top-up from the previous mode.
+        const loadVersion = ++this.loadVersion;
         this.loading();
         this.currentlyLoaded = 0;
         this.discoverOptions.set(+newMode);
         this.storageService.save(this.mediaTypeStorageKey, newMode.toString());
         await this.loadData();
+
+        // Media-mode changes previously loaded only one source range. If that range was
+        // heavily reduced by Hide Available From Discover, Movie-only/TV-only could stop
+        // with a visibly half-empty row even though later results were available.
+        if (this.discoverResults().length < this.amountToLoad) {
+            void this.topUpCarousel(loadVersion);
+        }
+
         this.finishLoading();
     }
 
@@ -333,6 +331,8 @@ export class CarouselListComponent {
                 return await this.searchService.recentlyRequestedMoviesByPage(loadOffset, amountToLoad);
             case DiscoverType.Seasonal:
                 return await this.searchService.seasonalMoviesByPage(loadOffset, amountToLoad);
+            case DiscoverType.Recommended:
+                return await this.searchService.recommendedMoviesByPage(loadOffset, amountToLoad);
             default:
                 return [];
         }
@@ -354,6 +354,8 @@ export class CarouselListComponent {
             case DiscoverType.RecentlyRequested:
                 // TODO need to do some more mapping
                 return [];
+            case DiscoverType.Recommended:
+                return await this.searchService.recommendedTvByPage(loadOffset, amountToLoad);
             default:
                 return [];
         }
@@ -373,7 +375,9 @@ export class CarouselListComponent {
             case DiscoverOption.Combined:
                 tempResults.push(...this.mapMovieModel());
                 tempResults.push(...this.mapTvModel());
-                this.shuffle(tempResults);
+                if (this.discoverType() !== DiscoverType.Recommended) {
+                    this.shuffle(tempResults);
+                }
                 break;
             case DiscoverOption.Movie:
                 tempResults.push(...this.mapMovieModel());
@@ -383,7 +387,15 @@ export class CarouselListComponent {
                 break;
         }
 
-        this.discoverResults.update(current => [...current, ...tempResults]);
+        this.discoverResults.update(current => {
+            const updated = [...current, ...tempResults];
+            if (this.discoverType() === DiscoverType.Recommended) {
+                updated.sort((a, b) => (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0));
+            }
+            return updated;
+        });
+        this.resultCount.emit(this.discoverResults().length);
+        this.scheduleCarouselSizing();
 
         this.finishLoading();
     }
@@ -404,7 +416,8 @@ export class CarouselListComponent {
                 approved: m.approved,
                 imdbid: m.imdbId,
                 denied: false,
-                background: m.backdropPath
+                background: m.backdropPath,
+                recommendationScore: m.recommendationScore
             });
         });
         return tempResults;
@@ -427,10 +440,73 @@ export class CarouselListComponent {
                 approved: m.approved || m.partlyAvailable,
                 imdbid: m.imdbId,
                 denied: false,
-                background: m.backdropPath
+                background: m.backdropPath,
+                recommendationScore: m.recommendationScore
             });
         });
         return tempResults;
+    }
+
+    private scheduleCarouselSizing() {
+        // The carousel is rendered by an @defer block after results arrive. Yield
+        // once so the root exists before measuring its actual content width.
+        setTimeout(() => {
+            this.initResizeObserver();
+            this.recalculateCarouselDimensions();
+        }, 0);
+    }
+
+    private initResizeObserver() {
+        const root = this.carouselRootRef?.nativeElement;
+        if (!root || this.resizeObserver) {
+            return;
+        }
+
+        this.resizeObserver = new ResizeObserver(() => this.recalculateCarouselDimensions());
+        this.resizeObserver.observe(root);
+    }
+
+    private recalculateCarouselDimensions() {
+        const root = this.carouselRootRef?.nativeElement;
+        if (!root) {
+            return;
+        }
+
+        // Use the actual PrimeNG viewport rather than the browser width so sidebar,
+        // navigation buttons, and page padding are naturally accounted for.
+        const itemsContent = root.querySelector<HTMLElement>('.p-carousel-items-content');
+        const width = (itemsContent ?? root).clientWidth;
+        if (!width) {
+            return;
+        }
+
+        this.updateCarouselDimensions(width);
+    }
+
+    private updateCarouselDimensions(width: number) {
+        if (!width) {
+            return;
+        }
+
+        // Discover cards are capped at 200px with 4px host padding on each side.
+        // Keep this target stable instead of measuring the discover-card host: the
+        // host itself inherits PrimeNG's current slot width, so feeding that value
+        // back into numVisible can create an unstable sizing loop.
+        const targetCardWidth = 208;
+
+        // Do not clamp this to the result count. PrimeNG derives slot width and
+        // translation distance from numVisible; keeping the viewport capacity here
+        // prevents sparse feeds from stretching their few cards across the row.
+        const maxVisible = 17;
+        const visible = Math.max(1, Math.min(maxVisible, Math.floor(width / targetCardWidth)));
+        const scroll = visible <= 2 ? visible : visible - 1;
+
+        this.numVisible.set(visible);
+        this.numScroll.set(Math.max(1, scroll));
+    }
+
+    public ngOnDestroy(): void {
+        this.resizeObserver?.disconnect();
     }
 
     private clear() {

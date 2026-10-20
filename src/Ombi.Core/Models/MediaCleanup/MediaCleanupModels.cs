@@ -19,6 +19,7 @@ namespace Ombi.Core.Models.MediaCleanup
     {
         public RequestType RequestType { get; set; }
         public int RequestId { get; set; }
+        public int MediaId { get; set; }
         public string Title { get; set; }
         public string PosterPath { get; set; }
         public string Overview { get; set; }

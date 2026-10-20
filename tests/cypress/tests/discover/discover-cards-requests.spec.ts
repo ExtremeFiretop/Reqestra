@@ -10,14 +10,20 @@ const initialDiscoverLoad = 20;
 // listed movie with sparse external metadata cannot change the card's loading
 // path and make the state assertions nondeterministic.
 //
-// The fixture contains fewer than the carousel's 20-item initial target.
-// Preserve the production pagination contract by returning a distinct second
-// page when the carousel asks to top up the missing cards.
-const interceptPopularMovie = (index: number, overrides: Partial<(typeof popularMovies)[number]>) => {
-  const body = popularMovies.map((movie) => ({ ...movie }));
-  Object.assign(body[index], overrides);
+// The fixture contains fewer than the carousel's 20-item initial target. Most
+// request-state tests are not refill tests, so fill their initial response to
+// 20 cards and keep the async refill path isolated to the dedicated regression
+// case below.
+const interceptPopularMovie = (
+  index: number,
+  overrides: Partial<(typeof popularMovies)[number]>,
+  simulateSparseFeed = false,
+) => {
+  const fixtureMovies = popularMovies.map((movie) => ({ ...movie }));
+  Object.assign(fixtureMovies[index], overrides);
 
-  const amountToTopUp = Math.max(0, initialDiscoverLoad - body.length);
+  const amountToTopUp = Math.max(0, initialDiscoverLoad - fixtureMovies.length);
+  const refillRequestAmount = initialDiscoverLoad;
   const topUpMovies = popularMovies.slice(0, amountToTopUp).map((movie, topUpIndex) => {
     const id = 9_000_000 + topUpIndex;
     return {
@@ -30,16 +36,20 @@ const interceptPopularMovie = (index: number, overrides: Partial<(typeof popular
     };
   });
 
+  const body = simulateSparseFeed
+    ? fixtureMovies
+    : [...fixtureMovies, ...topUpMovies];
+
   cy.intercept(
     "GET",
     `**/search/Movie/Popular/0/${initialDiscoverLoad}`,
     { body },
   ).as("cardsResponse");
 
-  if (amountToTopUp > 0) {
+  if (simulateSparseFeed && amountToTopUp > 0) {
     cy.intercept(
       "GET",
-      `**/search/Movie/Popular/${initialDiscoverLoad}/${amountToTopUp}`,
+      `**/search/Movie/Popular/${initialDiscoverLoad}/${refillRequestAmount}`,
       { body: topUpMovies },
     ).as("cardsTopUpResponse");
   }
@@ -77,7 +87,7 @@ describe("Discover Cards Requests Tests", () => {
       available: false,
       approved: false,
       requested: false,
-    });
+    }, true);
 
     cy.then(() => {
       window.localStorage.setItem("DiscoverOptions2", "2");
@@ -90,7 +100,7 @@ describe("Discover Cards Requests Tests", () => {
     });
 
     cy.wait("@cardsTopUpResponse").then((topUp) => {
-      expect(topUp.request.url).to.match(/\/search\/Movie\/Popular\/20\/4(?:\?.*)?$/i);
+      expect(topUp.request.url).to.match(/\/search\/Movie\/Popular\/20\/20(?:\?.*)?$/i);
       expect(topUp.response!.body).to.have.length(4);
 
       const ids = topUp.response!.body.map((movie: (typeof popularMovies)[number]) => movie.id);
@@ -126,9 +136,11 @@ describe("Discover Cards Requests Tests", () => {
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
       card.requestButton.should("exist");
-      // Not visible until hover
+      // Use the card's keyboard-accessible focus path rather than native hover.
+      // focus-within keeps the action area visible throughout Cypress's click
+      // actionability checks in headless browsers.
       card.requestButton.should("not.be.visible");
-      card.topLevelCard.realHover();
+      card.cardInner.find(".card-poster-link").focus().should("be.focused");
 
       card.requestButton.should("be.visible");
       card.requestButton.click();
@@ -185,9 +197,11 @@ describe("Discover Cards Requests Tests", () => {
           const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
           card.verifyTitle(title);
           card.requestButton.should("exist");
-          // Not visible until hover
+          // Use the card's keyboard-accessible focus path rather than native hover.
+          // focus-within keeps the action area visible throughout Cypress's click
+          // actionability checks in headless browsers.
           card.requestButton.should("not.be.visible");
-          card.topLevelCard.realHover();
+          card.cardInner.find(".card-poster-link").focus().should("be.focused");
 
           card.requestButton.should("be.visible");
           card.requestButton.click();
@@ -226,7 +240,7 @@ describe("Discover Cards Requests Tests", () => {
 
       const card = Page.popularCarousel.getCard(expectedId, true, DiscoverType.Popular);
       card.verifyTitle(title);
-      card.topLevelCard.realHover();
+      card.cardInner.realHover();
 
       card.requestButton.should("not.exist");
       card.availabilityText.should("have.text", "Available");

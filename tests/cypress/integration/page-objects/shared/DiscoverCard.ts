@@ -23,6 +23,10 @@ export class DiscoverCard {
         return cy.get(`#result${this.id}`);
     }
 
+    get cardInner(): Cypress.Chainable<any> {
+      return this.topLevelCard.find(".card-inner");
+    }
+
     get requestType(): Cypress.Chainable<any> {
       return cy.get(`#type${this.id}-${this.movie ? 'movie': 'tvShow'}`);
     }

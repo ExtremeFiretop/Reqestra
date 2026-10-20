@@ -33,7 +33,7 @@ namespace Ombi.Core.Engine.V2
         public MovieSearchEngineV2(ICurrentUser identity, IRequestServiceMain service, IMovieDbApi movApi, IMapper mapper,
             ILogger<MovieSearchEngineV2> logger, IRuleEvaluator r, OmbiUserManager um, ICacheService mem, ISettingsService<OmbiSettings> s, IRepository<RequestSubscription> sub,
             ISettingsService<CustomizationSettings> customizationSettings, IMovieRequestEngine movieRequestEngine, IHttpClientFactory httpClientFactory,
-            IFeatureService feature)
+            IFeatureService feature, IPersonalizedRecommendationService personalizedRecommendations)
             : base(identity, service, r, um, mem, s, sub)
         {
             MovieApi = movApi;
@@ -42,7 +42,9 @@ namespace Ombi.Core.Engine.V2
             _customizationSettings = customizationSettings;
             _movieRequestEngine = movieRequestEngine;
             _client = httpClientFactory.CreateClient();
+            _seasonalKeywordProvider = new SeasonalKeywordProvider(_client, movApi, logger);
             _feature = feature;
+            _personalizedRecommendations = personalizedRecommendations;
         }
 
         private IMovieDbApi MovieApi { get; }
@@ -51,7 +53,9 @@ namespace Ombi.Core.Engine.V2
         private readonly ISettingsService<CustomizationSettings> _customizationSettings;
         private readonly IMovieRequestEngine _movieRequestEngine;
         private readonly HttpClient _client;
+        private readonly SeasonalKeywordProvider _seasonalKeywordProvider;
         private readonly IFeatureService _feature;
+        private readonly IPersonalizedRecommendationService _personalizedRecommendations;
 
         public async Task<MovieFullInfoViewModel> GetFullMovieInformation(int theMovieDbId, CancellationToken cancellationToken, string langCode = null)
         {
@@ -221,11 +225,13 @@ namespace Ombi.Core.Engine.V2
         public async Task<IEnumerable<SearchMovieViewModel>> SeasonalList(int currentPosition, int amountToLoad, CancellationToken cancellationToken)
         {
             var langCode = await DefaultLanguageCode(null);
+            var today = DateTime.Today;
+            var keyWordIds = await Cache.GetOrAddAsync(
+                nameof(SeasonalList) + "KeywordDefinition" + today.ToString("yyyyMMdd"),
+                () => _seasonalKeywordProvider.ResolveAsync(today, cancellationToken),
+                DateTimeOffset.Now.AddHours(6));
 
-            var result = await _client.GetAsync("https://raw.githubusercontent.com/Ombi-app/Ombi.News/main/Seasonal.md");
-            var keyWordIds = await result.Content.ReadAsStringAsync();
-
-            if (string.IsNullOrEmpty(keyWordIds) || keyWordIds.Equals("\n"))
+            if (string.IsNullOrEmpty(keyWordIds))
             {
                 return new List<SearchMovieViewModel>();
             }
@@ -240,6 +246,18 @@ namespace Ombi.Core.Engine.V2
                 results.AddRange(apiResult.Skip(pagesToLoad.Skip).Take(pagesToLoad.Take));
             }
             return await TransformMovieResultsToResponse(results);
+        }
+
+        public async Task<IEnumerable<SearchMovieViewModel>> RecommendedMovies(int currentPosition, int amountToLoad, CancellationToken cancellationToken)
+        {
+            var langCode = await DefaultLanguageCode(null);
+            var ranked = await _personalizedRecommendations.GetMovieRecommendations(langCode, cancellationToken);
+            var page = ranked.Skip(currentPosition).Take(amountToLoad);
+            var processed = await TransformMovieResultsToResponse(page);
+
+            // Recommended for You should suggest something new to consume, even when the
+            // global Hide Available From Discover preference is disabled.
+            return processed.Where(x => !x.Available);
         }
 
         /// <summary>

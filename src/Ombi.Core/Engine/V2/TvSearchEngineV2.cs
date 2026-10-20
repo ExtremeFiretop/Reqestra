@@ -39,11 +39,12 @@ namespace Ombi.Core.Engine.V2
         private readonly ISettingsService<CustomizationSettings> _customization;
         private readonly ITvRequestEngine _requestEngine;
         private readonly IFeatureService _feature;
+        private readonly IPersonalizedRecommendationService _personalizedRecommendations;
 
         public TvSearchEngineV2(ICurrentUser identity, IRequestServiceMain service, ITvMazeApi tvMaze, IMapper mapper,
             ITraktApi trakt, IRuleEvaluator r, OmbiUserManager um, ICacheService memCache, ISettingsService<OmbiSettings> s,
             IRepository<RequestSubscription> sub, IMovieDbApi movieApi, ISettingsService<CustomizationSettings> customization, ITvRequestEngine requestEngine,
-            IFeatureService feature)
+            IFeatureService feature, IPersonalizedRecommendationService personalizedRecommendations)
             : base(identity, service, r, um, memCache, s, sub)
         {
             _tvMaze = tvMaze;
@@ -53,6 +54,7 @@ namespace Ombi.Core.Engine.V2
             _customization = customization;
             _requestEngine = requestEngine;
             _feature = feature;
+            _personalizedRecommendations = personalizedRecommendations;
         }
 
 
@@ -194,6 +196,17 @@ namespace Ombi.Core.Engine.V2
             return await processed;
         }
 
+        public async Task<IEnumerable<SearchTvShowViewModel>> Recommended(int currentlyLoaded, int amountToLoad, CancellationToken cancellationToken)
+        {
+            var langCode = await DefaultLanguageCode(null);
+            var ranked = await _personalizedRecommendations.GetTvRecommendations(langCode, cancellationToken);
+            var page = ranked.Skip(currentlyLoaded).Take(amountToLoad).ToList();
+
+            // Force availability enrichment for this feed so content already present in the
+            // user's media library is never presented as a recommendation.
+            return await ProcessResults(page, hideAvailable: true);
+        }
+
         public async Task<ActorCredits> GetTvByActor(int actorId, string langCode)
         {
             langCode = await DefaultLanguageCode(langCode);
@@ -263,9 +276,10 @@ namespace Ombi.Core.Engine.V2
         private const int MaxConcurrentTmdbEnrichmentRequests = 4;
         private static readonly SemaphoreSlim TmdbEnrichmentLimiter = new(MaxConcurrentTmdbEnrichmentRequests, MaxConcurrentTmdbEnrichmentRequests);
 
-        private async Task<IEnumerable<SearchTvShowViewModel>> ProcessResults(List<MovieDbSearchResult> items)
+        private async Task<IEnumerable<SearchTvShowViewModel>> ProcessResults(List<MovieDbSearchResult> items, bool hideAvailable = false)
         {
             var settings = await _customization.GetSettingsAsync();
+            hideAvailable = hideAvailable || settings.HideAvailableFromDiscover;
 
             // Pre-warm cache to avoid concurrent EF Core DbContext access
             await GetTvRequests();
@@ -275,7 +289,7 @@ namespace Ombi.Core.Engine.V2
             // Availability enrichment can require one TMDB show request plus a request for every season.
             // Build a fresh season list for each result instead of mutating the cached MovieDbSearchResult.
             // Cold-cache TMDB calls remain bounded by TmdbEnrichmentLimiter.
-            var availabilitySeasons = settings.HideAvailableFromDiscover
+            var availabilitySeasons = hideAvailable
                 ? await Task.WhenAll(nonDemoItems.Select(item => GetSeasonsForAvailability(item.Id)))
                 : nonDemoItems.Select(_ => new List<SeasonRequests>()).ToArray();
 
@@ -284,7 +298,7 @@ namespace Ombi.Core.Engine.V2
             for (var index = 0; index < nonDemoItems.Count; index++)
             {
                 var result = await ProcessResult(nonDemoItems[index], availabilitySeasons[index]);
-                if (result == null || (settings.HideAvailableFromDiscover && result.Available))
+                if (result == null || (hideAvailable && result.Available))
                 {
                     continue;
                 }

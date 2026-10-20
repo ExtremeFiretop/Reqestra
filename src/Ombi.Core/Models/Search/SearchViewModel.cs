@@ -17,6 +17,7 @@ namespace Ombi.Core.Models.Search
         public string EmbyUrl { get; set; }
         public string JellyfinUrl { get; set; }
         public string Quality { get; set; }
+        public int RecommendationScore { get; set; }
         public abstract RequestType Type { get; }
 
         /// <summary>

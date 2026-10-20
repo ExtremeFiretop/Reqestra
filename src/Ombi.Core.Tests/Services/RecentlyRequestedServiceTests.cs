@@ -127,13 +127,85 @@ namespace Ombi.Core.Tests.Services
             var result = await _subject.GetRecentlyRequested(CancellationToken.None);
 
             // Assert
-            // NOTE: There's a bug in the service where HideFromOtherUsers() doesn't set the Hide property
-            // when the user is an admin/power user, causing the filtering to not work properly.
-            // The service should set Hide = false explicitly for admin/power users.
-            // For now, we'll test the current behavior (6 items) until the service bug is fixed.
-            
-            Assert.That(result.Count(), Is.EqualTo(6)); // Current behavior due to service bug
-            // Assert.That(result.All(x => x.UserId == currentUserId), Is.True); // This would be the correct behavior
+            Assert.That(result.Count(), Is.EqualTo(4));
+            Assert.That(result.All(x => x.UserId == currentUserId), Is.True);
+        }
+
+        [Test]
+        public async Task GetRecentlyRequested_HideFromOtherUsersEnabled_FiltersBeforeTake()
+        {
+            // Arrange
+            const string currentUserId = "current-user";
+            var otherUsersNewest = CreateMovieRequests(7, requestedUserId: "other-user");
+            var currentUsersOlder = CreateMovieRequests(3, requestedUserId: currentUserId);
+            for (var i = 0; i < currentUsersOlder.Count; i++)
+            {
+                currentUsersOlder[i].Id = 100 + i;
+                currentUsersOlder[i].TheMovieDbId = 100 + i;
+                currentUsersOlder[i].RequestedDate = DateTime.UtcNow.AddDays(-30 - i);
+            }
+
+            var movieRequests = otherUsersNewest.Concat(currentUsersOlder).ToList();
+            SetupRepositoryMocks(movieRequests, new List<ChildRequests>(), new List<AlbumRequest>());
+            _customizationSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateCustomizationSettings());
+            _ombiSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateOmbiSettings(hideFromOtherUsers: true));
+            SetupCurrentUser(currentUserId);
+            SetupCacheService();
+
+            // Act
+            var result = (await _subject.GetRecentlyRequested(CancellationToken.None)).ToList();
+
+            // Assert
+            Assert.That(result.Count, Is.EqualTo(3));
+            Assert.That(result.All(x => x.UserId == currentUserId), Is.True);
+        }
+
+        [Test]
+        public async Task GetRecentlyRequested_HideAvailableEnabled_FiltersBeforeTake()
+        {
+            // Arrange
+            var availableNewest = CreateMovieRequests(7, available: true);
+            var unavailableOlder = CreateMovieRequests(3, available: false);
+            for (var i = 0; i < unavailableOlder.Count; i++)
+            {
+                unavailableOlder[i].Id = 100 + i;
+                unavailableOlder[i].TheMovieDbId = 100 + i;
+                unavailableOlder[i].RequestedDate = DateTime.UtcNow.AddDays(-30 - i);
+            }
+
+            var movieRequests = availableNewest.Concat(unavailableOlder).ToList();
+            SetupRepositoryMocks(movieRequests, new List<ChildRequests>(), new List<AlbumRequest>());
+            _customizationSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateCustomizationSettings(hideAvailable: true));
+            _ombiSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateOmbiSettings());
+            SetupCurrentUser();
+            SetupCacheService();
+
+            // Act
+            var result = (await _subject.GetRecentlyRequested(CancellationToken.None)).ToList();
+
+            // Assert
+            Assert.That(result.Count, Is.EqualTo(3));
+            Assert.That(result.All(x => !x.Available), Is.True);
+        }
+
+        [Test]
+        public async Task GetRecentlyRequested_AdminStillSeesOtherUsersWhenPrivacyEnabled()
+        {
+            // Arrange
+            var movieRequests = CreateMovieRequests(2, requestedUserId: "other-user");
+            SetupRepositoryMocks(movieRequests, new List<ChildRequests>(), new List<AlbumRequest>());
+            _customizationSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateCustomizationSettings());
+            _ombiSettingsMock.Setup(x => x.GetSettingsAsync()).ReturnsAsync(CreateOmbiSettings(hideFromOtherUsers: true));
+            SetupCurrentUser("admin-user");
+            _userManagerMock.Setup(x => x.IsInRoleAsync(It.IsAny<OmbiUser>(), OmbiRoles.Admin)).ReturnsAsync(true);
+            SetupCacheService();
+
+            // Act
+            var result = (await _subject.GetRecentlyRequested(CancellationToken.None)).ToList();
+
+            // Assert
+            Assert.That(result.Count, Is.EqualTo(2));
+            Assert.That(result.All(x => x.UserId == "other-user"), Is.True);
         }
 
         [Test]
@@ -279,7 +351,7 @@ namespace Ombi.Core.Tests.Services
 
         private void SetupCurrentUser(string userId = "test-user")
         {
-            var user = new OmbiUser { Id = userId, Alias = "TestUser", Language = "en" };
+            var user = new OmbiUser { Id = userId, Alias = "TestUser", Language = "en", UserType = UserType.LocalUser };
             _currentUserMock.Setup(x => x.GetUser()).ReturnsAsync(user);
             _currentUserMock.Setup(x => x.Username).Returns("testuser");
             

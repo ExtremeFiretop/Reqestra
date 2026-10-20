@@ -440,11 +440,12 @@
         "RequestSource":"Source:"
     },
     "Discovery": {
-        "PopularTab": "Popular",
-        "TrendingTab": "Trending",
+        "PopularTab": "Popular (Most Watched)",
+        "TrendingTab": "Trending (This Week)",
         "UpcomingTab": "Upcoming",
         "SeasonalTab": "Seasonal",
         "RecentlyRequestedTab": "Recently Requested",
+        "RecommendedForYouTab": "Recommended for You",
         "Movies": "Movies",
         "Combined": "Combined",
         "Tv": "TV",

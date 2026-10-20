@@ -205,6 +205,17 @@ namespace Ombi.Controllers.V2
         }
 
         /// <summary>
+        /// Returns personalized movie recommendations based on the current user's recent requests.
+        /// </summary>
+        [HttpGet("movie/recommended/{currentPosition}/{amountToLoad}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesDefaultResponseType]
+        public Task<IEnumerable<SearchMovieViewModel>> RecommendedMovies(int currentPosition, int amountToLoad)
+        {
+            return _movieEngineV2.RecommendedMovies(currentPosition, amountToLoad, Request.HttpContext.RequestAborted);
+        }
+
+        /// <summary>
         /// Returns Advanced Searched Media using paging
         /// </summary>
         /// <remarks>We use TheMovieDb as the Movie Provider</remarks>
@@ -355,6 +366,17 @@ namespace Ombi.Controllers.V2
             return _mediaCacheService.GetOrAddAsync(nameof(PopularTv) + currentPosition + amountToLoad,
                 () => _tvEngineV2.Popular(currentPosition, amountToLoad),
                 DateTimeOffset.Now.AddHours(12));
+        }
+
+        /// <summary>
+        /// Returns personalized TV recommendations based on the current user's recent requests.
+        /// </summary>
+        [HttpGet("tv/recommended/{currentPosition}/{amountToLoad}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesDefaultResponseType]
+        public Task<IEnumerable<SearchTvShowViewModel>> RecommendedTv(int currentPosition, int amountToLoad)
+        {
+            return _tvEngineV2.Recommended(currentPosition, amountToLoad, Request.HttpContext.RequestAborted);
         }
 
         /// <summary>

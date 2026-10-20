@@ -27,6 +27,8 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb
         Task<List<MovieDbSearchResult>> TrendingTv(string languageCode, int? page = null);
         Task<List<MovieDbSearchResult>> UpcomingTv(string languageCode, int? page = null);
         Task<List<MovieDbSearchResult>> SimilarMovies(int movieId, string langCode);
+        Task<List<MovieDbSearchResult>> GetRecommendations(int mediaId, string mediaType, string langCode, CancellationToken cancellationToken);
+        Task<List<MovieDbSearchResult>> GetSimilar(int mediaId, string mediaType, string langCode, CancellationToken cancellationToken);
         Task<FindResult> Find(string externalId, ExternalSource source);
         Task<TvExternals> GetTvExternals(int theMovieDbId);
         Task<SeasonDetails> GetSeasonEpisodes(int theMovieDbId, int seasonNumber, CancellationToken token, string langCode = "en");

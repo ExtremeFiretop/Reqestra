@@ -14,6 +14,7 @@ export interface IDiscoverCardResult {
     overview: string;
     imdbid: string;
     background: string|any;
+    recommendationScore?: number;
 
     tvMovieDb?: boolean;
 }

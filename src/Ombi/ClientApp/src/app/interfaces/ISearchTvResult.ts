@@ -19,6 +19,7 @@ export interface ISearchTvResult {
     rating: string;
     imdbId: string;
     siteRating: number;
+    recommendationScore?: number;
     trailer: string;
     homepage: string;
     seasonRequests: INewSeasonRequests[];

@@ -19,6 +19,7 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb.Models
         public int VoteCount { get; set; }
         public bool Video { get; set; }
         public float VoteAverage { get; set; }
+        public int RecommendationScore { get; set; }
 
         /// <summary>
         /// Mapped Property and not set from the API

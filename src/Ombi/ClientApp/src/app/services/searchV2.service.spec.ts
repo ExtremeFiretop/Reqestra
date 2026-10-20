@@ -77,6 +77,12 @@ describe('SearchV2Service', () => {
       expect(mockHttp.get).toHaveBeenCalledWith('/api/v2/search/Movie/seasonal/0/20');
     });
 
+    it('should call correct URL for recommendedMoviesByPage', () => {
+      mockHttp.get.mockReturnValue(of([]));
+      service.recommendedMoviesByPage(0, 20);
+      expect(mockHttp.get).toHaveBeenCalledWith('/api/v2/search/Movie/recommended/0/20');
+    });
+
     it('should call correct URL for getFullMovieDetails', () => {
       service.getFullMovieDetails(550);
       expect(mockHttp.get).toHaveBeenCalledWith('/api/v2/search/Movie/550');
@@ -103,6 +109,12 @@ describe('SearchV2Service', () => {
       mockHttp.get.mockReturnValue(of([]));
       service.popularTvByPage(0, 20);
       expect(mockHttp.get).toHaveBeenCalledWith('/api/v2/search/Tv/popular/0/20', expect.anything());
+    });
+
+    it('should call correct URL for recommendedTvByPage', () => {
+      mockHttp.get.mockReturnValue(of([]));
+      service.recommendedTvByPage(0, 20);
+      expect(mockHttp.get).toHaveBeenCalledWith('/api/v2/search/Tv/recommended/0/20', expect.anything());
     });
 
     it('should call correct URL for trendingTv', () => {

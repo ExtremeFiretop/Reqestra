@@ -157,6 +157,52 @@ namespace Ombi.Api.IntegrationTests.Tests
         };
 
         [Test]
+        public async Task RecommendedMovies_ReturnsPersonalizedScore()
+        {
+            Factory.MovieEngineV2
+                .Setup(x => x.RecommendedMovies(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<SearchMovieViewModel>
+                {
+                    new SearchMovieViewModel
+                    {
+                        Id = 10,
+                        Title = "Recommended Movie",
+                        RecommendationScore = 200123,
+                    }
+                });
+
+            var (status, body) = await GetAsync("/api/v2/search/movie/recommended/0/10");
+
+            Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+            var item = (JObject)AsArray(body)[0];
+            AssertHasProperties(item, "id", "title", "recommendationScore", "type");
+            Assert.That((int)item["recommendationScore"], Is.EqualTo(200123));
+        }
+
+        [Test]
+        public async Task RecommendedTv_ReturnsPersonalizedScore()
+        {
+            Factory.TvSearchEngineV2
+                .Setup(x => x.Recommended(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<SearchTvShowViewModel>
+                {
+                    new SearchTvShowViewModel
+                    {
+                        Id = 20,
+                        Title = "Recommended Show",
+                        RecommendationScore = 100456,
+                    }
+                });
+
+            var (status, body) = await GetAsync("/api/v2/search/tv/recommended/0/10");
+
+            Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+            var item = (JObject)AsArray(body)[0];
+            AssertHasProperties(item, "id", "title", "recommendationScore", "type");
+            Assert.That((int)item["recommendationScore"], Is.EqualTo(100456));
+        }
+
+        [Test]
         public async Task TopRatedMovies_ReturnsExpectedShape()
         {
             Factory.MovieEngineV2.Setup(x => x.TopRatedMovies(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(OneMovie());

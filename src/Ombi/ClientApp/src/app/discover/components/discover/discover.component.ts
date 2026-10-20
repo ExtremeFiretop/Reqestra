@@ -34,17 +34,29 @@ export class DiscoverComponent {
     
     // State using signals
     public isAdmin = signal<boolean>(false);
+    public recentlyRequestedCount = signal<number>(0);
     public seasonalMovieCount = signal<number>(0);
+    public recommendedResultCount = signal<number>(0);
     
     // Computed properties
+    public showRecentlyRequested = computed(() => this.recentlyRequestedCount() > 0);
     public showSeasonal = computed(() => this.seasonalMovieCount() > 0);
+    public showRecommended = computed(() => this.recommendedResultCount() > 0);
 
     constructor() {
         // Initialize admin status
         this.isAdmin.set(this.authService.isAdmin());
     }
 
+    public setRecentlyRequestedCount(count: number): void {
+        this.recentlyRequestedCount.set(count);
+    }
+
     public setSeasonalMovieCount(count: number): void {
         this.seasonalMovieCount.set(count);
+    }
+
+    public setRecommendedResultCount(count: number): void {
+        this.recommendedResultCount.set(count);
     }
 }

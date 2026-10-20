@@ -101,7 +101,11 @@
                                 <mat-icon>{{ hasVoted(item) ? 'how_to_vote' : 'priority_high' }}</mat-icon>
                                 {{ hasVoted(item) ? 'Vote recorded' : 'Vote needed' }}
                             </span>
-                            <h4>{{ item.title }}</h4>
+                            <h4>
+                                <a *ngIf="mediaDetailsLink(item) as detailsLink; else plainVoteTitle"
+                                   class="media-title-link" [routerLink]="detailsLink">{{ item.title }}</a>
+                                <ng-template #plainVoteTitle>{{ item.title }}</ng-template>
+                            </h4>
                             <p class="cleanup-scope" *ngIf="item.requestType === RequestType.tvShow && item.cleanup?.scopeLabel">
                                 <mat-icon>video_library</mat-icon>
                                 <span><strong>{{ item.cleanup?.scopeLabel }}</strong><ng-container *ngIf="item.cleanup?.selectedSizeOnDisk"> · {{ formatBytes(item.cleanup?.selectedSizeOnDisk || 0) }}</ng-container></span>
@@ -110,7 +114,21 @@
                             <p class="metadata">
                                 {{ mediaTypeText(item.requestType) }}<span *ngIf="item.releaseDate"> · {{ item.releaseDate | date:'yyyy' }}</span><span *ngIf="item.requestedBy"> · Requested by {{ item.requestedBy }}</span>
                             </p>
-                            <p class="media-overview media-overview-voting" *ngIf="item.overview">{{ item.overview }}</p>
+                            <div class="overview-expander overview-expander-voting" *ngIf="item.overview">
+                                <p #overviewText
+                                   class="media-overview media-overview-voting"
+                                   [class.media-overview-expanded]="isOverviewExpanded(item)"
+                                   [class.media-overview-clickable]="overviewCanExpand(item, 'voting')"
+                                   [attr.data-overview-key]="overviewMeasurementKey(item, 'voting')"
+                                   (click)="toggleOverviewIfExpandable(item, 'voting')">{{ item.overview }}</p>
+                                <button class="overview-toggle-label" type="button"
+                                        *ngIf="overviewCanExpand(item, 'voting')"
+                                        (click)="toggleOverview(item)"
+                                        [attr.aria-expanded]="isOverviewExpanded(item)"
+                                        [attr.aria-label]="(isOverviewExpanded(item) ? 'Collapse description for ' : 'Expand description for ') + item.title">
+                                    {{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}
+                                </button>
+                            </div>
                             <p class="metadata" *ngIf="item.cleanup as cleanup">{{ cleanup.deleteVotes }} remove · {{ cleanup.keepVotes }} keep</p>
                             <p class="vote-needed-message" *ngIf="!hasVoted(item)">You have not voted yet.</p>
                             <p class="metadata" *ngIf="item.cleanup?.votingEndsAt">Voting ends {{ item.cleanup?.votingEndsAt | date:'medium' }}</p>
@@ -156,7 +174,11 @@
                         <img *ngIf="posterUrl(item.posterPath)" class="attention-poster" [src]="posterUrl(item.posterPath)" [alt]="item.title" loading="lazy" />
                         <mat-card-content>
                             <span class="attention-label"><mat-icon>approval</mat-icon> Approval required</span>
-                            <h4>{{ item.title }}</h4>
+                            <h4>
+                                <a *ngIf="mediaDetailsLink(item) as detailsLink; else plainApprovalTitle"
+                                   class="media-title-link" [routerLink]="detailsLink">{{ item.title }}</a>
+                                <ng-template #plainApprovalTitle>{{ item.title }}</ng-template>
+                            </h4>
                             <p class="cleanup-scope" *ngIf="item.requestType === RequestType.tvShow && item.cleanup?.scopeLabel">
                                 <mat-icon>video_library</mat-icon>
                                 <span><strong>{{ item.cleanup?.scopeLabel }}</strong><ng-container *ngIf="item.cleanup?.selectedSizeOnDisk"> · {{ formatBytes(item.cleanup?.selectedSizeOnDisk || 0) }}</ng-container></span>
@@ -197,7 +219,11 @@
                         <img *ngIf="posterUrl(item.posterPath)" class="attention-poster" [src]="posterUrl(item.posterPath)" [alt]="item.title" loading="lazy" />
                         <mat-card-content>
                             <span class="attention-label grace-label"><mat-icon>schedule</mat-icon> Grace period</span>
-                            <h4>{{ item.title }}</h4>
+                            <h4>
+                                <a *ngIf="mediaDetailsLink(item) as detailsLink; else plainScheduledTitle"
+                                   class="media-title-link" [routerLink]="detailsLink">{{ item.title }}</a>
+                                <ng-template #plainScheduledTitle>{{ item.title }}</ng-template>
+                            </h4>
                             <p class="cleanup-scope" *ngIf="item.requestType === RequestType.tvShow && item.cleanup?.scopeLabel">
                                 <mat-icon>video_library</mat-icon>
                                 <span><strong>{{ item.cleanup?.scopeLabel }}</strong><ng-container *ngIf="item.cleanup?.selectedSizeOnDisk"> · {{ formatBytes(item.cleanup?.selectedSizeOnDisk || 0) }}</ng-container></span>
@@ -293,7 +319,11 @@
                 <mat-card-content>
                     <div class="title-row">
                         <div>
-                            <h2>{{ item.title }}</h2>
+                            <h2>
+                                <a *ngIf="mediaDetailsLink(item) as detailsLink; else plainCatalogTitle"
+                                   class="media-title-link" [routerLink]="detailsLink">{{ item.title }}</a>
+                                <ng-template #plainCatalogTitle>{{ item.title }}</ng-template>
+                            </h2>
                             <span class="muted">
                                 {{ mediaTypeText(item.requestType) }}<span *ngIf="item.releaseDate"> · {{ item.releaseDate | date:'yyyy' }}</span> · {{ loadingMetrics && !item.sizeOnDisk ? 'Loading size…' : formatBytes(item.sizeOnDisk) }}
                             </span>
@@ -304,7 +334,21 @@
                         </div>
                     </div>
 
-                    <p class="media-overview media-overview-catalog" *ngIf="item.overview">{{ item.overview }}</p>
+                    <div class="overview-expander overview-expander-catalog" *ngIf="item.overview">
+                        <p #overviewText
+                           class="media-overview media-overview-catalog"
+                           [class.media-overview-expanded]="isOverviewExpanded(item)"
+                           [class.media-overview-clickable]="overviewCanExpand(item, 'catalog')"
+                           [attr.data-overview-key]="overviewMeasurementKey(item, 'catalog')"
+                           (click)="toggleOverviewIfExpandable(item, 'catalog')">{{ item.overview }}</p>
+                        <button class="overview-toggle-label" type="button"
+                                *ngIf="overviewCanExpand(item, 'catalog')"
+                                (click)="toggleOverview(item)"
+                                [attr.aria-expanded]="isOverviewExpanded(item)"
+                                [attr.aria-label]="(isOverviewExpanded(item) ? 'Collapse description for ' : 'Expand description for ') + item.title">
+                            {{ isOverviewExpanded(item) ? 'Show less' : 'Show more' }}
+                        </button>
+                    </div>
                     <p class="metadata" *ngIf="item.requestedBy">Requested by {{ item.requestedBy }}</p>
                     <p class="metadata stewardship-metadata" *ngIf="item.isCleanupSteward">
                         <mat-icon>verified_user</mat-icon>

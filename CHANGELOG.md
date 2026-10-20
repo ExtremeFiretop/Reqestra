@@ -1,3 +1,123 @@
+## [4.70.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.0...v4.70.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **discover:** group optional personalized sections ([ebacb9e](https://github.com/ExtremeFiretop/Reqestra/commit/ebacb9ebbe250cf03fec1cc0166c8e3b7036259b))
+
+
+
+# [4.70.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.5...v4.70.0) (2026-10-19)
+
+
+### Features
+
+* **discover:** add personalized recommendations ([aeafbe5](https://github.com/ExtremeFiretop/Reqestra/commit/aeafbe5d7343af7611371e362f666e57d994cc57))
+
+
+
+## [4.69.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.4...v4.69.5) (2026-10-19)
+
+
+
+## [4.69.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.3...v4.69.4) (2026-10-19)
+
+
+
+## [4.69.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.2...v4.69.3) (2026-10-19)
+
+
+
+## [4.69.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.1...v4.69.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **cleanup:** only expand truncated descriptions ([a547541](https://github.com/ExtremeFiretop/Reqestra/commit/a547541184be79d90addbe3047e29b4310e7153e))
+
+
+
+## [4.69.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.69.0...v4.69.1) (2026-10-19)
+
+
+
+# [4.69.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.17...v4.69.0) (2026-10-19)
+
+
+### Features
+
+* **cleanup:** expand descriptions and link media details ([a37b348](https://github.com/ExtremeFiretop/Reqestra/commit/a37b348159c457cdea71c0bfa98b7c3c6974ca91))
+
+
+
+## [4.68.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.16...v4.68.17) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** refill filtered carousel results ([a2f14f8](https://github.com/ExtremeFiretop/Reqestra/commit/a2f14f837bc0c11b8876067380a44a0a9b45963e))
+
+
+
+## [4.68.16](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.15...v4.68.16) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** stabilize deferred carousel sizing ([af616a8](https://github.com/ExtremeFiretop/Reqestra/commit/af616a833b37f215ea60f56a0cf339d1d8c415ef))
+
+
+
+## [4.68.15](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.14...v4.68.15) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** use responsive carousel slot sizing ([2543e8a](https://github.com/ExtremeFiretop/Reqestra/commit/2543e8af781bd4ad6241a640ae5d88f6f06600ef)), closes [#86](https://github.com/ExtremeFiretop/Reqestra/issues/86)
+
+
+
+## [4.68.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.13...v4.68.14) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** normalize recently requested spacing ([13be3f9](https://github.com/ExtremeFiretop/Reqestra/commit/13be3f98fc4107b93c79515085bf0c1a3ad70d28))
+
+
+
+## [4.68.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.12...v4.68.13) (2026-10-19)
+
+
+### Bug Fixes
+
+* **discover:** clarify popular and trending headings ([18bb688](https://github.com/ExtremeFiretop/Reqestra/commit/18bb6883e75a393862bffbc5a4852bad1cacfa6d))
+* **discover:** hide empty recently requested results ([573e254](https://github.com/ExtremeFiretop/Reqestra/commit/573e254df10172c4f0a71b251c3887f1c9c3f1b3))
+
+
+
+## [4.68.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.11...v4.68.12) (2026-10-18)
+
+
+### Bug Fixes
+
+* **discover:** restore resilient seasonal discovery ([20118ad](https://github.com/ExtremeFiretop/Reqestra/commit/20118ad5bb2042b17a027515ff0d068eca032831))
+
+
+
+## [4.68.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.10...v4.68.11) (2026-10-15)
+
+
+### Bug Fixes
+
+* **notifications:** retry transient standard email failures ([19d48f8](https://github.com/ExtremeFiretop/Reqestra/commit/19d48f85931fcc16cadc6b90d8d2934be3dc0000))
+
+
+
+## [4.68.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.9...v4.68.10) (2026-10-15)
+
+
+
 ## [4.68.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.68.8...v4.68.9) (2026-10-15)
 
 
@@ -224,143 +344,6 @@
 ### Bug Fixes
 
 * **newsletter:** avoid redundant metadata and N+1 queries ([57105df](https://github.com/ExtremeFiretop/Reqestra/commit/57105dfcb16308b34f4b1e5cb97e1fbb90f13688))
-
-
-
-## [4.61.19](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.18...v4.61.19) (2026-10-09)
-
-
-### Bug Fixes
-
-* **updater:** harden Windows update extraction ([dabbe88](https://github.com/ExtremeFiretop/Reqestra/commit/dabbe88a4ce05cee2414411282b89f9e2be1eaa4))
-
-
-
-## [4.61.18](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.17...v4.61.18) (2026-10-09)
-
-
-### Bug Fixes
-
-* **plex:** harden episode sync against orphaned cache rows ([6b747dd](https://github.com/ExtremeFiretop/Reqestra/commit/6b747dd577d43761e41c1ef2bd6257c26c4ba5d6))
-
-
-
-## [4.61.17](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.16...v4.61.17) (2026-10-09)
-
-
-
-## [4.61.16](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.15...v4.61.16) (2026-10-09)
-
-
-### Bug Fixes
-
-* **newsletter:** skip orphaned media episodes ([949b28f](https://github.com/ExtremeFiretop/Reqestra/commit/949b28fbe8e2b242f6f32389dd1151a26bec0322))
-
-
-
-## [4.61.15](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.14...v4.61.15) (2026-10-08)
-
-
-
-## [4.61.14](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.13...v4.61.14) (2026-10-08)
-
-
-### Bug Fixes
-
-* **sonarr:** normalize monitoring for newly-added series ([310469a](https://github.com/ExtremeFiretop/Reqestra/commit/310469abdf82324c81c2c6372f7ead2b38ae74bd))
-
-
-
-## [4.61.13](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.12...v4.61.13) (2026-10-08)
-
-
-### Bug Fixes
-
-* **sonarr:** allow safe trailing provider episode gaps ([d36a349](https://github.com/ExtremeFiretop/Reqestra/commit/d36a3499ebdbcba920afd8adabebc51df9a30a25))
-
-
-
-## [4.61.12](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.11...v4.61.12) (2026-10-08)
-
-
-
-## [4.61.11](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.10...v4.61.11) (2026-10-08)
-
-
-### Bug Fixes
-
-* **sonarr:** allow placeholder metadata for exact seasons ([177d226](https://github.com/ExtremeFiretop/Reqestra/commit/177d2265cc5e2f28c6386056f6adbce9b260958d))
-
-
-
-## [4.61.10](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.9...v4.61.10) (2026-10-07)
-
-
-### Bug Fixes
-
-* **plex:** serialize content sync and database refresh ([339c106](https://github.com/ExtremeFiretop/Reqestra/commit/339c106d7026e023a16e8f326df4f22da5a77e81))
-
-
-
-## [4.61.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.8...v4.61.9) (2026-10-06)
-
-
-### Bug Fixes
-
-* **ci:** reconcile release tag ancestry before versioning ([91a2310](https://github.com/ExtremeFiretop/Reqestra/commit/91a2310d4ee5676378dda23b3cadc69aaa9a07ab))
-* **plex:** handle rate-limited API failures safely ([a19e043](https://github.com/ExtremeFiretop/Reqestra/commit/a19e043f1c8bc5d3b8c727455e4a8197542b0c9b))
-* **tests:** import Plex friends models in API tests ([a787933](https://github.com/ExtremeFiretop/Reqestra/commit/a7879331163373502374ec6798d265b2431bbe2a))
-
-
-
-## [4.61.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.7...v4.61.8) (2026-10-03)
-
-
-### Bug Fixes
-
-* **ci:** isolate wizard from full E2E suite ([0fb9839](https://github.com/ExtremeFiretop/Reqestra/commit/0fb983961a9be135435f08379fd5b8d9c1c3f716))
-* **security:** harden user-controlled logging ([c65a46c](https://github.com/ExtremeFiretop/Reqestra/commit/c65a46c8bb2653bf91a07ea0f83ee01d98a6cc89))
-
-
-
-## [4.61.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.6...v4.61.7) (2026-10-03)
-
-
-### Bug Fixes
-
-* **ci:** make release versioning tag-driven ([6cc5800](https://github.com/ExtremeFiretop/Reqestra/commit/6cc580080d84d3f440db028ba69e392ec40f82f8))
-* **notifications:** bound queue and retry transient failures ([35236e3](https://github.com/ExtremeFiretop/Reqestra/commit/35236e36d9997ae315bdeb50b4cb3e634858239b))
-* **notifications:** replace fire-and-forget cleanup emails ([244574d](https://github.com/ExtremeFiretop/Reqestra/commit/244574d0e49b1f15d4f83a4061fc49e49439d5f8))
-
-
-
-## [4.61.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.5...v4.61.6) (2026-10-03)
-
-
-### Bug Fixes
-
-* **updater:** align Microsoft.Extensions dependencies with .NET 8 ([3f99665](https://github.com/ExtremeFiretop/Reqestra/commit/3f9966597ccb4066f3af348dd8c8a07fe5fe5bb8))
-
-
-
-## [4.61.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.4...v4.61.5) (2026-10-03)
-
-
-### Bug Fixes
-
-* **updater:** harden process and Windows service handoff ([5672d79](https://github.com/ExtremeFiretop/Reqestra/commit/5672d79834f342faf429e7ef251062fef61e4bd9))
-* **updater:** resolve Octokit FileMode ambiguity ([18e2fd7](https://github.com/ExtremeFiretop/Reqestra/commit/18e2fd757136bd0002d416b33d38f8c60eace115))
-* **updater:** restore built-in release installation ([a66a615](https://github.com/ExtremeFiretop/Reqestra/commit/a66a615a3a691376685e70de430a9b3d9619dde4))
-* **updater:** tolerate transient GitHub update-check failures ([30cfe00](https://github.com/ExtremeFiretop/Reqestra/commit/30cfe00e709f7e19b58c44129f735418c4cf17aa))
-
-
-
-## [4.61.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.3...v4.61.4) (2026-10-02)
-
-
-### Bug Fixes
-
-* **ci:** harden multi-arch frontend Docker build ([3824f35](https://github.com/ExtremeFiretop/Reqestra/commit/3824f35d0c2a5bf5dbf61b85560bc3a0752783d4))
 
 
 

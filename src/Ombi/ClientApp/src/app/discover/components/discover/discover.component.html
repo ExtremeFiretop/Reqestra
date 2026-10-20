@@ -11,40 +11,42 @@
 			<genre-button-select></genre-button-select>
 		</section>
 
-		<section class="discover-section">
+		<section id="recently-requested-section" class="discover-section" [hidden]="!showRecentlyRequested()">
 			<div class="section-header">
 				<h2>{{ 'Discovery.RecentlyRequestedTab' | translate }}</h2>
 			</div>
-			<ombi-recently-list [id]="'recentlyRequested'"></ombi-recently-list>
+			<ombi-recently-list
+				[id]="'recentlyRequested'"
+				(requestCount)="setRecentlyRequestedCount($event)"
+			></ombi-recently-list>
 		</section>
 
-		@if (showSeasonal()) {
-			@defer (on viewport; prefetch on idle) {
-				<section class="discover-section">
-					<div class="section-header">
-						<h2>{{ 'Discovery.SeasonalTab' | translate }}</h2>
-					</div>
-					<carousel-list
-						[id]="'seasonal'"
-						[isAdmin]="isAdmin()"
-						[discoverType]="DiscoverType.Seasonal"
-						(movieCount)="setSeasonalMovieCount($event)"
-					></carousel-list>
-				</section>
-			} @placeholder(minimum 300) {
-				<section class="discover-section">
-					<div class="section-header">
-						<h2>{{ 'Discovery.SeasonalTab' | translate }}</h2>
-					</div>
-					<div class="skeleton-row">
-						@for (item of [1,2,3,4,5,6,7]; track item) {
-							<div class="skeleton-card">
-								<p-skeleton width="100%" height="270px" borderRadius="8px"></p-skeleton>
-							</div>
-						}
-					</div>
-				</section>
-			}
+		@defer (on idle) {
+			<section id="seasonal-section" class="discover-section" [hidden]="!showSeasonal()">
+				<div class="section-header">
+					<h2>{{ 'Discovery.SeasonalTab' | translate }}</h2>
+				</div>
+				<carousel-list
+					[id]="'seasonal'"
+					[isAdmin]="isAdmin()"
+					[discoverType]="DiscoverType.Seasonal"
+					(movieCount)="setSeasonalMovieCount($event)"
+				></carousel-list>
+			</section>
+		}
+
+		@defer (on idle) {
+			<section id="recommended-section" class="discover-section" [hidden]="!showRecommended()">
+				<div class="section-header">
+					<h2>{{ 'Discovery.RecommendedForYouTab' | translate }}</h2>
+				</div>
+				<carousel-list
+					[id]="'recommended'"
+					[isAdmin]="isAdmin()"
+					[discoverType]="DiscoverType.Recommended"
+					(resultCount)="setRecommendedResultCount($event)"
+				></carousel-list>
+			</section>
 		}
 
 		@defer (on viewport; prefetch on idle) {

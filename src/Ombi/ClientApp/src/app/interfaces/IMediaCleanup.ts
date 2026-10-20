@@ -63,6 +63,7 @@ export interface IMediaCleanupOverview {
 export interface IMediaCleanupItem {
     requestType: RequestType;
     requestId: number;
+    mediaId?: number;
     title: string;
     posterPath: string;
     overview?: string;
