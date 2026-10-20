@@ -1,3 +1,7 @@
+## [4.70.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.1...v4.70.2) (2026-10-20)
+
+
+
 ## [4.70.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.0...v4.70.1) (2026-10-20)
 
 
@@ -335,15 +339,6 @@
 ### Features
 
 * **status:** add signed-in system health indicator ([a870343](https://github.com/ExtremeFiretop/Reqestra/commit/a8703433600f5db643e2caaa375729f836bbe8c1))
-
-
-
-## [4.61.20](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.19...v4.61.20) (2026-10-09)
-
-
-### Bug Fixes
-
-* **newsletter:** avoid redundant metadata and N+1 queries ([57105df](https://github.com/ExtremeFiretop/Reqestra/commit/57105dfcb16308b34f4b1e5cb97e1fbb90f13688))
 
 
 
