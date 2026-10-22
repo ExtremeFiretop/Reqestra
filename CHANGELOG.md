@@ -1,3 +1,7 @@
+## [4.70.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.4...v4.70.5) (2026-10-22)
+
+
+
 ## [4.70.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.3...v4.70.4) (2026-10-22)
 
 
@@ -326,15 +330,6 @@
 ### Features
 
 * **requests:** allow profile-aware reprocessing ([18a4bef](https://github.com/ExtremeFiretop/Reqestra/commit/18a4beff04e05fd48bb3f1d55f0e051ff1c11114))
-
-
-
-# [4.64.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.63.0...v4.64.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** show download progress and ETA ([2ee5c02](https://github.com/ExtremeFiretop/Reqestra/commit/2ee5c02567ad6288ab9a0c5537b25cbefcc17195))
 
 
 
