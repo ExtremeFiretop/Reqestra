@@ -1,3 +1,13 @@
+## [4.70.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.2...v4.70.3) (2026-10-22)
+
+
+### Bug Fixes
+
+* **email:** brand notification footers as Reqestra ([deb9414](https://github.com/ExtremeFiretop/Reqestra/commit/deb9414ba7a90eb234732570f194d4629649d15c))
+* **media:** preserve TV posters on details pages ([7c06a5f](https://github.com/ExtremeFiretop/Reqestra/commit/7c06a5f48aeef56f7b3aa343e111f2387cdcdafd))
+
+
+
 ## [4.70.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.1...v4.70.2) (2026-10-20)
 
 
@@ -325,20 +335,6 @@
 ### Features
 
 * **requests:** show active Sonarr and Radarr downloads ([822aa40](https://github.com/ExtremeFiretop/Reqestra/commit/822aa402bd5b0ffa51418e6d76e7f3ee49b1ffdd))
-
-
-
-# [4.62.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.20...v4.62.0) (2026-10-10)
-
-
-### Bug Fixes
-
-* **discover:** keep card titles visible with request actions ([d4c9db8](https://github.com/ExtremeFiretop/Reqestra/commit/d4c9db848f23fb273b57909110bac36311a92c97))
-
-
-### Features
-
-* **status:** add signed-in system health indicator ([a870343](https://github.com/ExtremeFiretop/Reqestra/commit/a8703433600f5db643e2caaa375729f836bbe8c1))
 
 
 
