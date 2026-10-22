@@ -27,8 +27,9 @@ namespace Ombi.Notifications.Templates
         private const string Poster = "{@POSTER}";
         private const string DateKey = "{@DATENOW}";
         private const string Logo = "{@LOGO}";
+        private const string ApplicationNameKey = "{@APPLICATIONNAME}";
 
-        public string LoadTemplate(string subject, string body, string imgsrc = default(string), string logo = default(string), string url = default(string))
+        public string LoadTemplate(string subject, string body, string imgsrc = default(string), string logo = default(string), string url = default(string), string applicationName = default(string))
         {
             var sb = new StringBuilder(File.ReadAllText(TemplateLocation));
             sb.Replace(SubjectKey, subject);
@@ -36,8 +37,15 @@ namespace Ombi.Notifications.Templates
             sb.Replace(DateKey, DateTime.Now.ToString("f"));
             sb.Replace(Poster, GetPosterContent(imgsrc, url));
             sb.Replace(Logo, string.IsNullOrEmpty(logo) ? OmbiLogo : logo);
+            sb.Replace(ApplicationNameKey, GetApplicationName(applicationName));
 
             return sb.ToString();
+        }
+
+        private static string GetApplicationName(string applicationName)
+        {
+            var displayName = string.IsNullOrWhiteSpace(applicationName) ? "Reqestra" : applicationName.Trim();
+            return System.Net.WebUtility.HtmlEncode(displayName);
         }
 
         private string GetPosterContent(string imgsrc, string url)

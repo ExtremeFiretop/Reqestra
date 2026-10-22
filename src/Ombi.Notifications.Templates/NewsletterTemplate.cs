@@ -32,9 +32,10 @@ namespace Ombi.Notifications.Templates
         private const string Unsubscribe = "{@UNSUBSCRIBE}";
         private const string UnsubscribeText = "{@UNSUBSCRIBETEXT}";
         private const string PoweredByText = "{@POWEREDBYTEXT}";
+        private const string ApplicationNameKey = "{@APPLICATIONNAME}";
 
 
-        public string LoadTemplate(string subject, string intro, string tableHtml, string logo, string unsubscribeLink, string applicationUrl)
+        public string LoadTemplate(string subject, string intro, string tableHtml, string logo, string unsubscribeLink, string applicationUrl, string applicationName = default(string))
         {
             var sb = new StringBuilder(File.ReadAllText(TemplateLocation));
             sb.Replace(SubjectKey, subject);
@@ -46,8 +47,15 @@ namespace Ombi.Notifications.Templates
             sb.Replace(Unsubscribe, string.IsNullOrEmpty(unsubscribeLink) ? string.Empty : unsubscribeLink);
             sb.Replace(UnsubscribeText, string.IsNullOrEmpty(unsubscribeLink) ? string.Empty : Texts.Unsubscribe);
             sb.Replace(PoweredByText, Texts.PoweredBy);
+            sb.Replace(ApplicationNameKey, GetApplicationName(applicationName));
 
             return sb.ToString();
+        }
+
+        private static string GetApplicationName(string applicationName)
+        {
+            var displayName = string.IsNullOrWhiteSpace(applicationName) ? "Reqestra" : applicationName.Trim();
+            return System.Net.WebUtility.HtmlEncode(displayName);
         }
     }
 }

@@ -45,7 +45,7 @@ namespace Ombi.Notifications
                 var email = new EmailBasicTemplate();
 
                 var customization = await CustomizationSettings.GetSettingsAsync();
-                var html = email.LoadTemplate(model.Subject, model.Message, null, customization.Logo);
+                var html = email.LoadTemplate(model.Subject, model.Message, null, customization.Logo, applicationName: customization.ApplicationName);
                 
                 var messageId = MimeUtils.GenerateMessageId();
                 if (customization.ApplicationUrl.HasValue())
