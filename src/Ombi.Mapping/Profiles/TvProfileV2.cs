@@ -33,6 +33,7 @@ namespace Ombi.Mapping.Profiles
                 .ForMember(dest => dest.Cast, opts => opts.MapFrom(src => src.Credits.cast))
                 .ForMember(dest => dest.Crew, opts => opts.MapFrom(src => src.Credits.crew))
                 .ForMember(dest => dest.Banner, opts => opts.MapFrom(src => GetBanner(src.Images, src.backdrop_path)))
+                .ForMember(dest => dest.PosterPath, opts => opts.MapFrom(src => src.poster_path))
                 .ForMember(dest => dest.Genres, opts => opts.MapFrom(src => src.genres))
                 .ForMember(dest => dest.Keywords, opts => opts.MapFrom(src => src.Keywords))
                 .ForMember(dest => dest.Tagline, opts => opts.MapFrom(src => src.tagline))

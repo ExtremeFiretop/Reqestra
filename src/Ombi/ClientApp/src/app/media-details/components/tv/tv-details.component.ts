@@ -350,12 +350,14 @@ export class TvDetailsComponent implements OnInit {
     }
 
     private checkPoster() {
-      if (this.tv.images.original == null || this.tv.images.original === undefined) {
-        this.tv.images.original = "../../../images/default_movie_poster.png";
+      this.tv.images ??= { medium: '', original: '' };
+      const posterPath = this.tv.images.original || this.tv.posterPath;
+      if (posterPath) {
+        const normalizedPosterPath = posterPath.startsWith('/') ? posterPath : '/' + posterPath;
+        this.tv.images.original = posterPath.startsWith('http')
+          ? posterPath
+          : 'https://image.tmdb.org/t/p/w300' + normalizedPosterPath;
       }
-      else {
-        this.tv.images.original = 'https://image.tmdb.org/t/p/w300/' + this.tv.images.original
-      };
     }
 
     private loadAdvancedInfo() {

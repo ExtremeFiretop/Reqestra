@@ -9,6 +9,7 @@ namespace Ombi.Core.Models.Search.V2
         public string Title { get; set; }
         public List<string> Aliases { get; set; }
         public string Banner { get; set; }
+        public string PosterPath { get; set; }
         public int SeriesId { get; set; }
         public string Status { get; set; }
         public string FirstAired { get; set; }
