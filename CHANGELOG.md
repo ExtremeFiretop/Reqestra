@@ -1,3 +1,12 @@
+## [4.70.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.3...v4.70.4) (2026-10-22)
+
+
+### Bug Fixes
+
+* **email:** use configured application name in email metadata ([d5306f8](https://github.com/ExtremeFiretop/Reqestra/commit/d5306f8e27f404f1998bca770b6e4221cb272d83)), closes [#89](https://github.com/ExtremeFiretop/Reqestra/issues/89)
+
+
+
 ## [4.70.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.2...v4.70.3) (2026-10-22)
 
 
@@ -326,15 +335,6 @@
 ### Features
 
 * **requests:** show download progress and ETA ([2ee5c02](https://github.com/ExtremeFiretop/Reqestra/commit/2ee5c02567ad6288ab9a0c5537b25cbefcc17195))
-
-
-
-# [4.63.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.62.0...v4.63.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** show active Sonarr and Radarr downloads ([822aa40](https://github.com/ExtremeFiretop/Reqestra/commit/822aa402bd5b0ffa51418e6d76e7f3ee49b1ffdd))
 
 
 
