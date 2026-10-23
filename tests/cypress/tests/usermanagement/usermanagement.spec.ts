@@ -1,13 +1,21 @@
 
 describe('User Management Page', () => {
+    let userToDelete: string;
+    let userToEdit: string;
+
     beforeEach(() => {
       cy.login();
-      cy.createUser('userToDelete', 'password', [{
+
+      const fixtureSuffix = `${Date.now()}${Cypress._.random(1000, 9999)}`;
+      userToDelete = `userToDelete${fixtureSuffix}`;
+      userToEdit = `userToEdit${fixtureSuffix}`;
+
+      cy.createUser(userToDelete, 'password', [{
         value: "requestmovie",
         Enabled: "true",
       }]);
 
-      cy.createUser('userToEdit', 'password', [{
+      cy.createUser(userToEdit, 'password', [{
         value: "disabled",
         Enabled: "true",
       }]);
@@ -83,15 +91,15 @@ describe('User Management Page', () => {
     });
 
     it('Delete a user', () => {
-      cy.get('#edituserToDelete').click();
-      cy.get('#username').should('have.value', 'userToDelete');
+      cy.get(`#edit${userToDelete}`).click();
+      cy.get('#username').should('have.value', userToDelete);
       cy.get('[data-test=deletebtn]').click();
-      cy.verifyNotification('The user userToDelete was deleted');
+      cy.verifyNotification(`The user ${userToDelete} was deleted`);
     })
 
 
     it('Add request limits to a user', () => {
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
 
       cy.contains('Request Limits').click();
       cy.get('#movieRequestLimit').clear().type('2');
@@ -104,7 +112,7 @@ describe('User Management Page', () => {
       cy.verifyNotification('successfully');
 
       // Verify that the limits are set
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
       cy.contains('Request Limits').click();
       cy.get('#movieRequestLimit').should('have.value', '2')
       cy.get('#musicRequestLimit').should('have.value', '3')
@@ -114,7 +122,7 @@ describe('User Management Page', () => {
 
     it('Add notification preferences to user', () => {
 
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
 
       cy.contains('Notification Preferences').click();
       cy.get('#Discord').clear().type("Discord");
@@ -132,7 +140,7 @@ describe('User Management Page', () => {
       cy.verifyNotification('successfully');
 
       // Verify that the limits are set 
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
       cy.contains('Notification Preferences').click();
       cy.get('#Discord').should('have.value', "Discord");
       cy.get('#Pushbullet').should('have.value', "Pushbullet");
@@ -147,7 +155,7 @@ describe('User Management Page', () => {
 
     it('Modify roles', () => {
 
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
 
       cy.contains('Roles').click();
       cy.get('#rolePowerUser').click();
@@ -157,7 +165,7 @@ describe('User Management Page', () => {
 
       cy.verifyNotification('successfully');
 
-      cy.get('#edituserToEdit').click();
+      cy.get(`#edit${userToEdit}`).click();
       cy.get('#rolePowerUser').should('have.class', 'mat-checked');
     });
   });
