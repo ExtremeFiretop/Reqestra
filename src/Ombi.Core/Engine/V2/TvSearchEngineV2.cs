@@ -101,7 +101,11 @@ namespace Ombi.Core.Engine.V2
 
             foreach (var tvSeason in show.seasons.Where(x => x.season_number != 0)) // skip the first season
             {
-                var seasonEpisodes = (await _movieApi.GetSeasonEpisodes(show.id, tvSeason.season_number, token, langCode));
+                var seasonEpisodes = await _movieApi.GetSeasonEpisodes(show.id, tvSeason.season_number, token, langCode);
+                if (seasonEpisodes?.episodes == null)
+                {
+                    continue;
+                }
 
                 MapSeasons(mapped.SeasonRequests, tvSeason, seasonEpisodes);
             }
@@ -378,6 +382,11 @@ namespace Ombi.Core.Engine.V2
 
         private static void MapSeasons(List<SeasonRequests> seasonRequests, Season tvSeason, SeasonDetails seasonEpisodes)
         {
+            if (seasonEpisodes?.episodes == null)
+            {
+                return;
+            }
+
             foreach (var episode in seasonEpisodes.episodes)
             {
                 var season = seasonRequests.FirstOrDefault(x => x.SeasonNumber == episode.season_number);

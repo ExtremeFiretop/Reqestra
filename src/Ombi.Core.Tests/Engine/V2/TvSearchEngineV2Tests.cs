@@ -126,6 +126,102 @@ namespace Ombi.Core.Tests.Engine.V2
             mocker.GetMock<IMovieDbApi>()
                 .Verify(x => x.GetTvExternals(299939), Times.Once);
         }
+
+        [Test]
+        public async Task GetShowInformation_MissingSeasonDetails_SkipsSeasonAndContinues()
+        {
+            var mocker = new AutoMocker();
+            var userManager = MockHelper.MockUserManager(new List<OmbiUser>());
+            mocker.Use(userManager.Object);
+
+            mocker.GetMock<ICurrentUser>()
+                .Setup(x => x.GetUser())
+                .ReturnsAsync((OmbiUser)null);
+
+            var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<TvProfileV2>(), NullLoggerFactory.Instance);
+            mocker.Use(mapperConfig.CreateMapper());
+
+            mocker.GetMock<ICacheService>()
+                .Setup(x => x.GetOrAddAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Func<Task<TvInfo>>>(),
+                    It.IsAny<DateTimeOffset>()))
+                .Returns((string cacheKey, Func<Task<TvInfo>> factory, DateTimeOffset expiration) => factory());
+
+            mocker.GetMock<IMovieDbApi>()
+                .Setup(x => x.GetTVInfo("338542", "en"))
+                .ReturnsAsync(new TvInfo
+                {
+                    id = 338542,
+                    name = "Test Show",
+                    first_air_date = "2026-01-01",
+                    seasons = new List<Season>
+                    {
+                        new Season { season_number = 1, overview = "Missing season" },
+                        new Season { season_number = 2, overview = "Available season" }
+                    },
+                    networks = new[] { new Network { id = 1, name = "Test Network" } },
+                    episode_run_time = Array.Empty<int>(),
+                    genres = Array.Empty<Genre>(),
+                    Credits = new Credits
+                    {
+                        cast = Array.Empty<FullMovieCast>(),
+                        crew = Array.Empty<FullMovieCrew>()
+                    },
+                    Videos = new Videos { results = Array.Empty<Result>() },
+                    Images = new Images
+                    {
+                        Backdrops = new List<ImageContent>(),
+                        Posters = new List<ImageContent>
+                        {
+                            new ImageContent { FilePath = "/poster.jpg" }
+                        }
+                    },
+                    ExternalIds = new ExternalIds
+                    {
+                        ImdbId = "tt1234567",
+                        TvDbId = "7654321"
+                    }
+                });
+
+            mocker.GetMock<IMovieDbApi>()
+                .Setup(x => x.GetSeasonEpisodes(338542, 1, It.IsAny<CancellationToken>(), "en"))
+                .ReturnsAsync((SeasonDetails)null);
+
+            mocker.GetMock<IMovieDbApi>()
+                .Setup(x => x.GetSeasonEpisodes(338542, 2, It.IsAny<CancellationToken>(), "en"))
+                .ReturnsAsync(new SeasonDetails
+                {
+                    season_number = 2,
+                    episodes = new[]
+                    {
+                        new Episode
+                        {
+                            season_number = 2,
+                            episode_number = 1,
+                            name = "Season 2 Episode 1",
+                            air_date = "2026-02-01"
+                        }
+                    }
+                });
+
+            mocker.GetMock<IRuleEvaluator>()
+                .Setup(x => x.StartSearchRules(It.IsAny<SearchViewModel>()))
+                .ReturnsAsync(new[] { new RuleResult { Success = true } });
+
+            var subject = mocker.CreateInstance<TvSearchEngineV2>();
+            var result = await subject.GetShowInformation("338542", CancellationToken.None);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.SeasonRequests.Select(x => x.SeasonNumber), Is.EqualTo(new[] { 2 }));
+            Assert.That(result.SeasonRequests.Single().Episodes.Select(x => x.EpisodeNumber), Is.EqualTo(new[] { 1 }));
+
+            mocker.GetMock<IMovieDbApi>()
+                .Verify(x => x.GetSeasonEpisodes(338542, 1, It.IsAny<CancellationToken>(), "en"), Times.Once);
+            mocker.GetMock<IMovieDbApi>()
+                .Verify(x => x.GetSeasonEpisodes(338542, 2, It.IsAny<CancellationToken>(), "en"), Times.Once);
+        }
+
         [Test]
         public async Task GetShowInformation_MissingRegionalImagesAndMissingEnglishFallback_DoesNotThrow()
         {
