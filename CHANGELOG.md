@@ -1,3 +1,12 @@
+## [4.70.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.6...v4.70.7) (2026-10-23)
+
+
+### Bug Fixes
+
+* **tv:** handle missing TMDB season data ([6d1e856](https://github.com/ExtremeFiretop/Reqestra/commit/6d1e856be391ad49044802a2471639313e46646e))
+
+
+
 ## [4.70.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.5...v4.70.6) (2026-10-23)
 
 
@@ -316,15 +325,6 @@
 ### Bug Fixes
 
 * **notifications:** serialize mass email delivery ([349945b](https://github.com/ExtremeFiretop/Reqestra/commit/349945b98cd20ebb32d684f94226965f1e3867ef))
-
-
-
-## [4.65.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.0...v4.65.1) (2026-10-10)
-
-
-### Bug Fixes
-
-* **requests:** allow profile searches for available media ([78c41ba](https://github.com/ExtremeFiretop/Reqestra/commit/78c41baa07aeee97059b56bbf9faabd9df15e32b))
 
 
 
