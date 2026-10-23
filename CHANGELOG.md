@@ -1,3 +1,7 @@
+## [4.70.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.5...v4.70.6) (2026-10-23)
+
+
+
 ## [4.70.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.4...v4.70.5) (2026-10-22)
 
 
@@ -321,15 +325,6 @@
 ### Bug Fixes
 
 * **requests:** allow profile searches for available media ([78c41ba](https://github.com/ExtremeFiretop/Reqestra/commit/78c41baa07aeee97059b56bbf9faabd9df15e32b))
-
-
-
-# [4.65.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.64.0...v4.65.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** allow profile-aware reprocessing ([18a4bef](https://github.com/ExtremeFiretop/Reqestra/commit/18a4beff04e05fd48bb3f1d55f0e051ff1c11114))
 
 
 
