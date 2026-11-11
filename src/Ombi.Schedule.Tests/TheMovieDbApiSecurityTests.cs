@@ -5,7 +5,7 @@ using AutoMapper;
 using Moq;
 using NUnit.Framework;
 using Ombi.Api;
-using Ombi.Api.External.ExternalApis.TheMovieDb;
+using TmdbApiClient = global::Ombi.Api.External.ExternalApis.TheMovieDb.TheMovieDbApi;
 using Ombi.Api.External.ExternalApis.TheMovieDb.Models;
 using Ombi.Core.Settings;
 using Ombi.Core.Settings.Models.External;
@@ -47,9 +47,9 @@ namespace Ombi.Schedule.Tests
             Assert.That(captured.FullUri.AbsolutePath, Is.EqualTo("/3/movie/123"));
         }
 
-        private static TheMovieDbApi CreateSubject(IApi api)
+        private static TmdbApiClient CreateSubject(IApi api)
         {
-            return new TheMovieDbApi(Mock.Of<IMapper>(), api,
+            return new TmdbApiClient(Mock.Of<IMapper>(), api,
                 Mock.Of<ISettingsService<TheMovieDbSettings>>());
         }
 
