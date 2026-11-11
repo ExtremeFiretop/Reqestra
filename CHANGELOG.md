@@ -1,3 +1,12 @@
+## [4.70.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.7...v4.70.8) (2026-11-11)
+
+
+### Bug Fixes
+
+* **api:** secure TMDB transport and sanitize updater errors ([fbe56ee](https://github.com/ExtremeFiretop/Reqestra/commit/fbe56eec4b4f3672158e83863c231d4b2222e396))
+
+
+
 ## [4.70.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.6...v4.70.7) (2026-10-23)
 
 
@@ -316,15 +325,6 @@
 ### Bug Fixes
 
 * **notifications:** persist and honor mobile enabled setting ([2f4a81d](https://github.com/ExtremeFiretop/Reqestra/commit/2f4a81dbef0fe81cf5ebc22dcd226f97593b95fe))
-
-
-
-## [4.65.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.1...v4.65.2) (2026-10-10)
-
-
-### Bug Fixes
-
-* **notifications:** serialize mass email delivery ([349945b](https://github.com/ExtremeFiretop/Reqestra/commit/349945b98cd20ebb32d684f94226965f1e3867ef))
 
 
 
