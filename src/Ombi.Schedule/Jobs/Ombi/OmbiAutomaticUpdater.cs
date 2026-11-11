@@ -114,6 +114,32 @@ namespace Ombi.Schedule.Jobs.Ombi
                    IsTransientUpdateCheckException(exception.InnerException);
         }
 
+        private static string DescribeTransientUpdateCheckFailure(Exception exception)
+        {
+            // Do not log exception messages or exception objects here: Octokit can put
+            // an entire GitHub HTML error page (including embedded Base64 images) into
+            // the exception message. Only report bounded, locally generated metadata.
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                if (current is OctokitApiException apiException)
+                {
+                    return $"GitHub HTTP {(int)apiException.StatusCode}";
+                }
+
+                if (current is HttpRequestException)
+                {
+                    return "network request failed";
+                }
+
+                if (current is TaskCanceledException)
+                {
+                    return "request timed out or was cancelled";
+                }
+            }
+
+            return "transient request failure";
+        }
+
         public async Task Execute(IJobExecutionContext job)
         {
             Logger.LogDebug(LoggingEvents.Updater, "Starting Update job");
@@ -155,10 +181,9 @@ namespace Ombi.Schedule.Jobs.Ombi
                     // GitHub, DNS or the local network is temporarily unavailable. Log one
                     // concise warning and let the next scheduled run try again.
                     Logger.LogWarning(LoggingEvents.Updater,
-                        "Reqestra could not reach GitHub while checking for updates: {0}. " +
+                        "Reqestra GitHub update check failed ({Failure}). " +
                         "The updater will retry at the next scheduled check.",
-                        e.Message);
-                    Logger.LogDebug(e, "Transient Reqestra update-check failure");
+                        DescribeTransientUpdateCheckFailure(e));
                     return;
                 }
                 Logger.LogDebug(LoggingEvents.Updater, "Updates: {0}", updates);
