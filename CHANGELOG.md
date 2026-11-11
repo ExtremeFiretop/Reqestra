@@ -1,3 +1,13 @@
+## [4.70.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.8...v4.70.9) (2026-11-11)
+
+
+### Bug Fixes
+
+* **requests:** apply hide-requests filter to single movie lookup ([40f2f31](https://github.com/ExtremeFiretop/Reqestra/commit/40f2f3152e73a820bb30ff1ca2d24b8dbe4418c9))
+* **users:** exclude access tokens from JSON serialization ([a53238f](https://github.com/ExtremeFiretop/Reqestra/commit/a53238fdd610942311e7a82c6b68f0d75e47b9b6))
+
+
+
 ## [4.70.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.7...v4.70.8) (2026-11-11)
 
 
@@ -316,15 +326,6 @@
 ### Bug Fixes
 
 * **requests:** derive active download ETA from progress ([0e03778](https://github.com/ExtremeFiretop/Reqestra/commit/0e037788e0c887442efa5ae80c95948c4169e4a3))
-
-
-
-## [4.65.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.2...v4.65.3) (2026-10-11)
-
-
-### Bug Fixes
-
-* **notifications:** persist and honor mobile enabled setting ([2f4a81d](https://github.com/ExtremeFiretop/Reqestra/commit/2f4a81dbef0fe81cf5ebc22dcd226f97593b95fe))
 
 
 
