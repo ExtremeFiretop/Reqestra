@@ -34,3 +34,16 @@
 .tab-content {
     margin-top: 1.5em;
 }
+.email-preferences { max-width: 850px; padding-bottom: 32px; }
+.email-preferences p { color: #aeb0b5; }
+.email-preferences h3 { margin-top: 26px; margin-bottom: 12px; }
+.email-preferences__row { display: flex; justify-content: space-between; align-items: center;
+    gap: 24px; padding: 15px 2px; border-bottom: 1px solid rgba(160,160,160,.18); }
+.email-preferences__label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.email-preferences__label span { font-size: 13px; opacity: .8; }
+.email-preferences__label small { color: #c4a15a; }
+.email-preferences__quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+.email-preferences__actions { margin-top: 24px; }
+.email-preferences__note { border-left: 3px solid #d79018; padding-left: 12px; }
+.email-preferences__error { color: #f7a6a6; }
+@media (max-width: 600px) { .email-preferences__row { gap: 12px; } }

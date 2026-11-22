@@ -1,3 +1,88 @@
+## [4.71.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.3...v4.71.4) (2026-11-22)
+
+
+
+## [4.71.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.2...v4.71.3) (2026-11-22)
+
+
+
+## [4.71.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.1...v4.71.2) (2026-11-22)
+
+
+### Bug Fixes
+
+* **database:** prevent MySQL email-preferences migration startup crash ([bccc978](https://github.com/ExtremeFiretop/Reqestra/commit/bccc978f5641a4868a303e4fce9f5aee98875f27))
+
+
+
+## [4.71.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.0...v4.71.1) (2026-11-22)
+
+
+
+# [4.71.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.9...v4.71.0) (2026-11-22)
+
+
+### Features
+
+* **notifications:** add per-user email event subscriptions ([8513e4d](https://github.com/ExtremeFiretop/Reqestra/commit/8513e4de72c8c390fed2c82cf8c75b64c7db25d0))
+
+
+
+## [4.70.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.8...v4.70.9) (2026-11-11)
+
+
+### Bug Fixes
+
+* **requests:** apply hide-requests filter to single movie lookup ([40f2f31](https://github.com/ExtremeFiretop/Reqestra/commit/40f2f3152e73a820bb30ff1ca2d24b8dbe4418c9))
+* **users:** exclude access tokens from JSON serialization ([a53238f](https://github.com/ExtremeFiretop/Reqestra/commit/a53238fdd610942311e7a82c6b68f0d75e47b9b6))
+
+
+
+## [4.70.8](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.7...v4.70.8) (2026-11-11)
+
+
+### Bug Fixes
+
+* **api:** secure TMDB transport and sanitize updater errors ([fbe56ee](https://github.com/ExtremeFiretop/Reqestra/commit/fbe56eec4b4f3672158e83863c231d4b2222e396))
+
+
+
+## [4.70.7](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.6...v4.70.7) (2026-10-23)
+
+
+### Bug Fixes
+
+* **tv:** handle missing TMDB season data ([6d1e856](https://github.com/ExtremeFiretop/Reqestra/commit/6d1e856be391ad49044802a2471639313e46646e))
+
+
+
+## [4.70.6](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.5...v4.70.6) (2026-10-23)
+
+
+
+## [4.70.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.4...v4.70.5) (2026-10-22)
+
+
+
+## [4.70.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.3...v4.70.4) (2026-10-22)
+
+
+### Bug Fixes
+
+* **email:** use configured application name in email metadata ([d5306f8](https://github.com/ExtremeFiretop/Reqestra/commit/d5306f8e27f404f1998bca770b6e4221cb272d83)), closes [#89](https://github.com/ExtremeFiretop/Reqestra/issues/89)
+
+
+
+## [4.70.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.2...v4.70.3) (2026-10-22)
+
+
+### Bug Fixes
+
+* **email:** brand notification footers as Reqestra ([deb9414](https://github.com/ExtremeFiretop/Reqestra/commit/deb9414ba7a90eb234732570f194d4629649d15c))
+* **media:** preserve TV posters on details pages ([7c06a5f](https://github.com/ExtremeFiretop/Reqestra/commit/7c06a5f48aeef56f7b3aa343e111f2387cdcdafd))
+
+
+
 ## [4.70.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.1...v4.70.2) (2026-10-20)
 
 
@@ -221,124 +306,6 @@
 ### Bug Fixes
 
 * **requests:** aggregate TV grid status by series ([3e2c63b](https://github.com/ExtremeFiretop/Reqestra/commit/3e2c63b00adcf1241bdcf59f558a43868cdf112b))
-
-
-
-## [4.67.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.1...v4.67.2) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** make TV episode statuses lifecycle-aware ([0011c78](https://github.com/ExtremeFiretop/Reqestra/commit/0011c78bf4ee04c7afd4b611ea6dcb80d5829eed))
-
-
-
-## [4.67.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.0...v4.67.1) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** reset retry profile to configured default ([7874c18](https://github.com/ExtremeFiretop/Reqestra/commit/7874c18876e8ce76f1b8983fadca468ed16bbb86))
-
-
-
-# [4.67.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.66.0...v4.67.0) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** preserve ETA for mixed download queues ([17d29e4](https://github.com/ExtremeFiretop/Reqestra/commit/17d29e4cdf5fa2041383c41f5d6d51880ec520ec))
-
-
-### Features
-
-* **requests:** add searching and completed states ([af4ea9a](https://github.com/ExtremeFiretop/Reqestra/commit/af4ea9aa3d5cc88f3e926b821f2b5b240758119e))
-
-
-
-# [4.66.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.4...v4.66.0) (2026-10-11)
-
-
-### Features
-
-* **requests:** distinguish queued and active downloads ([ce4eea5](https://github.com/ExtremeFiretop/Reqestra/commit/ce4eea5a8c80c0b2752b9c664ed9bffb7b365c3c))
-
-
-
-## [4.65.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.3...v4.65.4) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** derive active download ETA from progress ([0e03778](https://github.com/ExtremeFiretop/Reqestra/commit/0e037788e0c887442efa5ae80c95948c4169e4a3))
-
-
-
-## [4.65.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.2...v4.65.3) (2026-10-11)
-
-
-### Bug Fixes
-
-* **notifications:** persist and honor mobile enabled setting ([2f4a81d](https://github.com/ExtremeFiretop/Reqestra/commit/2f4a81dbef0fe81cf5ebc22dcd226f97593b95fe))
-
-
-
-## [4.65.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.1...v4.65.2) (2026-10-10)
-
-
-### Bug Fixes
-
-* **notifications:** serialize mass email delivery ([349945b](https://github.com/ExtremeFiretop/Reqestra/commit/349945b98cd20ebb32d684f94226965f1e3867ef))
-
-
-
-## [4.65.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.0...v4.65.1) (2026-10-10)
-
-
-### Bug Fixes
-
-* **requests:** allow profile searches for available media ([78c41ba](https://github.com/ExtremeFiretop/Reqestra/commit/78c41baa07aeee97059b56bbf9faabd9df15e32b))
-
-
-
-# [4.65.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.64.0...v4.65.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** allow profile-aware reprocessing ([18a4bef](https://github.com/ExtremeFiretop/Reqestra/commit/18a4beff04e05fd48bb3f1d55f0e051ff1c11114))
-
-
-
-# [4.64.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.63.0...v4.64.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** show download progress and ETA ([2ee5c02](https://github.com/ExtremeFiretop/Reqestra/commit/2ee5c02567ad6288ab9a0c5537b25cbefcc17195))
-
-
-
-# [4.63.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.62.0...v4.63.0) (2026-10-10)
-
-
-### Features
-
-* **requests:** show active Sonarr and Radarr downloads ([822aa40](https://github.com/ExtremeFiretop/Reqestra/commit/822aa402bd5b0ffa51418e6d76e7f3ee49b1ffdd))
-
-
-
-# [4.62.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.61.20...v4.62.0) (2026-10-10)
-
-
-### Bug Fixes
-
-* **discover:** keep card titles visible with request actions ([d4c9db8](https://github.com/ExtremeFiretop/Reqestra/commit/d4c9db848f23fb273b57909110bac36311a92c97))
-
-
-### Features
-
-* **status:** add signed-in system health indicator ([a870343](https://github.com/ExtremeFiretop/Reqestra/commit/a8703433600f5db643e2caaa375729f836bbe8c1))
 
 
 

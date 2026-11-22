@@ -8,6 +8,7 @@ function createComponent() {
       id: 1396,
       requestId: 0,
       banner: null,
+      posterPath: null,
       images: { original: null },
       seasonRequests: [],
     }),
@@ -90,6 +91,22 @@ describe('TvDetailsComponent', () => {
 
     expect(component.metadataUnavailable).toBe(false);
     expect(component.tv.id).toBe(1396);
-    expect(component.tv.images.original).toBe('../../../images/default_movie_poster.png');
+    expect(component.tv.images.original).toBeNull();
+  });
+
+  it('uses the normal TMDB poster path when appended poster images are missing', async () => {
+    const { component, mockSearchService } = createComponent();
+    mockSearchService.getTvInfo.mockResolvedValue({
+      id: 282223,
+      requestId: 0,
+      banner: '/backdrop.jpg',
+      posterPath: '/yellow-horse-poster.jpg',
+      images: { original: null },
+      seasonRequests: [],
+    });
+
+    await component.ngOnInit();
+
+    expect(component.tv.images.original).toBe('https://image.tmdb.org/t/p/w300/yellow-horse-poster.jpg');
   });
 });

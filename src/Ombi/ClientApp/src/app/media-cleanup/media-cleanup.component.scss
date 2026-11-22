@@ -22,6 +22,21 @@
     opacity: .75;
 }
 
+.rate-limit-notice {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .75rem 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 193, 7, .45);
+    border-radius: .5rem;
+    background: rgba(255, 193, 7, .10);
+}
+
+.rate-limit-notice > span {
+    flex: 1;
+}
+
 .loading,
 .empty-state {
     display: flex;

@@ -603,10 +603,9 @@ export class MovieDetailsComponent implements OnInit {
 		});
 	}
 	private checkPoster() {
-		if (this.movie.posterPath == null || this.movie.posterPath === undefined) {
-			this.movie.posterPath = '../../../images/default_movie_poster.png';
-		} else {
-			this.movie.posterPath = 'https://image.tmdb.org/t/p/w300/' + this.movie.posterPath;
+		if (this.movie.posterPath && !this.movie.posterPath.startsWith('http')) {
+			const normalizedPosterPath = this.movie.posterPath.startsWith('/') ? this.movie.posterPath : '/' + this.movie.posterPath;
+			this.movie.posterPath = 'https://image.tmdb.org/t/p/w300' + normalizedPosterPath;
 		}
 	}
 	private loadAdvancedInfo() {

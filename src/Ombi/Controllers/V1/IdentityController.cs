@@ -57,7 +57,10 @@ namespace Ombi.Controllers.V1
             IRepository<UserQualityProfiles> userProfiles,
             IUserDeletionEngine deletionEngine,
             IRequestLimitService requestLimitService,
-            ICacheService cacheService)
+            ICacheService cacheService,
+            IRepository<UserEmailNotificationPreference> emailNotificationPreferences,
+            INotificationTemplatesRepository notificationTemplates,
+            ISettingsService<NewsletterSettings> newsletterSettings)
         {
             UserManager = user;
             RoleManager = rm;
@@ -75,6 +78,9 @@ namespace Ombi.Controllers.V1
             _deletionEngine = deletionEngine;
             _requestLimitService = requestLimitService;
             _cacheService = cacheService;
+            _emailNotificationPreferences = emailNotificationPreferences;
+            _notificationTemplates = notificationTemplates;
+            _newsletterSettings = newsletterSettings;
         }
 
         private OmbiUserManager UserManager { get; }
@@ -93,6 +99,9 @@ namespace Ombi.Controllers.V1
         private readonly IPlexApi _plexApi;
         private readonly ISettingsService<PlexSettings> _plexSettings;
         private readonly IRepository<UserNotificationPreferences> _userNotificationPreferences;
+        private readonly IRepository<UserEmailNotificationPreference> _emailNotificationPreferences;
+        private readonly INotificationTemplatesRepository _notificationTemplates;
+        private readonly ISettingsService<NewsletterSettings> _newsletterSettings;
         private readonly IRepository<UserQualityProfiles> _userQualityProfiles;
 
         /// <summary>
@@ -972,6 +981,110 @@ namespace Ombi.Controllers.V1
                 }
             }
             return user.UserAccessToken;
+        }
+
+        /// <summary>
+        /// Returns the signed-in user's email event subscriptions. Absent rows mean enabled
+        /// to preserve existing installations' transactional email behavior.
+        /// </summary>
+        [HttpGet("emailnotificationpreferences")]
+        [Authorize]
+        public async Task<IActionResult> GetEmailNotificationPreferences()
+        {
+            var username = User.Identity?.Name?.ToUpperInvariant();
+            if (string.IsNullOrEmpty(username)) return Unauthorized();
+            var user = await UserManager.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == username);
+            if (user == null) return Unauthorized();
+
+            var canManage = await UserManager.IsInRoleAsync(user, OmbiRoles.Admin) ||
+                            await UserManager.IsInRoleAsync(user, OmbiRoles.PowerUser);
+            var emailEnabled = (await EmailSettings.GetSettingsAsync()).Enabled;
+            var newsletterEnabled = (await _newsletterSettings.GetSettingsAsync()).Enabled;
+            var existing = await _emailNotificationPreferences.GetAll()
+                .Where(x => x.UserId == user.Id).ToListAsync();
+            var newsletterMember = await UserManager.IsInRoleAsync(user, OmbiRoles.ReceivesNewsletter);
+
+            var response = new EmailNotificationPreferencesViewModel { EmailEnabled = emailEnabled };
+            foreach (var type in EmailNotificationPreferenceTypes.Supported)
+            {
+                if (EmailNotificationPreferenceTypes.IsAdministrative(type) && !canManage)
+                    continue;
+
+                var template = await _notificationTemplates.GetTemplate(NotificationAgent.Email, type);
+                response.Preferences.Add(new EmailNotificationPreferenceItem
+                {
+                    NotificationType = type,
+                    Enabled = type == NotificationType.Newsletter
+                        ? newsletterMember
+                        : existing.FirstOrDefault(x => x.NotificationType == type)?.Enabled ?? true,
+                    GloballyEnabled = emailEnabled && (template?.Enabled ?? false) &&
+                        (type != NotificationType.Newsletter || newsletterEnabled),
+                    Administrative = EmailNotificationPreferenceTypes.IsAdministrative(type)
+                });
+            }
+            return Ok(response);
+        }
+
+        /// <summary>
+        /// Update only the authenticated user's own email preferences. Never accept a user ID
+        /// from the client. Newsletters reuse the existing ReceivesNewsletter role.
+        /// </summary>
+        [HttpPut("emailnotificationpreferences")]
+        [Authorize]
+        public async Task<IActionResult> UpdateEmailNotificationPreferences(
+            [FromBody] List<UpdateEmailNotificationPreference> updates)
+        {
+            var username = User.Identity?.Name?.ToUpperInvariant();
+            if (string.IsNullOrEmpty(username)) return Unauthorized();
+            var user = await UserManager.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == username);
+            if (user == null) return Unauthorized();
+            if (updates == null || updates.Count > EmailNotificationPreferenceTypes.Supported.Count ||
+                updates.GroupBy(x => x.NotificationType).Any(x => x.Count() > 1) ||
+                updates.Any(x => !EmailNotificationPreferenceTypes.IsSupported(x.NotificationType)))
+                return BadRequest();
+
+            var canManage = await UserManager.IsInRoleAsync(user, OmbiRoles.Admin) ||
+                            await UserManager.IsInRoleAsync(user, OmbiRoles.PowerUser);
+            if (updates.Any(x => EmailNotificationPreferenceTypes.IsAdministrative(x.NotificationType) && !canManage))
+                return Forbid();
+
+            var rows = await _emailNotificationPreferences.GetAll()
+                .Where(x => x.UserId == user.Id).ToListAsync();
+            var newRows = new List<UserEmailNotificationPreference>();
+            foreach (var update in updates.Where(x => x.NotificationType != NotificationType.Newsletter))
+            {
+                var row = rows.FirstOrDefault(x => x.NotificationType == update.NotificationType);
+                if (row != null)
+                {
+                    row.Enabled = update.Enabled;
+                }
+                else
+                {
+                    newRows.Add(new UserEmailNotificationPreference
+                    {
+                        UserId = user.Id,
+                        NotificationType = update.NotificationType,
+                        Enabled = update.Enabled
+                    });
+                }
+            }
+            if (newRows.Count > 0) await _emailNotificationPreferences.AddRange(newRows, save: false);
+            if (newRows.Count > 0 || updates.Any(x => x.NotificationType != NotificationType.Newsletter))
+                await _emailNotificationPreferences.SaveChangesAsync();
+
+            var newsletterUpdate = updates.FirstOrDefault(x => x.NotificationType == NotificationType.Newsletter);
+            if (newsletterUpdate != null)
+            {
+                var currentlySubscribed = await UserManager.IsInRoleAsync(user, OmbiRoles.ReceivesNewsletter);
+                if (newsletterUpdate.Enabled != currentlySubscribed)
+                {
+                    var result = newsletterUpdate.Enabled
+                        ? await UserManager.AddToRoleAsync(user, OmbiRoles.ReceivesNewsletter)
+                        : await UserManager.RemoveFromRoleAsync(user, OmbiRoles.ReceivesNewsletter);
+                    if (!result.Succeeded) return StatusCode(500, "Could not update newsletter subscription");
+                }
+            }
+            return Ok();
         }
 
         [HttpGet("notificationpreferences")]

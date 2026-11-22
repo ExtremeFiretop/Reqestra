@@ -908,6 +908,29 @@ namespace Ombi.Store.Migrations.OmbiMySql
                     b.ToTable("Tokens");
                 });
 
+            modelBuilder.Entity("Ombi.Store.Entities.UserEmailNotificationPreference", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("NotificationType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "NotificationType").IsUnique();
+
+                    b.ToTable("UserEmailNotificationPreferences");
+                });
+
             modelBuilder.Entity("Ombi.Store.Entities.UserNotificationPreferences", b =>
                 {
                     b.Property<int>("Id")

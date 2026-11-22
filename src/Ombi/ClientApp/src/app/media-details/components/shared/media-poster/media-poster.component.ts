@@ -1,6 +1,7 @@
 import { Component, Input } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { ImageComponent } from "../../../../components";
+import { RequestType } from "../../../../interfaces";
 
 @Component({
     standalone: true,
@@ -14,4 +15,5 @@ import { ImageComponent } from "../../../../components";
 export class MediaPosterComponent {
     
     @Input() posterPath: string;
+    @Input() type: RequestType;
 }

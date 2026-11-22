@@ -188,6 +188,10 @@ Cypress.Commands.add('createUser', (username: string, password: string, claims: 
     },
   }).then((resp) => {
     expect(resp.status).to.be.within(200, 299);
+    expect(
+      resp.body?.successful,
+      `creating user "${username}" should succeed: ${JSON.stringify(resp.body?.errors ?? [])}`
+    ).to.equal(true);
     cy.log(`Created user: ${username}`);
   });
 });

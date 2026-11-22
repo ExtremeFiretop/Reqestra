@@ -31,7 +31,7 @@ namespace Ombi.Api.External.ExternalApis.TheMovieDb
         }
 
         private const string ApiToken = "b8eabaf5608b88d0298aa189dd90bf00";
-        private const string BaseUri = "http://api.themoviedb.org/3/";
+        private const string BaseUri = "https://api.themoviedb.org/3/";
         private IMapper Mapper { get; }
         private IApi Api { get; }
         private AsyncLazy<TheMovieDbSettings> Settings { get; }

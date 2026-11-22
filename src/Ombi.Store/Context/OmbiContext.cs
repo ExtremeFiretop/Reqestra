@@ -53,6 +53,23 @@ namespace Ombi.Store.Context
             builder.Entity<PlexWatchlistUserStatus>()
                 .HasIndex(x => x.UserId)
                 .IsUnique();
+            builder.Entity<UserEmailNotificationPreference>()
+                .Property(x => x.UserId).HasMaxLength(255);
+            builder.Entity<UserEmailNotificationPreference>()
+                .HasIndex(x => new { x.UserId, x.NotificationType })
+                .IsUnique();
+            // Older MySQL user tables have provider/version-dependent collations.
+            // A foreign key from a new table can prevent the entire application
+            // from starting. Keep the FK on SQLite/Postgres, but not on MySQL;
+            // UserDeletionEngine explicitly removes email preference rows.
+            if (!string.Equals(Database.ProviderName, "Pomelo.EntityFrameworkCore.MySql", StringComparison.Ordinal))
+            {
+                builder.Entity<UserEmailNotificationPreference>()
+                    .HasOne<OmbiUser>()
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            }
         }
 
 
@@ -60,6 +77,7 @@ namespace Ombi.Store.Context
         public DbSet<Tokens> Tokens { get; set; }
         public DbSet<RequestSubscription> RequestSubscription { get; set; }
         public DbSet<UserNotificationPreferences> UserNotificationPreferences { get; set; }
+        public DbSet<UserEmailNotificationPreference> UserEmailNotificationPreferences { get; set; }
         public DbSet<MobileDevices> MobileDevices { get; set; }
         public DbSet<UserQualityProfiles> UserQualityProfileses { get; set; }
         public DbSet<RequestQueue> RequestQueue { get; set; }

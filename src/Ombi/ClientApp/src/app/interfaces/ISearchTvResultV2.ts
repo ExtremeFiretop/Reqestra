@@ -7,6 +7,7 @@ export interface ISearchTvResultV2 {
     aliases: string[];
     background: any;
     banner: string;
+    posterPath: string;
     seriesId: number;
     status: string;
     firstAired: string;

@@ -100,6 +100,33 @@ namespace Ombi
             services.AddRateLimiter(options =>
             {
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                // Keep the existing limits for other API endpoints unchanged. Media Cleanup
+                // rejects carry a useful message and Retry-After so clients can explain the
+                // temporary throttle instead of reporting an unexplained action failure.
+                options.OnRejected = async (rejection, cancellationToken) =>
+                {
+                    var httpContext = rejection.HttpContext;
+                    var response = httpContext.Response;
+                    response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    if (!httpContext.Request.Path.StartsWithSegments("/api/v1/MediaCleanup", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    // The fixed-window limiter generally reports the remaining window time;
+                    // fall back to the full minute if metadata is unavailable.
+                    var retrySeconds = rejection.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter)
+                        ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))
+                        : 60;
+                    response.Headers["Retry-After"] = retrySeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                    var isMutation = HttpMethods.IsPost(httpContext.Request.Method);
+                    var message = isMutation
+                        ? $"Too many Media Cleanup actions in a short time. Your action was not saved. Please wait {retrySeconds} seconds before trying again."
+                        : $"Too many Media Cleanup refreshes in a short time. Please wait {retrySeconds} seconds before trying again.";
+                    await response.WriteAsJsonAsync(new { message, retryAfterSeconds = retrySeconds }, cancellationToken: cancellationToken);
+                };
+
                 options.AddPolicy("PlexPinCreation", httpContext =>
                     RateLimitPartition.GetFixedWindowLimiter(
                         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -161,7 +188,9 @@ namespace Ombi
                         factory: _ => new FixedWindowRateLimiterOptions
                         {
                             AutoReplenishment = true,
-                            PermitLimit = 30,
+                            // Each successful vote refreshes the card; leave headroom above
+                            // 60 actions/min for page-load and supplemental overview reads.
+                            PermitLimit = 90,
                             QueueLimit = 0,
                             Window = TimeSpan.FromMinutes(1)
                         }));
@@ -186,7 +215,7 @@ namespace Ombi
                         factory: _ => new FixedWindowRateLimiterOptions
                         {
                             AutoReplenishment = true,
-                            PermitLimit = 20,
+                            PermitLimit = 60,
                             QueueLimit = 0,
                             Window = TimeSpan.FromMinutes(1)
                         }));

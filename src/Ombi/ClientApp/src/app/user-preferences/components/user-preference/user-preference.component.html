@@ -6,7 +6,7 @@
     </h2>
   </div>
 
-  <mat-tab-group>
+  <mat-tab-group *ngIf="user" [selectedIndex]="selectedTabIndex">
     <mat-tab label="{{'UserPreferences.Profile' | translate}}">
       <div class="tab-content">
 
@@ -124,6 +124,66 @@
 
     </mat-tab>
 
+
+    <mat-tab label="Notifications">
+      <div class="tab-content email-preferences">
+        <h2>Email notifications</h2>
+        <p>Choose which emails you receive. An administrator controls which types are available to everyone.</p>
+
+        <div *ngIf="emailPreferencesLoading">Loading your email preferences...</div>
+        <div *ngIf="emailPreferencesError" class="email-preferences__error" role="alert">
+          Unable to load your email preferences.
+          <button mat-button type="button" (click)="loadEmailPreferences()">Retry</button>
+        </div>
+        <ng-container *ngIf="!emailPreferencesLoading && !emailPreferencesError">
+          <p *ngIf="!emailEnabled" class="email-preferences__note">
+            Email notifications are currently disabled by an administrator.
+            Your choices will be preserved for when email is enabled again.
+          </p>
+          <div class="email-preferences__quick-actions" *ngIf="emailEnabled">
+            <button mat-stroked-button type="button" (click)="toggleAllEmailPreferences(true)">Enable available types</button>
+            <button mat-stroked-button type="button" (click)="toggleAllEmailPreferences(false)">Mute available types</button>
+          </div>
+
+          <h3>My requests and issues</h3>
+          <div class="email-preferences__row" *ngFor="let preference of personalEmailPreferences">
+            <div class="email-preferences__label">
+              <strong>{{emailEventLabels[preference.notificationType]?.title}}</strong>
+              <span>{{emailEventLabels[preference.notificationType]?.description}}</span>
+              <small *ngIf="!preference.globallyEnabled">Unavailable — disabled by administrator</small>
+            </div>
+            <mat-slide-toggle [attr.aria-label]="emailEventLabels[preference.notificationType]?.title"
+                color="primary" [checked]="preference.enabled"
+                [disabled]="!preference.globallyEnabled"
+                (change)="preference.enabled = $event.checked"></mat-slide-toggle>
+          </div>
+
+          <ng-container *ngIf="adminEmailPreferences.length">
+            <h3>Administrative alerts</h3>
+            <p>These options are available to administrators and power users.</p>
+            <div class="email-preferences__row" *ngFor="let preference of adminEmailPreferences">
+              <div class="email-preferences__label">
+                <strong>{{emailEventLabels[preference.notificationType]?.title}}</strong>
+                <span>{{emailEventLabels[preference.notificationType]?.description}}</span>
+                <small *ngIf="!preference.globallyEnabled">Unavailable — disabled by administrator</small>
+              </div>
+              <mat-slide-toggle [attr.aria-label]="emailEventLabels[preference.notificationType]?.title"
+                  color="primary" [checked]="preference.enabled"
+                  [disabled]="!preference.globallyEnabled"
+                  (change)="preference.enabled = $event.checked"></mat-slide-toggle>
+            </div>
+          </ng-container>
+
+          <div class="email-preferences__actions">
+            <button id="saveEmailPreferences" mat-raised-button color="accent" type="button"
+                [disabled]="emailPreferencesSaving || !emailPreferencesDirty"
+                (click)="saveEmailPreferences()">
+              {{emailPreferencesSaving ? 'Saving...' : 'Save email preferences'}}
+            </button>
+          </div>
+        </ng-container>
+      </div>
+    </mat-tab>
 
     <!-- <mat-tab label="Preferences"> Coming Soon... </mat-tab> -->
 

@@ -4,6 +4,10 @@ import { discoverPage as Page } from "@/integration/page-objects";
 describe("Discover Recently Requested Tests", () => {
   beforeEach(() => {
     cy.login();
+    // Cypress retries rerun the test but keep the same database. Clear persisted
+    // requests before every attempt so an approval from a failed attempt cannot
+    // make the retry start in an already-approved state.
+    cy.clearAllRequests();
   });
 
   it("Hides Recently Requested When No Requests Are Visible", () => {
@@ -280,7 +284,10 @@ describe("Discover Recently Requested Tests", () => {
       Enabled: "true",
     }]);
     cy.loginWithCreds(username, password);
-    cy.requestAllTv(71712);
+    cy.requestAllTv(71712).then((resp) => {
+      expect(resp.status, 'pending TV request should return HTTP success').to.be.within(200, 299);
+      expect(resp.body?.result, 'pending TV request should be created').to.equal(true);
+    });
     cy.login();
 
     cy.intercept("GET", "**/v2/Requests/recentlyRequested").as("response");
@@ -288,7 +295,15 @@ describe("Discover Recently Requested Tests", () => {
 
     Page.visit();
 
-    cy.wait("@response").then((_) => {
+    cy.wait("@response").then((interception) => {
+      const recentRequests = (interception.response?.body ?? []) as Array<{
+        mediaId: string | number;
+        approved: boolean;
+      }>;
+      const persistedRequest = recentRequests.find((item) => String(item.mediaId) === "71712");
+
+      expect(persistedRequest, 'new TV request should appear in Recently Requested').to.exist;
+      expect(persistedRequest?.approved, 'new TV request should still require approval').to.equal(false);
 
       const card = Page.recentlyRequested.getRequest("71712");
       card.status.should('contain.text', 'Pending');
