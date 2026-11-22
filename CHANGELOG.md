@@ -1,3 +1,7 @@
+## [4.71.5](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.4...v4.71.5) (2026-11-22)
+
+
+
 ## [4.71.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.3...v4.71.4) (2026-11-22)
 
 
@@ -297,15 +301,6 @@
 ### Features
 
 * **requests:** add importing lifecycle state ([ff91076](https://github.com/ExtremeFiretop/Reqestra/commit/ff910767003f9566750dd82e187ec40699bb0820))
-
-
-
-## [4.67.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.2...v4.67.3) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** aggregate TV grid status by series ([3e2c63b](https://github.com/ExtremeFiretop/Reqestra/commit/3e2c63b00adcf1241bdcf59f558a43868cdf112b))
 
 
 
