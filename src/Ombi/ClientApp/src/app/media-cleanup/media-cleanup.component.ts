@@ -36,6 +36,7 @@ import {
 } from "../interfaces";
 import { MediaCleanupService, NotificationService } from "../services";
 import { Subscription } from "rxjs";
+import { mediaCleanupRateLimitMessage } from "./media-cleanup-rate-limit";
 import {
     MediaCleanupTvSelectionDialogResult,
     TvCleanupSelectionDialogComponent
@@ -67,6 +68,7 @@ export class MediaCleanupComponent implements OnInit, AfterViewInit, OnDestroy {
     public loading = true;
     public loadingMetrics = false;
     public loadingLastPlayed = false;
+    public rateLimitNotice: string | null = null;
     private readonly busyItemKeys = new Set<string>();
     private readonly expandedVoterKeys = new Set<string>();
     private readonly expandedOverviewKeys = new Set<string>();
@@ -123,11 +125,13 @@ export class MediaCleanupComponent implements OnInit, AfterViewInit, OnDestroy {
                 this.overview = x;
                 this.ensureValidViewMode();
                 this.loading = false;
+                this.rateLimitNotice = null;
                 this.loadSupplementalData();
             },
-            error: () => {
+            error: error => {
                 this.loading = false;
-                this.notificationService.error("Unable to load media cleanup.");
+                this.notificationService.error(
+                    this.showRateLimitNotice(error, "refresh") ?? "Unable to load media cleanup.");
             }
         });
     }
@@ -823,13 +827,29 @@ export class MediaCleanupComponent implements OnInit, AfterViewInit, OnDestroy {
                 }
 
                 this.notificationService.success(result.message);
+                this.rateLimitNotice = null;
                 this.refreshItem(item, key, refreshMetrics);
             },
             error: error => {
                 this.busyItemKeys.delete(key);
-                this.notificationService.error(error?.error?.message ?? "Media cleanup action failed.");
+                this.notificationService.error(
+                    this.showRateLimitNotice(error, "action")
+                    ?? error?.error?.message
+                    ?? "Media cleanup action failed.");
             }
         });
+    }
+
+    public dismissRateLimitNotice(): void {
+        this.rateLimitNotice = null;
+    }
+
+    private showRateLimitNotice(error: unknown, context: "action" | "refresh"): string | null {
+        const message = mediaCleanupRateLimitMessage(error, context);
+        if (message) {
+            this.rateLimitNotice = message;
+        }
+        return message;
     }
 
     private refreshItem(item: IMediaCleanupItem, key: string, refreshMetrics = false): void {
@@ -862,11 +882,14 @@ export class MediaCleanupComponent implements OnInit, AfterViewInit, OnDestroy {
                 }
                 this.busyItemKeys.delete(key);
             },
-            error: () => {
+            error: error => {
                 this.busyItemKeys.delete(key);
+                const rateLimitMessage = this.showRateLimitNotice(error, "refresh");
                 this.notificationService.warning(
                     "Media Cleanup",
-                    "The action completed, but this card could not be refreshed. Refresh the page to update its status.");
+                    rateLimitMessage
+                        ? `The action succeeded, but the updated status could not load. ${rateLimitMessage}`
+                        : "The action completed, but this card could not be refreshed. Refresh the page to update its status.");
             }
         });
     }

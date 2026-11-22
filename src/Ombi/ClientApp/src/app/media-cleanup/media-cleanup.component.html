@@ -9,6 +9,12 @@
         </button>
     </div>
 
+    <div *ngIf="rateLimitNotice" class="rate-limit-notice" role="alert">
+        <mat-icon aria-hidden="true">schedule</mat-icon>
+        <span>{{ rateLimitNotice }}</span>
+        <button mat-button type="button" (click)="dismissRateLimitNotice()" aria-label="Dismiss rate-limit message">Dismiss</button>
+    </div>
+
     <div *ngIf="loading" class="loading"><mat-spinner diameter="48"></mat-spinner></div>
 
     <ng-container *ngIf="!loading && overview">
