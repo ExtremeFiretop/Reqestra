@@ -1,3 +1,7 @@
+## [4.71.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.0...v4.71.1) (2026-11-22)
+
+
+
 # [4.71.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.9...v4.71.0) (2026-11-22)
 
 
@@ -317,15 +321,6 @@
 ### Features
 
 * **requests:** add searching and completed states ([af4ea9a](https://github.com/ExtremeFiretop/Reqestra/commit/af4ea9aa3d5cc88f3e926b821f2b5b240758119e))
-
-
-
-# [4.66.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.4...v4.66.0) (2026-10-11)
-
-
-### Features
-
-* **requests:** distinguish queued and active downloads ([ce4eea5](https://github.com/ExtremeFiretop/Reqestra/commit/ce4eea5a8c80c0b2752b9c664ed9bffb7b365c3c))
 
 
 
