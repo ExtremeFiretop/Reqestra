@@ -74,7 +74,7 @@ export class UserPreferenceComponent implements OnInit {
         [NotificationType.IssueComment]: { title: "Issue comments", description: "When someone comments on an issue" },
         [NotificationType.IssueResolved]: { title: "Issue resolved", description: "When an issue is resolved" },
         [NotificationType.Newsletter]: { title: "Newsletter", description: "Newly added movies and shows" },
-        [NotificationType.NewRequest]: { title: "New requests", description: "When someone makes a new request" },
+        [NotificationType.NewRequest]: { title: "New requests", description: "Receive notifications for new requests that are not excluded by your administrator's auto-approval notification settings." },
         [NotificationType.Issue]: { title: "New issues", description: "When someone reports an issue" },
         [NotificationType.ItemAddedToFaultQueue]: { title: "Failed requests", description: "When a request needs administrative attention" },
     };
