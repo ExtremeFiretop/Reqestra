@@ -28,8 +28,9 @@ namespace Ombi.Notifications.Templates
         private const string DateKey = "{@DATENOW}";
         private const string Logo = "{@LOGO}";
         private const string ApplicationNameKey = "{@APPLICATIONNAME}";
+        private const string EmailPreferencesKey = "{@EMAILPREFERENCES}";
 
-        public string LoadTemplate(string subject, string body, string imgsrc = default(string), string logo = default(string), string url = default(string), string applicationName = default(string))
+        public string LoadTemplate(string subject, string body, string imgsrc = default(string), string logo = default(string), string url = default(string), string applicationName = default(string), string emailPreferencesUrl = default(string))
         {
             var sb = new StringBuilder(File.ReadAllText(TemplateLocation));
             sb.Replace(SubjectKey, subject);
@@ -38,6 +39,7 @@ namespace Ombi.Notifications.Templates
             sb.Replace(Poster, GetPosterContent(imgsrc, url));
             sb.Replace(Logo, string.IsNullOrEmpty(logo) ? OmbiLogo : logo);
             sb.Replace(ApplicationNameKey, GetApplicationName(applicationName));
+            sb.Replace(EmailPreferencesKey, GetEmailPreferencesFooter(emailPreferencesUrl));
 
             return sb.ToString();
         }
@@ -46,6 +48,19 @@ namespace Ombi.Notifications.Templates
         {
             var displayName = string.IsNullOrWhiteSpace(applicationName) ? "Reqestra" : applicationName.Trim();
             return System.Net.WebUtility.HtmlEncode(displayName);
+        }
+
+        private static string GetEmailPreferencesFooter(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) ||
+                (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) ||
+                !string.IsNullOrEmpty(parsed.UserInfo))
+            {
+                return string.Empty;
+            }
+            var safeUrl = System.Net.WebUtility.HtmlEncode(parsed.ToString());
+            return $"<tr><td style=\"font-size:12px;text-align:center;padding:10px;\">" +
+                $"<a href=\"{safeUrl}\">Manage email preferences</a></td></tr>";
         }
 
         private string GetPosterContent(string imgsrc, string url)

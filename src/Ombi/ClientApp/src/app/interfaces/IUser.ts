@@ -127,6 +127,23 @@ export interface IMassEmailModel {
     bcc: boolean;
 }
 
+export interface IEmailNotificationPreferenceItem {
+    notificationType: number;
+    enabled: boolean;
+    globallyEnabled: boolean;
+    administrative: boolean;
+}
+
+export interface IEmailNotificationPreferences {
+    emailEnabled: boolean;
+    preferences: IEmailNotificationPreferenceItem[];
+}
+
+export interface IEmailNotificationPreferenceUpdate {
+    notificationType: number;
+    enabled: boolean;
+}
+
 export interface INotificationPreferences {
     id: number;
     userId: string;

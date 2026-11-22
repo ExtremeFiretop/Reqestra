@@ -23,11 +23,13 @@ namespace Ombi.Notifications.Agents
     {
         public EmailNotification(ISettingsService<EmailNotificationSettings> settings, INotificationTemplatesRepository r, IMovieRequestRepository m, ITvRequestRepository t, IEmailProvider prov, ISettingsService<CustomizationSettings> c,
             ILogger<EmailNotification> log, UserManager<OmbiUser> um, IRepository<RequestSubscription> sub, IMusicRequestRepository music,
-            IRepository<UserNotificationPreferences> userPref) : base(settings, r, m, t, c, log, sub, music, userPref, um)
+            IRepository<UserNotificationPreferences> userPref,
+            IRepository<UserEmailNotificationPreference> emailPreferences) : base(settings, r, m, t, c, log, sub, music, userPref, um)
         {
             EmailProvider = prov;
             Logger = log;
             _userManager = um;
+            _emailPreferences = emailPreferences;
         }
         private static readonly TimeSpan[] RetryDelays =
         {
@@ -39,6 +41,17 @@ namespace Ombi.Notifications.Agents
         private ILogger<EmailNotification> Logger { get; }
         public override string NotificationName => nameof(EmailNotification);
         private readonly UserManager<OmbiUser> _userManager;
+        private readonly IRepository<UserEmailNotificationPreference> _emailPreferences;
+
+        private string GetEmailPreferencesUrl()
+        {
+            var url = Customization?.ApplicationUrl;
+            return Uri.TryCreate(url, UriKind.Absolute, out var parsed) &&
+                   (parsed.Scheme == Uri.UriSchemeHttps || parsed.Scheme == Uri.UriSchemeHttp) &&
+                   string.IsNullOrEmpty(parsed.UserInfo)
+                ? url.TrimEnd('/') + "/user-preferences?tab=notifications"
+                : null;
+        }
 
         protected override bool ValidateConfiguration(EmailNotificationSettings settings)
         {
@@ -70,13 +83,16 @@ namespace Ombi.Notifications.Agents
                 return null;
             }
             var email = new EmailBasicTemplate();
-            var html = email.LoadTemplate(parsed.Subject, parsed.Message, parsed.Image, Customization.Logo, parsed.DetailsUrl);
+            var html = email.LoadTemplate(parsed.Subject, parsed.Message, parsed.Image,
+                Customization.Logo, parsed.DetailsUrl, Customization.ApplicationName,
+                type == NotificationType.Test ? null : GetEmailPreferencesUrl());
 
 
             var message = new NotificationMessage
             {
                 Message = html,
                 Subject = parsed.Subject,
+                EmailEventType = type,
             };
 
 
@@ -87,7 +103,10 @@ namespace Ombi.Notifications.Agents
         {
             var parsed = await LoadTemplate(NotificationAgent.Email, type, model);
 
-            return parsed.Message;
+            var preferencesUrl = GetEmailPreferencesUrl();
+            return string.IsNullOrEmpty(preferencesUrl) || type == NotificationType.Test
+                ? parsed.Message
+                : parsed.Message + "\n\nManage email preferences: " + preferencesUrl;
         }
 
         protected override async Task NewRequest(NotificationOptions model, EmailNotificationSettings settings)
@@ -108,6 +127,7 @@ namespace Ombi.Notifications.Agents
                     continue;
                 }
                 message.To = recipient.Email;
+                message.RecipientUserId = recipient.Id;
                 await Send(message, settings);
             }
         }
@@ -204,6 +224,9 @@ namespace Ombi.Notifications.Agents
             message.To = model.RequestType == RequestType.Movie
                 ? MovieRequest.RequestedUser.Email
                 : TvRequest.RequestedUser.Email;
+            message.RecipientUserId = model.RequestType == RequestType.Movie
+                ? MovieRequest.RequestedUserId
+                : TvRequest.RequestedUserId;
             await Send(message, settings);
 
         }
@@ -223,6 +246,9 @@ namespace Ombi.Notifications.Agents
             message.To = model.RequestType == RequestType.Movie
                 ? MovieRequest.RequestedUser.Email
                 : TvRequest.RequestedUser.Email;
+            message.RecipientUserId = model.RequestType == RequestType.Movie
+                ? MovieRequest.RequestedUserId
+                : TvRequest.RequestedUserId;
 
             await Send(message, settings);
         }
@@ -243,6 +269,9 @@ namespace Ombi.Notifications.Agents
             message.To = model.RequestType == RequestType.Movie
                 ? MovieRequest.RequestedUser.Email
                 : TvRequest.RequestedUser.Email;
+            message.RecipientUserId = model.RequestType == RequestType.Movie
+                ? MovieRequest.RequestedUserId
+                : TvRequest.RequestedUserId;
             await Send(message, settings);
         }
 
@@ -258,6 +287,7 @@ namespace Ombi.Notifications.Agents
                     }
 
                     message.To = user.Email;
+                    message.RecipientUserId = user.Id;
 
                     await Send(message, settings);
                 }
@@ -278,11 +308,39 @@ namespace Ombi.Notifications.Agents
             message.To = model.RequestType == RequestType.Movie
                 ? MovieRequest.RequestedUser.Email
                 : TvRequest.RequestedUser.Email;
+            message.RecipientUserId = model.RequestType == RequestType.Movie
+                ? MovieRequest.RequestedUserId
+                : TvRequest.RequestedUserId;
             await Send(message, settings);
         }
 
         protected override async Task Send(NotificationMessage model, EmailNotificationSettings settings)
         {
+            if (model.EmailEventType.HasValue &&
+                EmailNotificationPreferenceTypes.IsSupported(model.EmailEventType.Value) &&
+                model.EmailEventType.Value != NotificationType.Newsletter &&
+                !string.IsNullOrWhiteSpace(model.To))
+            {
+                // Use the actual recipient's account, not the requester's account: administrators,
+                // subscribers and requesters can independently opt out of the same event.
+                var recipientId = model.RecipientUserId;
+                if (string.IsNullOrEmpty(recipientId))
+                {
+                    recipientId = (await _userManager.FindByEmailAsync(model.To.Trim()))?.Id;
+                }
+                if (!string.IsNullOrEmpty(recipientId))
+                {
+                    var preference = await _emailPreferences.FirstOrDefaultAsync(x =>
+                        x.UserId == recipientId && x.NotificationType == model.EmailEventType.Value);
+                    if (preference != null && !preference.Enabled)
+                    {
+                        Logger.LogDebug("Skipping {EmailEvent} email for opted-out user {UserId}",
+                            model.EmailEventType.Value, recipientId);
+                        return;
+                    }
+                }
+            }
+
             for (var attempt = 1; ; attempt++)
             {
                 try
@@ -314,6 +372,7 @@ namespace Ombi.Notifications.Agents
                     continue;
                 }
                 message.To = recipient.Email;
+                message.RecipientUserId = recipient.Id;
                 await Send(message, settings);
             }
         }

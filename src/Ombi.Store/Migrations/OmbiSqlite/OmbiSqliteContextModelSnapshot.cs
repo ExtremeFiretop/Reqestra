@@ -906,6 +906,29 @@ namespace Ombi.Store.Migrations.OmbiSqlite
                     b.ToTable("Tokens");
                 });
 
+            modelBuilder.Entity("Ombi.Store.Entities.UserEmailNotificationPreference", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("NotificationType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "NotificationType").IsUnique();
+
+                    b.ToTable("UserEmailNotificationPreferences");
+                });
+
             modelBuilder.Entity("Ombi.Store.Entities.UserNotificationPreferences", b =>
                 {
                     b.Property<int>("Id")
@@ -1230,6 +1253,15 @@ namespace Ombi.Store.Migrations.OmbiSqlite
                         .HasForeignKey("UserId");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Ombi.Store.Entities.UserEmailNotificationPreference", b =>
+                {
+                    b.HasOne("Ombi.Store.Entities.OmbiUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Ombi.Store.Entities.UserNotificationPreferences", b =>

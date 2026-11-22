@@ -4,7 +4,7 @@ import { Injectable, Inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable } from "rxjs";
 
-import { ICheckbox, ICreateWizardUser, IIdentityResult, INotificationPreferences, IResetPasswordToken, IStreamingCountries, IUpdateLocalUser, IUser, IUserDropdown, IWizardUserResult } from "../interfaces";
+import { ICheckbox, ICreateWizardUser, IIdentityResult, IEmailNotificationPreferences, IEmailNotificationPreferenceUpdate, INotificationPreferences, IResetPasswordToken, IStreamingCountries, IUpdateLocalUser, IUser, IUserDropdown, IWizardUserResult } from "../interfaces";
 import { ServiceHelpers } from "./service.helpers";
 
 @Injectable()
@@ -82,6 +82,14 @@ export class IdentityService extends ServiceHelpers {
 
     public sendWelcomeEmail(user: IUser): Observable<null> {
         return this.http.post<any>(`${this.url}welcomeEmail`, JSON.stringify(user), {headers: this.headers});
+    }
+
+    public getEmailNotificationPreferences(): Observable<IEmailNotificationPreferences> {
+        return this.http.get<IEmailNotificationPreferences>(`${this.url}emailnotificationpreferences`, {headers: this.headers});
+    }
+
+    public updateEmailNotificationPreferences(preferences: IEmailNotificationPreferenceUpdate[]): Observable<void> {
+        return this.http.put<void>(`${this.url}emailnotificationpreferences`, preferences, {headers: this.headers});
     }
 
     public getNotificationPreferences(): Observable<INotificationPreferences[]> {

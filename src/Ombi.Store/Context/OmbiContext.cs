@@ -53,6 +53,16 @@ namespace Ombi.Store.Context
             builder.Entity<PlexWatchlistUserStatus>()
                 .HasIndex(x => x.UserId)
                 .IsUnique();
+            builder.Entity<UserEmailNotificationPreference>()
+                .Property(x => x.UserId).HasMaxLength(255);
+            builder.Entity<UserEmailNotificationPreference>()
+                .HasIndex(x => new { x.UserId, x.NotificationType })
+                .IsUnique();
+            builder.Entity<UserEmailNotificationPreference>()
+                .HasOne<OmbiUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
 
@@ -60,6 +70,7 @@ namespace Ombi.Store.Context
         public DbSet<Tokens> Tokens { get; set; }
         public DbSet<RequestSubscription> RequestSubscription { get; set; }
         public DbSet<UserNotificationPreferences> UserNotificationPreferences { get; set; }
+        public DbSet<UserEmailNotificationPreference> UserEmailNotificationPreferences { get; set; }
         public DbSet<MobileDevices> MobileDevices { get; set; }
         public DbSet<UserQualityProfiles> UserQualityProfileses { get; set; }
         public DbSet<RequestQueue> RequestQueue { get; set; }

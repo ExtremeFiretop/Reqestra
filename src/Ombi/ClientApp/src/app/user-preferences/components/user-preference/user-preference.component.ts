@@ -3,7 +3,7 @@ import { AuthService } from "../../../auth/auth.service";
 import { TranslateService } from "@ngx-translate/core";
 import { AvailableLanguages } from "./user-preference.constants";
 import { IdentityService, NotificationService, ValidationService } from "../../../services";
-import { IUser, UserType } from "../../../interfaces";
+import { IUser, UserType, NotificationType, IEmailNotificationPreferenceItem } from "../../../interfaces";
 import { Md5 } from "ts-md5";
 import { UntypedFormBuilder, UntypedFormGroup, Validators, ReactiveFormsModule } from "@angular/forms";
 import { APP_BASE_HREF, CommonModule } from "@angular/common";
@@ -16,6 +16,8 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatTabsModule } from "@angular/material/tabs";
+import { MatSlideToggleModule } from "@angular/material/slide-toggle";
+import { ActivatedRoute } from "@angular/router";
 import { TranslateModule } from "@ngx-translate/core";
 import { QRCodeModule } from "angularx-qrcode";
 import { CustomizationFacade } from "../../../state/customization";
@@ -36,6 +38,7 @@ import { CustomizationFacade } from "../../../state/customization";
         MatTooltipModule,
         MatCheckboxModule,
         MatTabsModule,
+        MatSlideToggleModule,
         TranslateModule,
         QRCodeModule
     ]
@@ -55,6 +58,39 @@ export class UserPreferenceComponent implements OnInit {
 
     public passwordForm: UntypedFormGroup;
 
+    public selectedTabIndex = 0;
+    public emailPreferences: IEmailNotificationPreferenceItem[] = [];
+    public emailEnabled = false;
+    public emailPreferencesLoading = true;
+    public emailPreferencesSaving = false;
+    public emailPreferencesError = false;
+    private savedEmailPreferences = new Map<number, boolean>();
+
+    public readonly emailEventLabels: Record<number, { title: string; description: string }> = {
+        [NotificationType.RequestApproved]: { title: "Request approved", description: "When a request is approved" },
+        [NotificationType.RequestAvailable]: { title: "Request available", description: "When requested media becomes available" },
+        [NotificationType.PartiallyAvailable]: { title: "Partially available", description: "When some requested episodes become available" },
+        [NotificationType.RequestDeclined]: { title: "Request declined", description: "When a request is declined" },
+        [NotificationType.IssueComment]: { title: "Issue comments", description: "When someone comments on an issue" },
+        [NotificationType.IssueResolved]: { title: "Issue resolved", description: "When an issue is resolved" },
+        [NotificationType.Newsletter]: { title: "Newsletter", description: "Newly added movies and shows" },
+        [NotificationType.NewRequest]: { title: "New requests", description: "When someone makes a new request" },
+        [NotificationType.Issue]: { title: "New issues", description: "When someone reports an issue" },
+        [NotificationType.ItemAddedToFaultQueue]: { title: "Failed requests", description: "When a request needs administrative attention" },
+    };
+
+    public get personalEmailPreferences(): IEmailNotificationPreferenceItem[] {
+        return this.emailPreferences.filter(x => !x.administrative);
+    }
+
+    public get adminEmailPreferences(): IEmailNotificationPreferenceItem[] {
+        return this.emailPreferences.filter(x => x.administrative);
+    }
+
+    public get emailPreferencesDirty(): boolean {
+        return this.emailPreferences.some(x => this.savedEmailPreferences.get(x.notificationType) !== x.enabled);
+    }
+
     private user: IUser;
     private applicationUrl: string = this.customizationFacade.appUrl();
     private logo: string = this.customizationFacade.logo();
@@ -66,6 +102,7 @@ export class UserPreferenceComponent implements OnInit {
         private readonly fb: UntypedFormBuilder,
         private readonly validationService: ValidationService,
         private readonly customizationFacade: CustomizationFacade,
+        private readonly route: ActivatedRoute,
         @Inject(APP_BASE_HREF) public internalBaseUrl: string) { }
 
     public async ngOnInit() {
@@ -88,6 +125,10 @@ export class UserPreferenceComponent implements OnInit {
         }
 
         this.user = await this.identityService.getUser().toPromise();
+        this.selectedTabIndex = this.route.snapshot.queryParamMap.get("tab") === "notifications"
+            ? (this.user.userType === UserType.LocalUser ? 2 : 1)
+            : 0;
+        this.loadEmailPreferences();
         this.selectedCountry = this.user.streamingCountry;
         this.setProfileImageUrl(this.user);
         this.identityService.getSupportedStreamingCountries().subscribe(x => this.countries = x);
@@ -107,6 +148,46 @@ export class UserPreferenceComponent implements OnInit {
         this.passwordForm.controls.confirmPassword.valueChanges.subscribe(x => {
             if (x) {
                 this.validationService.enableValidation(this.passwordForm, "password");
+            }
+        });
+    }
+
+    public loadEmailPreferences(): void {
+        this.emailPreferencesLoading = true;
+        this.emailPreferencesError = false;
+        this.identityService.getEmailNotificationPreferences().subscribe({
+            next: response => {
+                this.emailEnabled = response.emailEnabled;
+                this.emailPreferences = response.preferences ?? [];
+                this.savedEmailPreferences = new Map<number, boolean>(this.emailPreferences.map(x => [x.notificationType, x.enabled] as [number, boolean]));
+                this.emailPreferencesLoading = false;
+            },
+            error: () => {
+                this.emailPreferencesLoading = false;
+                this.emailPreferencesError = true;
+            }
+        });
+    }
+
+    public toggleAllEmailPreferences(enabled: boolean): void {
+        this.emailPreferences.filter(x => x.globallyEnabled).forEach(x => x.enabled = enabled);
+    }
+
+    public saveEmailPreferences(): void {
+        if (this.emailPreferencesSaving || !this.emailPreferencesDirty) return;
+        this.emailPreferencesSaving = true;
+        const changes = this.emailPreferences
+            .filter(x => this.savedEmailPreferences.get(x.notificationType) !== x.enabled)
+            .map(x => ({ notificationType: x.notificationType, enabled: x.enabled }));
+        this.identityService.updateEmailNotificationPreferences(changes).subscribe({
+            next: () => {
+                this.emailPreferencesSaving = false;
+                this.savedEmailPreferences = new Map<number, boolean>(this.emailPreferences.map(x => [x.notificationType, x.enabled] as [number, boolean]));
+                this.notification.success("Email notification preferences saved");
+            },
+            error: () => {
+                this.emailPreferencesSaving = false;
+                this.notification.error("Could not save email notification preferences");
             }
         });
     }
