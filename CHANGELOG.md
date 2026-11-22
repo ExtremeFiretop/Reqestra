@@ -1,3 +1,12 @@
+# [4.71.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.9...v4.71.0) (2026-11-22)
+
+
+### Features
+
+* **notifications:** add per-user email event subscriptions ([8513e4d](https://github.com/ExtremeFiretop/Reqestra/commit/8513e4de72c8c390fed2c82cf8c75b64c7db25d0))
+
+
+
 ## [4.70.9](https://github.com/ExtremeFiretop/Reqestra/compare/v4.70.8...v4.70.9) (2026-11-11)
 
 
@@ -317,15 +326,6 @@
 ### Features
 
 * **requests:** distinguish queued and active downloads ([ce4eea5](https://github.com/ExtremeFiretop/Reqestra/commit/ce4eea5a8c80c0b2752b9c664ed9bffb7b365c3c))
-
-
-
-## [4.65.4](https://github.com/ExtremeFiretop/Reqestra/compare/v4.65.3...v4.65.4) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** derive active download ETA from progress ([0e03778](https://github.com/ExtremeFiretop/Reqestra/commit/0e037788e0c887442efa5ae80c95948c4169e4a3))
 
 
 
