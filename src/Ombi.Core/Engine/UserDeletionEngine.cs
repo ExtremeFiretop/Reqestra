@@ -23,6 +23,7 @@ namespace Ombi.Core.Engine
         private readonly IRepository<NotificationUserId> _notificationRepository;
         private readonly IRepository<RequestSubscription> _requestSubscriptionRepository;
         private readonly IRepository<UserNotificationPreferences> _userNotificationPreferences;
+        private readonly IRepository<UserEmailNotificationPreference> _emailNotificationPreferences;
         private readonly IRepository<UserQualityProfiles> _userQualityProfiles;
         private readonly ITvRequestRepository _tvRepository;
         private readonly IMusicRequestRepository _musicRepository;
@@ -43,7 +44,10 @@ namespace Ombi.Core.Engine
                                     IRepository<UserQualityProfiles> qualityProfilesRepo,
                                     IRepository<Votes> voteRepository,
                                     IRepository<MobileDevices> mobileDevicesRepository,
-                                    IMediaCleanupEngine mediaCleanupEngine = null
+                                    IMediaCleanupEngine mediaCleanupEngine = null,
+                                    // Optional for existing construction sites and test fixtures;
+                                    // DI supplies this repository in production.
+                                    IRepository<UserEmailNotificationPreference> emailNotificationPreferences = null
                                     )
         {
             _movieRepository = movieRepository;
@@ -57,6 +61,7 @@ namespace Ombi.Core.Engine
             _requestSubscriptionRepository = requestSubRepository;
             _notificationRepository = notificationidsRepo;
             _userNotificationPreferences = notificationPreferencesRepo;
+            _emailNotificationPreferences = emailNotificationPreferences;
             _userQualityProfiles = qualityProfilesRepo;
             _voteRepository = voteRepository;
             _mobileDevicesRepository = mobileDevicesRepository;
@@ -73,6 +78,7 @@ namespace Ombi.Core.Engine
             var tvParentIds = tvUserRequested.Select(x => x.ParentRequestId).Distinct().ToList();
             var musicRequested = _musicRepository.GetAll().Where(x => x.RequestedUserId == userId);
             var notificationPreferences = _userNotificationPreferences.GetAll().Where(x => x.UserId == userId);
+            var emailNotificationPreferences = _emailNotificationPreferences?.GetAll().Where(x => x.UserId == userId);
             var userQuality = await _userQualityProfiles.GetAll().FirstOrDefaultAsync(x => x.UserId == userId);
 
             if (moviesUserRequested.Count > 0)
@@ -116,6 +122,12 @@ namespace Ombi.Core.Engine
             if (notificationPreferences.Any())
             {
                 await _userNotificationPreferences.DeleteRange(notificationPreferences);
+            }
+            // Explicit cleanup is necessary on MySQL because its legacy user-key
+            // collations prevent a portable FK with ON DELETE CASCADE.
+            if (emailNotificationPreferences != null && emailNotificationPreferences.Any())
+            {
+                await _emailNotificationPreferences.DeleteRange(emailNotificationPreferences);
             }
             if (userQuality != null)
             {

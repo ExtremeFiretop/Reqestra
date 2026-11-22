@@ -18,22 +18,20 @@ namespace Ombi.Store.Migrations.OmbiMySql
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", Microsoft.EntityFrameworkCore.Metadata.MySqlValueGenerationStrategy.IdentityColumn),
-                    UserId = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    // Older MySQL installs can use a different charset/collation for
+                    // AspNetUsers.Id. Do not force utf8mb4 here or create a foreign key
+                    // across incompatible legacy user ID definitions.
+                    UserId = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: false),
                     NotificationType = table.Column<int>(type: "int", nullable: false),
                     Enabled = table.Column<bool>(type: "tinyint(1)", nullable: false)
                 },
                 constraints: table =>
                 {
+                    // MySQL intentionally omits the FK. The existing user key's
+                    // charset/collation varies across older installations. User
+                    // deletion explicitly removes these preference rows instead.
                     table.PrimaryKey("PK_UserEmailNotificationPreferences", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserEmailNotificationPreferences_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
+                });
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserEmailNotificationPreferences_UserId_NotificationType",

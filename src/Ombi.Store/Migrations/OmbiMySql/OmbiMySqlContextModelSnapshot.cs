@@ -1257,15 +1257,6 @@ namespace Ombi.Store.Migrations.OmbiMySql
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Ombi.Store.Entities.UserEmailNotificationPreference", b =>
-                {
-                    b.HasOne("Ombi.Store.Entities.OmbiUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Ombi.Store.Entities.UserNotificationPreferences", b =>
                 {
                     b.HasOne("Ombi.Store.Entities.OmbiUser", "User")

@@ -58,11 +58,18 @@ namespace Ombi.Store.Context
             builder.Entity<UserEmailNotificationPreference>()
                 .HasIndex(x => new { x.UserId, x.NotificationType })
                 .IsUnique();
-            builder.Entity<UserEmailNotificationPreference>()
-                .HasOne<OmbiUser>()
-                .WithMany()
-                .HasForeignKey(x => x.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // Older MySQL user tables have provider/version-dependent collations.
+            // A foreign key from a new table can prevent the entire application
+            // from starting. Keep the FK on SQLite/Postgres, but not on MySQL;
+            // UserDeletionEngine explicitly removes email preference rows.
+            if (!string.Equals(Database.ProviderName, "Pomelo.EntityFrameworkCore.MySql", StringComparison.Ordinal))
+            {
+                builder.Entity<UserEmailNotificationPreference>()
+                    .HasOne<OmbiUser>()
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            }
         }
 
 
