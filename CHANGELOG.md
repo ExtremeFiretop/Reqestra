@@ -1,3 +1,12 @@
+## [4.71.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.1...v4.71.2) (2026-11-22)
+
+
+### Bug Fixes
+
+* **database:** prevent MySQL email-preferences migration startup crash ([bccc978](https://github.com/ExtremeFiretop/Reqestra/commit/bccc978f5641a4868a303e4fce9f5aee98875f27))
+
+
+
 ## [4.71.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.0...v4.71.1) (2026-11-22)
 
 
@@ -307,20 +316,6 @@
 ### Bug Fixes
 
 * **requests:** reset retry profile to configured default ([7874c18](https://github.com/ExtremeFiretop/Reqestra/commit/7874c18876e8ce76f1b8983fadca468ed16bbb86))
-
-
-
-# [4.67.0](https://github.com/ExtremeFiretop/Reqestra/compare/v4.66.0...v4.67.0) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** preserve ETA for mixed download queues ([17d29e4](https://github.com/ExtremeFiretop/Reqestra/commit/17d29e4cdf5fa2041383c41f5d6d51880ec520ec))
-
-
-### Features
-
-* **requests:** add searching and completed states ([af4ea9a](https://github.com/ExtremeFiretop/Reqestra/commit/af4ea9aa3d5cc88f3e926b821f2b5b240758119e))
 
 
 
