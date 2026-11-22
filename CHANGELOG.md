@@ -1,3 +1,7 @@
+## [4.71.3](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.2...v4.71.3) (2026-11-22)
+
+
+
 ## [4.71.2](https://github.com/ExtremeFiretop/Reqestra/compare/v4.71.1...v4.71.2) (2026-11-22)
 
 
@@ -307,15 +311,6 @@
 ### Bug Fixes
 
 * **requests:** make TV episode statuses lifecycle-aware ([0011c78](https://github.com/ExtremeFiretop/Reqestra/commit/0011c78bf4ee04c7afd4b611ea6dcb80d5829eed))
-
-
-
-## [4.67.1](https://github.com/ExtremeFiretop/Reqestra/compare/v4.67.0...v4.67.1) (2026-10-11)
-
-
-### Bug Fixes
-
-* **requests:** reset retry profile to configured default ([7874c18](https://github.com/ExtremeFiretop/Reqestra/commit/7874c18876e8ce76f1b8983fadca468ed16bbb86))
 
 
 
