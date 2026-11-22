@@ -55,10 +55,9 @@ class UserPreferencesPage extends BasePage {
     }
 
     get securityTab(): Cypress.Chainable<any> {
-        cy.waitUntil(() => {
-            return cy.get('#mat-tab-label-0-1').should('be.visible');
-        });
-        return cy.get('#mat-tab-label-0-1');
+        // Wait for the actual Security tab; generated Material IDs can point to
+        // Notifications before the async user details finish loading.
+        return cy.contains('[role="tab"]', /^Security$/).should('be.visible');
     }
 
     profile = new ProfileTab();

@@ -6,7 +6,7 @@
     </h2>
   </div>
 
-  <mat-tab-group [selectedIndex]="selectedTabIndex">
+  <mat-tab-group *ngIf="user" [selectedIndex]="selectedTabIndex">
     <mat-tab label="{{'UserPreferences.Profile' | translate}}">
       <div class="tab-content">
 
